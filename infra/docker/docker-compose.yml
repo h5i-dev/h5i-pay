@@ -16,6 +16,8 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.api
+      args:
+        API_FEATURES: mock-psp
     environment:
       DATABASE_URL: postgres://h5i:h5i@db:5432/h5i
       H5I_APP_SECRET: dev-secret-change-me

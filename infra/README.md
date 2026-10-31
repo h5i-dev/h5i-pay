@@ -27,11 +27,11 @@ Secrets Manager + KMS · CloudWatch logs/metrics/alarms → SNS · AWS Backup wi
 | `terraform/batch.tf` | AWS Batch GPU compute environment (ECS GPU AMI, min 0 vCPU, IMDSv2, encrypted EBS), Fargate CPU environment, two queues, job definitions for the reconciliation worker |
 | `terraform/iam.tf` | one role per actor (task execution, API task, Batch service/instance/job, RDS monitoring, flow logs, backup), GitHub OIDC deploy role limited to the `test` environment |
 | `terraform/observability.tf` | log groups (KMS, 90 days); alarms: ledger invariant violated, ledger posting refused, reconciliation exceptions, ALB 5xx %, unhealthy targets, DLQ depth, queue age, RDS CPU and storage; SNS topic; AWS Backup plan and weekly restore-testing plan |
-| `terraform/environments/test.tfvars` | a test-mode environment (Mock PSP, synthetic funds) |
+| `terraform/environments/test.tfvars` | a test-mode environment (Mock PSP, synthetic funds; runs the `<tag>-mock` API image). `psp_mode = "mock"` is rejected for `prod*` environments |
 | `docker/Dockerfile.api` | API image: Rust build stage, distroless `cc` runtime as uid 65532 |
 | `docker/Dockerfile.worker` | batch worker: CUDA 13.2 devel build stage (PTX for compute_75), CUDA base runtime with the AWS CLI, uid 10001 |
 | `docker/batch-entrypoint.sh` | S3 in → `h5i-pay-batch reconcile` → S3 out (reports and audit copy) |
-| `docker/docker-compose.yml` | local PostgreSQL + API with the Mock PSP |
+| `docker/docker-compose.yml` | local PostgreSQL + API built with `API_FEATURES=mock-psp` (the Mock PSP) |
 | `../.github/workflows/ci.yml` | build, clippy, tests with PostgreSQL, CUDA build, optional GPU runner tests and benchmark, proofs (`h5i app extract --check`, `check`, `mutate`), Terraform checks, images to ECR via OIDC, deploy to `test` with approval |
 
 ## Apply (operator)

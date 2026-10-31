@@ -11,15 +11,16 @@
 //!   Unset with `DATABASE_URL`: plain TCP (local development only);
 //! * `H5I_APP_SECRET` (required) — the HMAC key for bearer tokens;
 //! * `LISTEN` — default `127.0.0.1:8080`;
-//! * `H5I_PAY_PSP` — `mock` (default) or `stripe` (test mode only: reads
-//!   `STRIPE_SECRET_KEY`, which must be `sk_test_…`, and `STRIPE_WEBHOOK_SECRET`);
-//! * `H5I_PAY_MOCK_WEBHOOK_SECRET` — the Mock PSP's signing secret;
+//! * `H5I_PAY_PSP` — `stripe` (the default; test mode only: reads
+//!   `STRIPE_SECRET_KEY`, which must be `sk_test_…`, and `STRIPE_WEBHOOK_SECRET`)
+//!   or `mock`, only in builds with the `mock-psp` feature (then the default);
+//! * `H5I_PAY_MOCK_WEBHOOK_SECRET` — the Mock PSP's signing secret (`mock-psp` builds);
 //! * `H5I_APP_ISSUE=<tenant>:<user>` — print a one-day token and exit.
 
 use h5i_app_http::HmacAuth;
 use h5i_app_pg::EngineConfig;
 use payment_api::{router, AppState};
-use payment_connectors::{mock::MockPsp, stripe::StripePsp, Psp};
+use payment_connectors::{stripe::StripePsp, Psp};
 use payment_storage::ledger::{self, LedgerApp};
 use std::sync::Arc;
 
@@ -39,11 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("DB_CREDENTIALS is set but DB_CA_FILE is not: refusing a database connection without TLS".into());
     }
     let addr = std::env::var("LISTEN").unwrap_or_else(|_| "127.0.0.1:8080".into());
-    let psp: Arc<dyn Psp> = match std::env::var("H5I_PAY_PSP").as_deref().unwrap_or("mock") {
-        "mock" => Arc::new(MockPsp::new(std::env::var("H5I_PAY_MOCK_WEBHOOK_SECRET").unwrap_or_else(|_| "whsec_mock_dev".into()))),
-        "stripe" => Arc::new(StripePsp::from_env()?),
-        other => return Err(format!("H5I_PAY_PSP={other}: expected mock or stripe").into()),
-    };
+    let psp = select_psp(std::env::var("H5I_PAY_PSP").ok().as_deref())?;
     let (ledger_engine, payments_engine) = payment_storage::engines_with(&url, 16, EngineConfig::default(), &tls).await?;
     tracing::info!(psp = psp.name(), db_tls = matches!(tls, payment_storage::DbTls::Verified(_)), "payment provider and database");
     let state = AppState::with_payments(ledger_engine, payments_engine, psp, &secret);
@@ -54,6 +51,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     })
     .await?;
     Ok(())
+}
+
+/// The PSP named by `H5I_PAY_PSP`. The Mock PSP exists only in builds with
+/// the `mock-psp` feature (SEC-05); there it is also the default. Without
+/// it the default is Stripe (test mode), and `mock` is refused.
+fn select_psp(name: Option<&str>) -> Result<Arc<dyn Psp>, Box<dyn std::error::Error>> {
+    const DEFAULT: &str = if cfg!(feature = "mock-psp") { "mock" } else { "stripe" };
+    match name.unwrap_or(DEFAULT) {
+        #[cfg(feature = "mock-psp")]
+        "mock" => {
+            tracing::warn!("Mock PSP: accepts any token and settles instantly; synthetic funds only");
+            let secret = std::env::var("H5I_PAY_MOCK_WEBHOOK_SECRET").unwrap_or_else(|_| "whsec_mock_dev".into());
+            Ok(Arc::new(payment_connectors::mock::MockPsp::new(secret)))
+        }
+        #[cfg(not(feature = "mock-psp"))]
+        "mock" => Err("H5I_PAY_PSP=mock: this binary is built without the Mock PSP (feature mock-psp)".into()),
+        "stripe" => Ok(Arc::new(StripePsp::from_env()?)),
+        other => Err(format!("H5I_PAY_PSP={other}: expected mock or stripe").into()),
+    }
 }
 
 /// `DATABASE_URL`, or one built from the RDS-managed credentials secret

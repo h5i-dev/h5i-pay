@@ -4,15 +4,16 @@
 //! PSP's answers and webhooks into [`Outcome`]s and [`WebhookEvent`]s. It
 //! decides nothing about a payment's state; the payment kernel does.
 //!
-//! Two connectors exist: [`mock::MockPsp`], an in-process PSP with fault
-//! injection for tests, and [`stripe::StripePsp`], Stripe in **test mode
-//! only** (it refuses live keys). Neither ever sees a card number: callers
+//! Two connectors exist: `mock::MockPsp` (feature `mock`), an in-process
+//! PSP with fault injection for tests, and [`stripe::StripePsp`], Stripe in
+//! **test mode only** (it refuses live keys). Neither ever sees a card number: callers
 //! pass PSP tokens (`pm_card_visa`, `tok_visa`) or use hosted checkout, and
 //! [`check_payment_method`] rejects anything that looks like a PAN.
 //!
 //! Every mutating call carries an idempotency key derived from our own ids,
 //! so a retry after a timeout cannot charge, capture or refund twice.
 
+#[cfg(feature = "mock")]
 pub mod mock;
 pub mod stripe;
 pub mod webhook;

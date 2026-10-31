@@ -49,6 +49,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --workspace --all-targets --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo clippy --workspace --all-targets --locked --features payment-api/mock-psp -- -D warnings
       # Two TLS-only PostgreSQL servers (default protocols and TLS 1.2 only)
       # with a throwaway CA, from h5i's script at the pinned rev. Exports
       # H5I_APP_TEST_TLS_DATABASE_URL, H5I_APP_TEST_TLS12_DATABASE_URL and
@@ -66,6 +67,14 @@ jobs:
           test -n "$H5I_APP_TEST_TLS_DATABASE_URL" && test -s "$H5I_APP_TEST_TLS_CA"
           cargo test --locked -p h5i-pay-tests --test tls -- --nocapture 2>&1 | tee "$RUNNER_TEMP/tls.log"
           ! grep -q 'skipping' "$RUNNER_TEMP/tls.log"
+      # SEC-05: the production build of the API has no Mock PSP. Build it
+      # alone (no workspace feature unification) and check it refuses mock.
+      - name: Production binary refuses the Mock PSP
+        run: |
+          cargo build --locked -p payment-api --bin h5i-pay
+          out=$(H5I_PAY_PSP=mock H5I_APP_SECRET=x DATABASE_URL=postgres://unused@127.0.0.1:1/x ./target/debug/h5i-pay 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -q 'built without the Mock PSP'
       - name: Stripe test-mode round trip (only with a test key)
         if: env.HAS_STRIPE_KEY == 'true'
         env:
@@ -179,6 +188,18 @@ jobs:
           tags: ${{ steps.ecr.outputs.registry }}/h5i-pay/api:${{ github.sha }}
           provenance: true
           sbom: true
+      # The same API with the Mock PSP compiled in, for synthetic-funds test
+      # environments (Terraform picks it when psp_mode = "mock").
+      - name: API image with the Mock PSP (test environments only)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile.api
+          build-args: API_FEATURES=mock-psp
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/h5i-pay/api:${{ github.sha }}-mock
+          provenance: true
+          sbom: true
       - name: Worker image
         uses: docker/build-push-action@v6
         with:
@@ -210,7 +231,11 @@ jobs:
         run: |
           family=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query 'services[0].taskDefinition' --output text)
           aws ecs describe-task-definition --task-definition "$family" --query taskDefinition > td.json
-          jq --arg img "${{ steps.ecr.outputs.registry }}/h5i-pay/api:${{ github.sha }}" \
+          # Keep the image variant Terraform chose: the -mock image only when
+          # the task runs H5I_PAY_PSP=mock (the production image refuses it).
+          psp=$(jq -r '.containerDefinitions[] | select(.name == "api") | .environment[] | select(.name == "H5I_PAY_PSP") | .value' td.json)
+          suffix=""; [ "$psp" = "mock" ] && suffix="-mock"
+          jq --arg img "${{ steps.ecr.outputs.registry }}/h5i-pay/api:${{ github.sha }}$suffix" \
             '.containerDefinitions |= map(if .name == "api" then .image = $img else . end)
              | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' td.json > td-new.json
           arn=$(aws ecs register-task-definition --cli-input-json file://td-new.json --query taskDefinition.taskDefinitionArn --output text)

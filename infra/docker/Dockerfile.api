@@ -4,10 +4,15 @@
 FROM rust:1.99-bookworm AS build
 WORKDIR /src
 COPY . .
+# Empty (the default) for the production image: no Mock PSP in the binary,
+# so H5I_PAY_PSP=mock is refused at startup (SEC-05). The synthetic-funds
+# test image is built with --build-arg API_FEATURES=mock-psp and tagged
+# <sha>-mock.
+ARG API_FEATURES=""
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/src/target \
-    cargo build --release --locked -p payment-api --bin h5i-pay \
+    cargo build --release --locked -p payment-api --bin h5i-pay ${API_FEATURES:+--features "$API_FEATURES"} \
  && cp target/release/h5i-pay /h5i-pay
 
 # No shell, no package manager; runs as uid 65532.

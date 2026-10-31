@@ -10,6 +10,12 @@ publish.workspace = true
 name = "h5i-pay"
 path = "src/main.rs"
 
+[features]
+# `H5I_PAY_PSP=mock`: the Mock PSP. Off by default and in the production
+# image, so a production binary cannot run with a PSP that accepts any token
+# (SEC-05). Local development: `cargo run -p payment-api --features mock-psp`.
+mock-psp = ["payment-connectors/mock"]
+
 [dependencies]
 h5i-app = { workspace = true, features = ["full"] }
 h5i-app-core.workspace = true

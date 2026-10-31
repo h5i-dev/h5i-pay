@@ -11,6 +11,8 @@ restore test into a throwaway instance, Multi-AZ for automatic failover.
    instance the weekly restore test created.
 2. Run an API task against it with `DATABASE_URL` pointing at the restored
    instance and `H5I_PAY_PSP=mock` (never a real PSP against restored data).
+   Use the `<sha>-mock` API image; the production image has no Mock PSP
+   and refuses to start with `mock`.
 3. For every tenant: `GET /v1/ledger/audit` must return `ok: true`, and
    `POST /v1/reconcile` must show no `ledger` exceptions. The audit checks
    the same invariants the proofs establish, on the restored rows.

@@ -41,7 +41,7 @@ payment-ledger.workspace = true
 payment-domain.workspace = true
 payment-storage = { workspace = true, features = ["testing"] }
 payment-api.workspace = true
-payment-connectors.workspace = true
+payment-connectors = { workspace = true, features = ["mock"] }
 payment-reconcile.workspace = true
 payment-batch.workspace = true
 payment-gpu.workspace = true

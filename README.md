@@ -107,9 +107,9 @@ Locally, without `DB_CA_FILE`, it uses plain TCP:
 
 ```sh
 export DATABASE_URL=$(scripts/dev-db.sh) H5I_APP_SECRET=dev-secret
-OP=$(H5I_APP_ISSUE=1:0 cargo run -q -p payment-api --bin h5i-pay)     # tenant 1, operator
-ALICE=$(H5I_APP_ISSUE=1:1 cargo run -q -p payment-api --bin h5i-pay)  # tenant 1, user 1
-cargo run -p payment-api --bin h5i-pay &
+OP=$(H5I_APP_ISSUE=1:0 cargo run -q -p payment-api --features mock-psp --bin h5i-pay)     # tenant 1, operator
+ALICE=$(H5I_APP_ISSUE=1:1 cargo run -q -p payment-api --features mock-psp --bin h5i-pay)  # tenant 1, user 1
+cargo run -p payment-api --features mock-psp --bin h5i-pay &   # Mock PSP: dev and test builds only
 
 rpc() { curl -s -H "Authorization: Bearer $1" -H 'content-type: application/json' -d "$2" localhost:8080/v1/ledger; echo; }
 rpc $OP    '{"cmd":"open","currency":392}'                                     # {"id":0}
@@ -118,8 +118,9 @@ rpc $OP    '{"cmd":"transfer","id":1,"debit":0,"credit":1,"amount":1000}'      #
 rpc $OP    '{"cmd":"transfer","id":1,"debit":0,"credit":1,"amount":1000}'      # exists (replay)
 curl -s -H "Authorization: Bearer $OP" localhost:8080/v1/ledger/audit
 
-# Payments (Mock PSP by default; H5I_PAY_PSP=stripe with STRIPE_SECRET_KEY=sk_test_… for Stripe test mode)
-MERCHANT=$(H5I_APP_ISSUE=1:7 cargo run -q -p payment-api --bin h5i-pay)
+# Payments. A mock-psp build defaults to the Mock PSP; H5I_PAY_PSP=stripe with STRIPE_SECRET_KEY=sk_test_…
+# for Stripe test mode. A build without the feature (the production image) defaults to stripe and refuses mock.
+MERCHANT=$(H5I_APP_ISSUE=1:7 cargo run -q -p payment-api --features mock-psp --bin h5i-pay)
 pay() { curl -s -H "Authorization: Bearer $1" -H 'content-type: application/json' -d "$3" localhost:8080$2; echo; }
 pay $MERCHANT /v1/payments '{"amount":1200,"currency":"jpy","capture":"manual","payment_method":"tok_visa"}'
 pay $MERCHANT /v1/payments/0/capture '{"amount":1000}'

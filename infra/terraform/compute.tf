@@ -195,15 +195,20 @@ resource "aws_ecs_cluster" "main" {
 }
 
 locals {
-  api_image = "${aws_ecr_repository.repo["api"].repository_url}:${var.api_image_tag}"
+  # The production image has no Mock PSP compiled in (SEC-05); with
+  # psp_mode = "mock" the task runs the <tag>-mock image CI builds with
+  # API_FEATURES=mock-psp.
+  api_image = "${aws_ecr_repository.repo["api"].repository_url}:${var.api_image_tag}${var.psp_mode == "mock" ? "-mock" : ""}"
   # The API builds its database URL from DB_HOST, DB_NAME and the RDS-managed
   # credentials secret (JSON with username and password) at start-up.
   api_secrets = concat(
     [
       { name = "H5I_APP_SECRET", valueFrom = aws_secretsmanager_secret.app.arn },
       { name = "DB_CREDENTIALS", valueFrom = aws_db_instance.main.master_user_secret[0].secret_arn },
-      { name = "H5I_PAY_MOCK_WEBHOOK_SECRET", valueFrom = aws_secretsmanager_secret.mock_webhook_secret.arn },
     ],
+    var.psp_mode == "mock" ? [
+      { name = "H5I_PAY_MOCK_WEBHOOK_SECRET", valueFrom = aws_secretsmanager_secret.mock_webhook_secret.arn },
+    ] : [],
     var.psp_mode == "stripe" ? [
       { name = "STRIPE_SECRET_KEY", valueFrom = aws_secretsmanager_secret.stripe_secret_key.arn },
       { name = "STRIPE_WEBHOOK_SECRET", valueFrom = aws_secretsmanager_secret.stripe_webhook_secret.arn },

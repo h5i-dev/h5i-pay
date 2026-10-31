@@ -23,6 +23,13 @@ variable "psp_mode" {
     condition     = contains(["mock", "stripe"], var.psp_mode)
     error_message = "psp_mode must be mock or stripe."
   }
+
+  # SEC-05: the Mock PSP accepts any token. Never in an environment whose
+  # name says production.
+  validation {
+    condition     = !(var.psp_mode == "mock" && can(regex("^prod", var.environment)))
+    error_message = "psp_mode = \"mock\" is not allowed in a prod* environment."
+  }
 }
 
 variable "vpc_cidr" {

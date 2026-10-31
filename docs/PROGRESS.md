@@ -180,6 +180,28 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### SEC-05 closed: the Mock PSP is out of production builds
+
+- `payment-connectors` feature `mock` gates `mock::MockPsp`;
+  `payment-api` feature `mock-psp` enables it. Both are off by default.
+  Without it, `H5I_PAY_PSP=mock` stops the binary at startup and the
+  default PSP is `stripe`. With it, the default stays `mock`, and a warning
+  is logged.
+- `Dockerfile.api` has `ARG API_FEATURES=""`: the production image is built
+  without the Mock PSP, and CI also pushes `<sha>-mock` (built with
+  `API_FEATURES=mock-psp`). Terraform runs the `-mock` image and injects
+  the mock webhook secret only for `psp_mode = "mock"`, and rejects
+  `psp_mode = "mock"` in `prod*` environments (cross-variable validation;
+  checked with a scratch plan: `prod-1`+`mock` rejected, `test`/`staging`
+  +`mock` and `prod`+`stripe` accepted). The deploy job keeps the image
+  variant matching the task's `H5I_PAY_PSP`.
+- CI builds `payment-api` alone and fails unless the binary refuses
+  `mock`, and runs clippy on the `mock-psp` path too.
+- Checked here: the production binary refuses `mock`, defaults to Stripe
+  (`STRIPE_SECRET_KEY is not set`), and `strings` finds no Mock PSP
+  markers in it (2 in the `mock-psp` build); both image variants were
+  built and run.
+
 ### u32 columns
 
 - Ledger: `Account.currency`, `Account.code`, `Transfer.currency`,
@@ -248,8 +270,7 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 ## Open items / decisions
 
 - Not done or not verifiable here:
-  - SEC-02 (coarse identity, operator = user 0) and SEC-05 (Mock PSP must
-    be removed from production builds) are open; see
+  - SEC-02 (coarse identity, operator = user 0) is open; see
     `docs/security-review.md`.
   - No test kills the API process itself mid-request; fault injection
     kills the database backend and drops connections instead.
