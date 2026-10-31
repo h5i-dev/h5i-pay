@@ -14,7 +14,7 @@ testing = ["h5i-app-pg/testing"]
 h5i-app = { workspace = true, features = ["full"] }
 # `schema!`'s server-side mapping expands to paths through these two.
 h5i-app-core.workspace = true
-h5i-app-pg.workspace = true
+h5i-app-pg = { workspace = true, features = ["tls"] }
 h5i-app-http.workspace = true
 h5i-app-json.workspace = true
 payment-ledger.workspace = true

@@ -62,6 +62,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 export H5I_APP_TEST_DATABASE_URL=$(scripts/dev-db.sh)
 cargo test --workspace
 
+# TLS-only PostgreSQL for tests/tls (h5i's script; prints the three variables)
+eval "$(bash /path/to/h5i/scripts/app/pg-tls.sh /tmp/pg-tls | sed 's/^/export /')"
+cargo test -p h5i-pay-tests --test tls
 # Proofs: Charon, Aeneas and Lean at the versions h5i pins
 h5i app doctor
 h5i app extract crates/payment-ledger crates/payment-domain   # rewrite proofs/*/generated/
@@ -95,6 +98,12 @@ The GPU computes reports and candidate decisions; it never commits
 financial state.
 
 ## Run
+
+Set `DB_CA_FILE` to a PEM CA bundle to connect to PostgreSQL over verified
+TLS (certificate chain and host name, no plaintext fallback). Deployed, the
+API reads the RDS credentials secret and refuses to start without it; the
+image ships the Amazon RDS bundle at `/etc/h5i-pay/rds-global-bundle.pem`.
+Locally, without `DB_CA_FILE`, it uses plain TCP:
 
 ```sh
 export DATABASE_URL=$(scripts/dev-db.sh) H5I_APP_SECRET=dev-secret

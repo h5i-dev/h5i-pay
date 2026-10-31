@@ -13,6 +13,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # No shell, no package manager; runs as uid 65532.
 FROM gcr.io/distroless/cc-debian12:nonroot
 COPY --from=build /h5i-pay /usr/local/bin/h5i-pay
+# The Amazon RDS global CA bundle, vendored from
+# https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+# (refresh with infra/docker/update-rds-ca.sh). The ECS task sets DB_CA_FILE
+# to this path; when it is unset (local compose) the API uses plain TCP.
+COPY infra/docker/rds-global-bundle.pem /etc/h5i-pay/rds-global-bundle.pem
 USER 65532:65532
 ENV LISTEN=0.0.0.0:8080
 EXPOSE 8080

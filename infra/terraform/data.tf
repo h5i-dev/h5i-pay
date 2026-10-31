@@ -99,12 +99,12 @@ resource "aws_db_parameter_group" "pg17" {
     name  = "log_lock_waits"
     value = "1"
   }
-  # h5i-app-pg 0.1.4 connects with tokio-postgres NoTls, so TLS cannot be
-  # forced yet: the database sits in isolated subnets reachable only from the
-  # API security group. Tracked in docs/security-review.md (H5I-PAY-SEC-01).
+  # Only TLS connections are accepted. The API connects with h5i-app-pg's
+  # pool_tls, verifying the server certificate against the RDS global CA
+  # bundle and its host name (DB_CA_FILE; docs/security-review.md SEC-01).
   parameter {
     name  = "rds.force_ssl"
-    value = "0"
+    value = "1"
   }
   parameter {
     name  = "idle_in_transaction_session_timeout"

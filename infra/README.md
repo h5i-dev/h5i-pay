@@ -52,11 +52,4 @@ GPU environment and leaves the CPU queue.
 
 ## Known gaps (tracked in `docs/security-review.md`)
 
-- **TLS to PostgreSQL.** h5i-app-pg 0.1.4 connects with `tokio-postgres`
-  `NoTls`, so `rds.force_ssl` is 0. The database is reachable only from
-  the API security group, in subnets with no route out. TLS support in
-  h5i-app-pg is the fix (a contribution back to h5i-app, design §4).
-- **Images not built here.** The Dockerfiles were not built on the
-  development machine (not enough free disk for the build stages); CI
-  builds them.
 - **The ADOT collector image is `latest`.** Pin a digest before production.

@@ -61,7 +61,7 @@ assume (`docs/proof-assumptions.md`), failure handling
 runbooks (`docs/runbooks/`), benchmarks (`docs/benchmarks.md`),
 infrastructure (`infra/`).
 
-Open before real funds: SEC-01 (TLS to PostgreSQL), SEC-02 (operator
+Open before real funds: SEC-02 (operator
 identity), SEC-05 (mock PSP out of production builds), the operating-model
 and licensing decision above, merchant onboarding, a payout flow, and an
 actual restore drill and failover drill on AWS.

@@ -16,12 +16,27 @@ RUN --mount=type=cache,target=/opt/cargo/registry \
     PAYMENT_GPU_ARCH=compute_75 cargo build --release --locked -p payment-gpu --features cuda --bin h5i-pay-batch \
  && cp target/release/h5i-pay-batch /h5i-pay-batch
 
+# AWS CLI v2 for the entrypoint's S3 copies (Ubuntu 24.04 has no awscli
+# package). Pinned version and SHA-256; the hash was taken after checking
+# the release's PGP signature against the AWS CLI Team key
+# FB5D B77F D5C1 18B8 0511 ADA8 A631 0ACC 4672 475C.
+ARG AWSCLI_VERSION=2.39.0
+ARG AWSCLI_SHA256=6c89ce7ed7bc0a2520e2bc3eeedfea4e2eb2e7da2836860c9471871408404036
+RUN apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf /var/lib/apt/lists/* \
+ && curl -sSfL --proto '=https' "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip" -o /tmp/awscli.zip \
+ && echo "${AWSCLI_SHA256}  /tmp/awscli.zip" | sha256sum -c - \
+ && unzip -q /tmp/awscli.zip -d /tmp \
+ && /tmp/aws/install --install-dir /opt/aws-cli --bin-dir /opt/aws-cli-bin \
+ && rm -rf /tmp/aws /tmp/awscli.zip
+
 # The CUDA driver comes from the host (ECS GPU AMI); without a GPU the
 # worker uses the multithreaded CPU engine.
 FROM nvidia/cuda:13.2.0-base-ubuntu24.04
-RUN apt-get update && apt-get install -y --no-install-recommends awscli ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 10001 --create-home worker
+COPY --from=build /opt/aws-cli /opt/aws-cli
+RUN ln -s /opt/aws-cli/v2/current/bin/aws /usr/local/bin/aws && aws --version
 COPY --from=build /h5i-pay-batch /usr/local/bin/h5i-pay-batch
 COPY infra/docker/batch-entrypoint.sh /usr/local/bin/batch-entrypoint.sh
 USER 10001

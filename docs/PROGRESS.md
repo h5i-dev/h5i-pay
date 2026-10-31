@@ -155,8 +155,8 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 - `payment-api` reads RDS-managed credentials (`DB_HOST`/`DB_NAME`/
   `DB_CREDENTIALS`); `h5i-pay-batch` prints a JSON summary line for the
   reconciliation-exceptions metric filter.
-- Known gap: h5i-app-pg connects without TLS, so `rds.force_ssl = 0`
-  (`docs/security-review.md`).
+- Known gap at the time: h5i-app-pg connected without TLS, so
+  `rds.force_ssl = 0`. Closed after M5 (SEC-01, below).
 
 ## M5 — Production Hardening (docs): done
 
@@ -180,6 +180,36 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### SEC-01 closed: verified TLS to PostgreSQL
+
+- `payment-storage` enables h5i-app-pg's `tls` feature. `DbTls::from_env`
+  reads `DB_CA_FILE`; when set, every pool uses `pool_tls` with
+  `Roots::PemFile` (chain and host name verified, `sslmode` forced to
+  `require`, `sslmode=disable` an error, no plaintext fallback). A missing
+  or certificate-less bundle fails at startup. The API refuses to start on
+  the RDS-secret path (`DB_CREDENTIALS`) without `DB_CA_FILE`; with
+  `DATABASE_URL` and no CA it uses plain TCP (local development).
+- The Amazon RDS global CA bundle (114 CAs, sha256 `90a6f1a7…f21b`) is
+  vendored at `infra/docker/rds-global-bundle.pem`
+  (`infra/docker/update-rds-ca.sh` refreshes it) and shipped in the API
+  image at `/etc/h5i-pay/rds-global-bundle.pem`; the ECS task sets
+  `DB_CA_FILE` to it. Not added to the worker image: the batch worker has
+  no database credentials or network path to RDS.
+- Terraform: `rds.force_ssl = 1`. `terraform fmt -check` and `validate` pass.
+- `tests/tls` (7 tests) against h5i's `scripts/app/pg-tls.sh` servers
+  (TLS-only `pg_hba.conf`; ports 55433 default protocols, 55434 TLS 1.2):
+  payment, capture, refund, reconciliation and audit over TLS with every
+  server-side connection TLS (`pg_stat_ssl`); plain TCP refused by the
+  server; a certificate from another CA refused (`UnknownIssuer`); the IP
+  instead of the certified name refused (`NotValidForName`);
+  `sslmode=disable` refused; bad CA files refused.
+- The API image was built locally (90.7 MB) and run against the TLS-only
+  server: with the test CA it served `/v1/ledger` and `audit` with
+  `db_tls=true`; with the shipped RDS bundle the handshake failed; without
+  `DB_CA_FILE` it refused to start.
+- CI starts the TLS servers with h5i's script at the pinned rev and fails if
+  the TLS suite skipped.
+
 ### h5i-app from git rev a19667c
 
 - Every h5i-app crate (including `h5i-app-gpu` and
@@ -196,16 +226,19 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 ## Open items / decisions
 
 - Not done or not verifiable here:
-  - SEC-01 (no TLS to PostgreSQL; needs a TLS option in h5i-app-pg),
-    SEC-02 (coarse identity, operator = user 0), SEC-05 (Mock PSP must be
-    removed from production builds) are open; see `docs/security-review.md`.
+  - SEC-02 (coarse identity, operator = user 0) and SEC-05 (Mock PSP must
+    be removed from production builds) are open; see
+    `docs/security-review.md`.
   - No test kills the API process itself mid-request; fault injection
     kills the database backend and drops connections instead.
   - Nothing calls `POST /v1/recover` on a schedule; an EventBridge rule or
     a cron task is still needed (runbook `psp-incidents.md` describes the
     manual call).
-  - Docker images were not built on this host (about 4 GB free disk); CI
-    builds them.
+  - Docker images are built locally now. The worker image did not build
+    before (Ubuntu 24.04 has no `awscli` package); fixed by installing AWS
+    CLI v2.39.0 from its release zip, pinned by SHA-256 after a PGP check.
+    The worker image (793 MB) ran a 200k-row reconciliation on the A10G
+    and on CPU with identical reports. Not pushed to any registry.
   - The Stripe test-mode round trip was skipped (no `STRIPE_SECRET_KEY`).
   - Terraform was validated, never planned against or applied to AWS.
 

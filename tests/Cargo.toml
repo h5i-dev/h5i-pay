@@ -22,6 +22,10 @@ name = "fault_injection"
 path = "fault-injection/main.rs"
 
 [[test]]
+name = "tls"
+path = "tls/main.rs"
+
+[[test]]
 name = "differential"
 path = "differential/main.rs"
 
@@ -31,7 +35,7 @@ gpu = ["payment-gpu/cuda"]
 
 [dependencies]
 h5i-app-core.workspace = true
-h5i-app-pg = { workspace = true, features = ["testing"] }
+h5i-app-pg = { workspace = true, features = ["testing", "tls"] }
 h5i-app-http.workspace = true
 payment-ledger.workspace = true
 payment-domain.workspace = true

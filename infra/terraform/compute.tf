@@ -221,6 +221,9 @@ locals {
       { name = "H5I_PAY_PSP", value = var.psp_mode },
       { name = "DB_HOST", value = aws_db_instance.main.address },
       { name = "DB_NAME", value = aws_db_instance.main.db_name },
+      # TLS with verify-full against the RDS CAs shipped in the image; the API
+      # refuses to start with DB_CREDENTIALS and no DB_CA_FILE.
+      { name = "DB_CA_FILE", value = "/etc/h5i-pay/rds-global-bundle.pem" },
       { name = "RUST_LOG", value = "info,h5i_app_pg=warn" },
       { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://127.0.0.1:4317" },
     ]

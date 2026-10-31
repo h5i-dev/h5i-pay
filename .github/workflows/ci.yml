@@ -49,9 +49,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --workspace --all-targets --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # Two TLS-only PostgreSQL servers (default protocols and TLS 1.2 only)
+      # with a throwaway CA, from h5i's script at the pinned rev. Exports
+      # H5I_APP_TEST_TLS_DATABASE_URL, H5I_APP_TEST_TLS12_DATABASE_URL and
+      # H5I_APP_TEST_TLS_CA for tests/tls (SEC-01).
+      - name: TLS-only PostgreSQL
+        run: |
+          curl -sSfL "https://raw.githubusercontent.com/h5i-dev/h5i/$H5I_REV/scripts/app/pg-tls.sh" -o "$RUNNER_TEMP/pg-tls.sh"
+          bash "$RUNNER_TEMP/pg-tls.sh" "$RUNNER_TEMP/pg-tls" >> "$GITHUB_ENV"
       # Unit, integration (HTTP + Mock PSP + PostgreSQL), concurrency,
-      # fault-injection and CPU differential tests.
+      # fault-injection, TLS and CPU differential tests.
       - run: cargo test --workspace --locked
+      # Fail if the TLS suite skipped (its variables missing) instead of passing silently.
+      - name: TLS suite ran
+        run: |
+          test -n "$H5I_APP_TEST_TLS_DATABASE_URL" && test -s "$H5I_APP_TEST_TLS_CA"
+          cargo test --locked -p h5i-pay-tests --test tls -- --nocapture 2>&1 | tee "$RUNNER_TEMP/tls.log"
+          ! grep -q 'skipping' "$RUNNER_TEMP/tls.log"
       - name: Stripe test-mode round trip (only with a test key)
         if: env.HAS_STRIPE_KEY == 'true'
         env:
