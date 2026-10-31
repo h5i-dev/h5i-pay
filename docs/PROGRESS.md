@@ -18,7 +18,7 @@ after a disconnect. Newest entries first within each milestone.
 `h5i` v0.5.2 has no `init` or `capture` commands (`h5i --help` lists
 `box ui browser plugin project app skill completion`), so commits are
 plain `git commit`; provenance for the proofs is `h5i app check` /
-`h5i app mutate`, whose records live under `proofs/.lake/h5i`.
+`h5i app mutate`, whose run records live under `crates/*/.h5i/app/runs/`.
 
 PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOME/.elan/bin:$PATH`.
 
@@ -158,9 +158,41 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 - Known gap: h5i-app-pg connects without TLS, so `rds.force_ssl = 0`
   (`docs/security-review.md`).
 
-## M5 — Production Hardening (docs): not started
+## M5 — Production Hardening (docs): done
+
+- `docs/failure-recovery.md`: each failure (database connection lost
+  mid-transaction or before COMMIT, races, PSP timeouts and outages, lost
+  refund responses, duplicate/reordered/forged webhooks, crash between
+  capture and ledger posting, settlement mismatch, GPU failure, bad
+  deploy, database loss), what keeps money correct, and the test or proof
+  that shows it.
+- `docs/security-review.md`: threat model and findings SEC-01..07.
+- `docs/compliance.md`: PCI DSS scope (no card data handled: tokens and
+  hosted Checkout only), data retention, audit trail, what is still needed
+  before real funds.
+- `docs/runbooks/`: ledger imbalance, reconciliation exceptions, PSP
+  incidents, webhooks, backup/restore, deploy/rollback, batch jobs, secret
+  rotation.
+- `docs/proof-assumptions.md`: trusted base, gate results, the mutant
+  table (first failing proof per mutant, read from the run records), and
+  the limits of the GPU and reconciliation evidence.
+- README updated with the full layout and commands.
 
 ## Open items / decisions
+
+- Not done or not verifiable here:
+  - SEC-01 (no TLS to PostgreSQL; needs a TLS option in h5i-app-pg),
+    SEC-02 (coarse identity, operator = user 0), SEC-05 (Mock PSP must be
+    removed from production builds) are open; see `docs/security-review.md`.
+  - No test kills the API process itself mid-request; fault injection
+    kills the database backend and drops connections instead.
+  - Nothing calls `POST /v1/recover` on a schedule; an EventBridge rule or
+    a cron task is still needed (runbook `psp-incidents.md` describes the
+    manual call).
+  - Docker images were not built on this host (about 4 GB free disk); CI
+    builds them.
+  - The Stripe test-mode round trip was skipped (no `STRIPE_SECRET_KEY`).
+  - Terraform was validated, never planned against or applied to AWS.
 
 - u32 columns break the Lean that `h5i-app-schema` 0.1.4 renders (its
   generated proofs fail on `int ↑(u32)`), so every kernel column is `u64`.

@@ -9,12 +9,39 @@ not proven. Every theorem named here builds with `lake build` and passes
 
 | Area | Theorems | About |
 |---|---|---|
-| Ledger | `payment_ledger.Theorems.conservation`, `journal_balanced`, `no_overdraft`, `no_overcredit`, `posting_balanced`, `replay_is_noop`, `only_owner_or_operator_debits`, `reachable_inv` | the Lean that Charon+Aeneas extract from `crates/payment-ledger/src/lib.rs` (`proofs/generated/PaymentLedger.lean`) |
+| Ledger | `payment_ledger.Theorems.conservation`, `journal_balanced`, `no_overdraft`, `no_overcredit`, `posting_balanced`, `replay_is_noop`, `only_owner_or_operator_debits`, `reachable_inv` | the Lean that Charon+Aeneas extract from `crates/payment-ledger/src/lib.rs` (`proofs/ledger/generated/PaymentLedger.lean`) |
 | Batch | `payment_ledger.Batch.batch_serial` | the extracted `batch` loop |
 | Storage | `payment_ledger.Storage.db_inv` | the extracted `sql_writes`/`decode` and h5i-app's SQL model (`H5iAppLib.Pg`) |
 | Engine model | `Models.isolation`, `noninterference`, `others_commute`, `keyed_replay`, `keyed_conflict`, `ledger_isolation` | a hand-written Lean model of the engine (`proofs/ledger/Models/Engine.lean`) |
 | Payments | `payment_domain.Theorems.status_steps_allowed`, `terminal_final`, `captured_final`, `refund_safety`, `refunded_le_captured`, `event_dedup`, `reachable_inv` | the extracted `crates/payment-domain/src/lib.rs` (`proofs/payments/generated/PaymentDomain.lean`) |
 | Policies | `payment_domain.Policies.check_sound` | the extracted `crates/payment-domain/src/policy.rs` |
+
+Gate results at the M5 commit: `h5i app check crates/payment-ledger` — 145
+theorems in 11 modules; `h5i app check crates/payment-domain` — 121
+theorems in 6 modules; both on the three standard axioms only.
+
+The specifications were tested against deliberately wrong kernels
+(`h5i app mutate`, mutants listed in each crate's `h5i-app.toml`); every
+mutant broke a proof. The table lists the first proof that failed, taken
+from the `lean_build` stage log in the run record
+(`crates/*/.h5i/app/runs/*-mutation-*/run.json`). Lake stops at the first
+failing module, so theorems downstream of it (for example `conservation`
+for the ledger mutants) were not re-checked in the trial; they depend on
+the failing step lemma and cannot be proved without it.
+
+| Kernel | Mutant (`h5i-app.toml` name) | First failing proof |
+|---|---|---|
+| ledger | `self_transfer_allowed` | `Commands.transfer_spec` |
+| ledger | `overdraft_allowed` | `Commands.post_spec` |
+| ledger | `anyone_may_debit` | `Commands.may_debit_spec` |
+| ledger | `credit_side_short` | `Commands.post_spec` |
+| ledger | `replay_ignores_amount` | `Commands.same_transfer_spec` |
+| payments | `refund_past_capture` | `Commands.request_refund_spec` |
+| payments | `capture_beyond_authorization` | `Commands.record_captured_spec` |
+| payments | `decline_after_capture` | `Commands.record_declined_spec` |
+| payments | `webhook_not_deduplicated` | `Commands.event_spec` |
+| payments | `refund_success_without_release` | `Commands.record_refund_spec` |
+| policy | `blocked_recipient_approved` | `Policies.check_sound` |
 
 "Reachable" (`Spec.Reachable`) means: reached from the empty ledger by any
 sequence of commands that the kernel accepted, from any callers, in any
@@ -68,7 +95,16 @@ committed history is such a sequence.
   miss a merchant on an unsorted list (refusing, never wrongly approving).
 - **CPU/GPU equivalence** of the batch engines is checked by differential
   tests on the inputs they cover, not proven (see `docs/benchmarks.md`).
-
+  The CPU engines and the CUDA kernels are separate implementations of the
+  Rust rules: the CUDA C in `crates/payment-gpu/kernels/batch.cu` is a
+  transcription, not compiled from the extracted Rust. Trusted for the GPU
+  path: nvcc, the PTX JIT, the CUDA driver and hardware, `cust`, the buffer
+  layouts (asserted sizes), and the launch shell. Only the policy rules the
+  CPU engines run are the verified function; the SIMD policy engine is a
+  separate implementation checked against it by tests.
+- **Reconciliation rules are not proven.** `payment_reconcile::rules` is
+  tested (every code, random inputs, four engines against an oracle), not
+  extracted.
 - **Tenant isolation inside PostgreSQL** is proven for the SQL model and the
   engine model, not for the real engine or database.
 - **The `Exists` replay path does not check the caller.** A principal who

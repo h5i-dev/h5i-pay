@@ -16,12 +16,31 @@ in a SERIALIZABLE PostgreSQL transaction. The design is
 | `crates/payment-domain` | payment state machine, refunds, webhook dedup, batch policy rules (extracted to Lean) |
 | `crates/payment-storage` | h5i-app PostgreSQL adapters, JSON codecs, audits |
 | `crates/payment-connectors` | PSP connectors: Mock PSP, Stripe (test mode only), webhook signatures |
-| `crates/payment-reconcile` | reconciliation rules and CPU engines |
+| `crates/payment-reconcile` | reconciliation rules and CPU engines (reference, single-thread, multithread, AVX2) |
+| `crates/payment-batch` | batch API on h5i-app-gpu: policy validation and reconciliation with CPU/GPU/Auto selection |
+| `crates/payment-gpu` | CUDA kernels (`kernels/batch.cu`, feature `cuda`) and the `h5i-pay-batch` worker |
 | `crates/payment-api` | the `h5i-pay` HTTP server and the payment orchestrator |
 | `proofs/ledger` | Lake project: extracted ledger, `Ledger/`, `Batch/`, `Models/` |
 | `proofs/payments` | Lake project: extracted payment kernel, `Payments/`, `Policies/` |
-| `tests/` | integration, concurrency and fault-injection suites |
+| `tests/` | integration, concurrency, fault-injection and CPU/GPU differential suites |
+| `benchmarks/` | `bench` binary; results in `benchmarks/results/`, analysis in [docs/benchmarks.md](docs/benchmarks.md) |
+| `infra/` | Terraform for AWS and Dockerfiles ([infra/README.md](infra/README.md)); never applied |
+| `.github/workflows/ci.yml` | CI: Rust, CUDA build, proofs, Terraform checks, images, test deploy |
 | `scripts/dev-db.sh` | a local PostgreSQL 17 in docker |
+
+## Documents
+
+- [docs/design-v0.1.md](docs/design-v0.1.md): design (Japanese)
+- [docs/PROGRESS.md](docs/PROGRESS.md): milestone status and open items
+- [docs/proof-assumptions.md](docs/proof-assumptions.md): what is proven and what the proofs assume
+- [docs/benchmarks.md](docs/benchmarks.md): CPU vs GPU results, including where the GPU loses
+- [docs/failure-recovery.md](docs/failure-recovery.md): failure modes and recovery
+- [docs/security-review.md](docs/security-review.md): threat model and open findings
+- [docs/compliance.md](docs/compliance.md): PCI DSS scope and readiness
+- [docs/runbooks/](docs/runbooks/README.md): operational runbooks
+
+h5i-pay runs in test mode with synthetic funds only (Mock PSP or Stripe
+test keys). It never handles raw card numbers.
 
 ## Dependencies
 
@@ -52,6 +71,24 @@ The two Lake projects have the same `require`s, so h5i's shared package
 cache (`~/.cache/h5i/lake`) holds one copy of Mathlib for both. On a small
 disk, set `H5I_LAKE_CACHE=off` and symlink `proofs/payments/.lake/packages`
 to `../../ledger/.lake/packages` instead.
+
+## GPU batch and benchmarks
+
+Needs the CUDA toolkit (`nvcc`), an NVIDIA driver and libclang. Without the
+`cuda` feature everything builds and runs on the CPU only.
+
+```sh
+cargo clippy --workspace --all-targets --features payment-gpu/cuda,h5i-pay-tests/gpu,h5i-pay-benchmarks/gpu -- -D warnings
+cargo test --release -p h5i-pay-tests --features gpu --test differential   # GPU vs the reference on every row
+cargo build --release -p h5i-pay-benchmarks --features gpu
+./target/release/bench all --out benchmarks/results/<instance>.json
+
+cargo run --release -p payment-gpu --features cuda --bin h5i-pay-batch -- \
+  reconcile internal.csv external.csv report.json --engine auto
+```
+
+The GPU computes reports and candidate decisions; it never commits
+financial state.
 
 ## Run
 
