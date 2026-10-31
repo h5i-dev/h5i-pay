@@ -20,5 +20,5 @@ payment-batch.workspace = true
 payment-reconcile.workspace = true
 payment-domain.workspace = true
 # The same Rust-CUDA revision h5i-app-gpu-backend-nvvm pins.
-h5i-app-gpu-backend-nvvm = { git = "https://github.com/h5i-dev/h5i", tag = "v0.5.2", optional = true }
+h5i-app-gpu-backend-nvvm = { git = "https://github.com/h5i-dev/h5i", rev = "a19667cbbb5a1be14c8d16579eb00e679910dc57", optional = true }
 cust = { git = "https://github.com/Rust-GPU/rust-cuda", rev = "3a82c35a7196731fb60eebdac2a40d2b1bf0ba95", optional = true }

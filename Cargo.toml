@@ -21,17 +21,19 @@ publish = false
 repository = "https://github.com/h5i-dev/h5i-pay"
 
 [workspace.dependencies]
-# h5i-app 0.1.4, pinned exactly. It resolves from crates.io (checked
-# 2026-10-31); the same sources are tag v0.5.2 of github.com/h5i-dev/h5i.
-h5i-app = { version = "=0.1.4" }
-h5i-app-core = { version = "=0.1.4" }
-h5i-app-pg = { version = "=0.1.4" }
-h5i-app-http = { version = "=0.1.4" }
-h5i-app-json = { version = "=0.1.4" }
-h5i-app-schema = { version = "=0.1.4" }
-h5i-app-sql = { version = "=0.1.4" }
-# h5i-app-gpu is not published on crates.io: git dependency at tag v0.5.2.
-h5i-app-gpu = { git = "https://github.com/h5i-dev/h5i", tag = "v0.5.2" }
+# Every h5i-app crate from one commit of github.com/h5i-dev/h5i (main after
+# #769, Lean lemmas for u32 schema columns, and #770, h5i-app-pg `tls`).
+# The crates there are still version 0.1.4 and are not on crates.io.
+# Keep this rev, crates/payment-gpu's backend-nvvm rev and the
+# `h5i_app_lib` require in proofs/*/lakefile.lean identical.
+h5i-app = { git = "https://github.com/h5i-dev/h5i", rev = "a19667cbbb5a1be14c8d16579eb00e679910dc57" }
+h5i-app-core = { git = "https://github.com/h5i-dev/h5i", rev = "a19667cbbb5a1be14c8d16579eb00e679910dc57" }
+h5i-app-pg = { git = "https://github.com/h5i-dev/h5i", rev = "a19667cbbb5a1be14c8d16579eb00e679910dc57" }
+h5i-app-http = { git = "https://github.com/h5i-dev/h5i", rev = "a19667cbbb5a1be14c8d16579eb00e679910dc57" }
+h5i-app-json = { git = "https://github.com/h5i-dev/h5i", rev = "a19667cbbb5a1be14c8d16579eb00e679910dc57" }
+h5i-app-schema = { git = "https://github.com/h5i-dev/h5i", rev = "a19667cbbb5a1be14c8d16579eb00e679910dc57" }
+h5i-app-sql = { git = "https://github.com/h5i-dev/h5i", rev = "a19667cbbb5a1be14c8d16579eb00e679910dc57" }
+h5i-app-gpu = { git = "https://github.com/h5i-dev/h5i", rev = "a19667cbbb5a1be14c8d16579eb00e679910dc57" }
 
 payment-ledger = { path = "crates/payment-ledger" }
 payment-domain = { path = "crates/payment-domain" }

@@ -44,9 +44,13 @@ test keys). It never handles raw card numbers.
 
 ## Dependencies
 
-`h5i-app = "=0.1.4"` and its sub-crates resolve from crates.io, pinned
-exactly. `h5i-app-gpu` is not published, so it is a git dependency on
-<https://github.com/h5i-dev/h5i> at tag `v0.5.2`.
+Every h5i-app crate (`h5i-app`, `-core`, `-pg`, `-http`, `-json`, `-schema`,
+`-sql`, `-gpu`, `-gpu-backend-nvvm`) is a git dependency on
+<https://github.com/h5i-dev/h5i> at one commit, `a19667cbbb5a1be14c8d16579eb00e679910dc57`
+(main after #769, Lean lemmas for `u32` schema columns, and #770, verified
+TLS in h5i-app-pg). The crates there are version 0.1.4 and are not on
+crates.io. The Lean library `h5i_app_lib` in `proofs/*/lakefile.lean` is
+required from the same commit; keep the three pins identical.
 
 ## Build, test, prove
 
@@ -58,7 +62,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 export H5I_APP_TEST_DATABASE_URL=$(scripts/dev-db.sh)
 cargo test --workspace
 
-# Proofs: Charon, Aeneas and Lean at the versions h5i v0.5.2 pins
+# Proofs: Charon, Aeneas and Lean at the versions h5i pins
 h5i app doctor
 h5i app extract crates/payment-ledger crates/payment-domain   # rewrite proofs/*/generated/
 h5i app extract --check crates/payment-ledger crates/payment-domain

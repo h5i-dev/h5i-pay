@@ -475,7 +475,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -595,8 +595,7 @@ checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 [[package]]
 name = "h5i-app"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4830a2fcc247ad88326cc1c16a9d6b2fea7cd9acc8a522b6b4a13a1e44c640b"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 dependencies = [
  "h5i-app-core",
  "h5i-app-http",
@@ -611,8 +610,7 @@ dependencies = [
 [[package]]
 name = "h5i-app-core"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d750574335c3cdfbcddaa560a0b486db0c2e5dc259c528085811f5e5f82d9ff"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 dependencies = [
  "h5i-app-std",
 ]
@@ -620,12 +618,12 @@ dependencies = [
 [[package]]
 name = "h5i-app-gpu"
 version = "0.1.4"
-source = "git+https://github.com/h5i-dev/h5i?tag=v0.5.2#17b7d922000a7b8bb8b88235ecc7a963043efee8"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 
 [[package]]
 name = "h5i-app-gpu-backend-nvvm"
 version = "0.1.0"
-source = "git+https://github.com/h5i-dev/h5i?tag=v0.5.2#17b7d922000a7b8bb8b88235ecc7a963043efee8"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 dependencies = [
  "cust",
  "h5i-app-gpu",
@@ -634,8 +632,7 @@ dependencies = [
 [[package]]
 name = "h5i-app-http"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61f9927fc1c53708afb6b0da10a8ce28e6281a2946cf5f987d429fd33e7c6c3a"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 dependencies = [
  "axum",
  "h5i-app-core",
@@ -650,14 +647,12 @@ dependencies = [
 [[package]]
 name = "h5i-app-json"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "874cdb412b1f9572de7e9f79efa62453fa4ca771ed376c6afdc5e2308c28b6ab"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 
 [[package]]
 name = "h5i-app-pg"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ed2ffc925e3938b16d37ea84d908326ac0aebfd4df4ffa1f3caf4c02054d60d"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 dependencies = [
  "bytes",
  "deadpool-postgres",
@@ -673,8 +668,7 @@ dependencies = [
 [[package]]
 name = "h5i-app-pgsql"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9c198fc082c74b0e9e536ee1f4344ecf593cc6c4d8dbf73d380a3c1ae28f5f8"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 dependencies = [
  "h5i-app-sql",
 ]
@@ -682,26 +676,22 @@ dependencies = [
 [[package]]
 name = "h5i-app-schema"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b52ae795c54621104015418d071a72b762ff61cb2086fc9780f7f2f830debfa"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 
 [[package]]
 name = "h5i-app-sql"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0d2f363ad1a4bc99437a9f71e7859cf78e35bc6708cec8f38e2480048fc427d"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 
 [[package]]
 name = "h5i-app-std"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1790956b4ba076c24e5f623e3e847ecc42f0f2aafaa0b4161436c29b3fa79c5a"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 
 [[package]]
 name = "h5i-app-token"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e666e061fc12608293c270445972c5b2b3962a02355def6ee8a6ab866f22a734"
+source = "git+https://github.com/h5i-dev/h5i?rev=a19667cbbb5a1be14c8d16579eb00e679910dc57#a19667cbbb5a1be14c8d16579eb00e679910dc57"
 
 [[package]]
 name = "h5i-pay-benchmarks"
@@ -1600,7 +1590,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

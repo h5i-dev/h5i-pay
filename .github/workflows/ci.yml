@@ -18,9 +18,10 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_TOOLCHAIN: "1.99.1"
-  # Keep in sync with proofs/*/lakefile.lean (h5i v0.5.2 pins).
+  # Keep in sync with proofs/*/lakefile.lean and Cargo.toml (the h5i rev
+  # every h5i-app crate and the h5i_app_lib Lean library come from).
   AENEAS_REV: b86120db3183b0107eb5f2637b11c424cd06ef1c
-  H5I_TAG: v0.5.2
+  H5I_REV: a19667cbbb5a1be14c8d16579eb00e679910dc57
 
 jobs:
   rust:
@@ -96,8 +97,10 @@ jobs:
         run: |
           curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-      - name: h5i CLI ${{ env.H5I_TAG }}
-        run: cargo install --locked --git https://github.com/h5i-dev/h5i --tag "$H5I_TAG" h5i
+      - name: h5i CLI at ${{ env.H5I_REV }}
+        env:
+          H5I_SKIP_WEB_BUILD: "1"
+        run: cargo install --locked --git https://github.com/h5i-dev/h5i --rev "$H5I_REV" h5i
       - uses: actions/cache@v4
         with:
           path: ~/.cache/h5i/lake

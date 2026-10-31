@@ -9,7 +9,7 @@ after a disconnect. Newest entries first within each milestone.
 |---|---|---|
 | Rust | 1.99.1 | workspace edition 2024 |
 | h5i CLI | 0.5.2, `~/.local/bin/h5i` | built from `/root/h5i-upstream` with `H5I_SKIP_WEB_BUILD=1` (no Node on the host, so the `h5i ui` web bundle is not embedded) |
-| h5i-app | 0.1.4 from crates.io, pinned `=0.1.4` | `h5i-app-gpu` is not on crates.io: git dependency on h5i tag `v0.5.2` |
+| h5i-app | 0.1.4 from git, h5i rev `a19667cbbb5a1be14c8d16579eb00e679910dc57` | every h5i-app crate and the `h5i_app_lib` Lean library from that one commit (main after #769 and #770; not on crates.io). Until 2026-10-31 the crates came from crates.io `=0.1.4` and h5i tag `v0.5.2`. The h5i CLI is still the v0.5.2 build: the commits after the tag change only `crates/h5i-app-*`, `scripts/` and CI, not the CLI |
 | Charon / Aeneas | 4bd5a29f6e97 / b86120db3183 at `/opt/aeneas/{charon,aeneas}/bin` | built with `nix build github:AeneasVerif/aeneas/<rev>` (Determinate Nix installer); `h5i app doctor` is green when both are on `PATH` |
 | Lean | leanprover/lean4:v4.31.0 via elan (`~/.elan/bin`) | Mathlib cache from `lake exe cache get` |
 | PostgreSQL | 17 in docker (`scripts/dev-db.sh`, port 55432) | |
@@ -177,6 +177,21 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
   table (first failing proof per mutant, read from the run records), and
   the limits of the GPU and reconciliation evidence.
 - README updated with the full layout and commands.
+
+## After M5 (newest first)
+
+### h5i-app from git rev a19667c
+
+- Every h5i-app crate (including `h5i-app-gpu` and
+  `h5i-app-gpu-backend-nvvm`) and both `h5i_app_lib` Lake requires now come
+  from h5i `a19667cbbb5a1be14c8d16579eb00e679910dc57`. The h5i_app_lib Lean
+  sources and the Aeneas pin are identical to v0.5.2; the re-extraction
+  changed only the `Source:` path comments in `proofs/*/generated/`.
+- Verified: `h5i app extract --check` (both up to date), `h5i app check`
+  (ledger 145 theorems / 11 modules, payments 121 / 6, standard axioms
+  only), `h5i app mutate` (5/5 and 6/6 caught), `lake build` in both
+  projects, `cargo test --workspace`, clippy with and without CUDA, GPU
+  differential tests.
 
 ## Open items / decisions
 
