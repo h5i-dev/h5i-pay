@@ -1,0 +1,14 @@
+[package]
+name = "payment-domain"
+description = "h5i-pay: the verified payment state machine, refunds, webhook dedup and batch policy rules (pure Rust, extracted to Lean 4)"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish.workspace = true
+
+# Extracted to Lean by Charon + Aeneas (`h5i app extract crates/payment-domain`).
+# No I/O, no clock, no PSP client code: the shell calls the PSP and records
+# the outcome through `Command::Record` / `Command::Event`.
+[dependencies]
+h5i-app-schema.workspace = true
+h5i-app-sql.workspace = true

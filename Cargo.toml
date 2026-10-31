@@ -1,0 +1,59 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/payment-ledger",
+    "crates/payment-domain",
+    "crates/payment-storage",
+    "crates/payment-connectors",
+    "crates/payment-api",
+    "tests",
+]
+# The CUDA device crate is built separately for nvptx64 (see crates/payment-gpu/device).
+exclude = ["crates/payment-gpu/device"]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+version = "0.1.0"
+publish = false
+repository = "https://github.com/h5i-dev/h5i-pay"
+
+[workspace.dependencies]
+# h5i-app 0.1.4, pinned exactly. It resolves from crates.io (checked
+# 2026-10-31); the same sources are tag v0.5.2 of github.com/h5i-dev/h5i.
+h5i-app = { version = "=0.1.4" }
+h5i-app-core = { version = "=0.1.4" }
+h5i-app-pg = { version = "=0.1.4" }
+h5i-app-http = { version = "=0.1.4" }
+h5i-app-json = { version = "=0.1.4" }
+h5i-app-schema = { version = "=0.1.4" }
+h5i-app-sql = { version = "=0.1.4" }
+# h5i-app-gpu is not published on crates.io: git dependency at tag v0.5.2.
+h5i-app-gpu = { git = "https://github.com/h5i-dev/h5i", tag = "v0.5.2" }
+
+payment-ledger = { path = "crates/payment-ledger" }
+payment-domain = { path = "crates/payment-domain" }
+payment-storage = { path = "crates/payment-storage" }
+payment-connectors = { path = "crates/payment-connectors" }
+payment-api = { path = "crates/payment-api" }
+payment-reconcile = { path = "crates/payment-reconcile" }
+payment-batch = { path = "crates/payment-batch" }
+payment-gpu = { path = "crates/payment-gpu" }
+
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "signal", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rayon = "1"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[profile.release]
+debug = 1
+
+[profile.bench]
+debug = 1

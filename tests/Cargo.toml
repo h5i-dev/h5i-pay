@@ -1,0 +1,36 @@
+[package]
+name = "h5i-pay-tests"
+description = "h5i-pay: integration, concurrency, fault-injection and differential tests"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "common/mod.rs"
+
+[[test]]
+name = "integration"
+path = "integration/main.rs"
+
+[[test]]
+name = "concurrency"
+path = "concurrency/main.rs"
+
+[[test]]
+name = "fault_injection"
+path = "fault-injection/main.rs"
+
+[dependencies]
+h5i-app-core.workspace = true
+h5i-app-pg = { workspace = true, features = ["testing"] }
+h5i-app-http.workspace = true
+payment-ledger.workspace = true
+payment-domain.workspace = true
+payment-storage = { workspace = true, features = ["testing"] }
+payment-api.workspace = true
+tokio.workspace = true
+serde_json.workspace = true
+reqwest.workspace = true
+axum.workspace = true
+tokio-postgres = "0.7"

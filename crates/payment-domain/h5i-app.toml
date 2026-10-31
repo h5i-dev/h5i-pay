@@ -1,0 +1,18 @@
+# Read by `h5i app` (extract, check, prove, mutate). Run from the repo root:
+#   h5i app prove crates/payment-domain
+[extract]
+crate = "."
+start-from = ["transition", "policy::check"]
+schema = true
+include = ["h5i_app_sql"]
+
+[proofs]
+dir = "../../proofs"
+
+[check]
+theorems = [
+  "payment_domain.Transitions.status_steps_allowed",
+  "payment_domain.Refunds.refund_safety",
+  "payment_domain.Refunds.reachable_inv",
+  "payment_domain.Policies.check_sound",
+]

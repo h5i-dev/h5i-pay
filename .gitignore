@@ -22,3 +22,27 @@ rustc-ice-*.txt
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Lean / Lake build output
+.lake/
+
+# Local secrets (Stripe test keys etc.) never belong in git
+.env
+.env.*
+*.pem
+
+# Benchmark scratch output and device builds
+/benchmarks/out/
+*.ptx.tmp
+
+# Terraform state and local overrides
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl.bak

@@ -1,0 +1,20 @@
+[package]
+name = "payment-connectors"
+description = "h5i-pay: PSP connectors (Mock PSP, Stripe test mode) and webhook signatures"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+hex.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+axum.workspace = true

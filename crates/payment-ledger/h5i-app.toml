@@ -1,0 +1,47 @@
+# Read by `h5i app` (extract, check, prove, mutate). Run from the repo root:
+#   h5i app prove crates/payment-ledger
+[extract]
+crate = "."
+start-from = ["transition"]
+schema = true
+include = ["h5i_app_sql"]
+
+[proofs]
+# One Lake project for every kernel; the extraction goes to proofs/generated/.
+dir = "../../proofs"
+
+[check]
+theorems = [
+  "payment_ledger.Theorems.conservation",
+  "payment_ledger.Theorems.journal_balanced",
+  "payment_ledger.Theorems.no_overdraft",
+  "payment_ledger.Theorems.replay_is_noop",
+  "payment_ledger.Theorems.only_owner_or_operator_debits",
+  "payment_ledger.Storage.db_inv",
+]
+
+# Bugs the proofs must reject (`h5i app mutate crates/payment-ledger`).
+[[mutant]]
+name = "self_transfer_allowed"
+old = "if t.debit == t.credit {\n                return Err(Error::SameAccount);"
+new = "if false {\n                return Err(Error::SameAccount);"
+
+[[mutant]]
+name = "overdraft_allowed"
+old = "if a.no_overdraft && debits > a.credits {"
+new = "if a.no_overdraft && debits > a.credits + 1 {"
+
+[[mutant]]
+name = "anyone_may_debit"
+old = "actor.operator || a.owner == actor.user"
+new = "true"
+
+[[mutant]]
+name = "credit_side_short"
+old = "let credits = b.credits + t.amount;"
+new = "let credits = b.credits + t.amount - 1;"
+
+[[mutant]]
+name = "replay_ignores_amount"
+old = "old.debit == t.debit && old.credit == t.credit && old.amount == t.amount && old.code == t.code"
+new = "old.debit == t.debit && old.credit == t.credit && old.code == t.code"
