@@ -57,6 +57,38 @@ def U64.Insts.H5i_app_sqlColumn.from_val
   | h5i_app_sql.Val.Bytes _ => ok none
   | h5i_app_sql.Val.Null => ok none
 
+/-- [h5i_app_sql::{impl h5i_app_sql::Column for u32}::to_val]:
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a19667c/crates/h5i-app-sql/src/lib.rs', lines 37:4-37:27
+    Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u32>}::to_val]
+    Visibility: public -/
+@[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u32>}::to_val"]
+def U32.Insts.H5i_app_sqlColumn.to_val
+  (self : Std.U32) : Result h5i_app_sql.Val := do
+  let i ← lift (UScalar.hcast .I64 self)
+  ok (h5i_app_sql.Val.Int i)
+
+/-- [h5i_app_sql::{impl h5i_app_sql::Column for u32}::from_val]:
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a19667c/crates/h5i-app-sql/src/lib.rs', lines 40:4-40:39
+    Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u32>}::from_val]
+    Visibility: public -/
+@[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u32>}::from_val"]
+def U32.Insts.H5i_app_sqlColumn.from_val
+  (v : h5i_app_sql.Val) : Result (Option Std.U32) := do
+  match v with
+  | h5i_app_sql.Val.Int i =>
+    if i >= 0#i64
+    then
+      let i1 ← lift (UScalar.hcast .I64 core.num.U32.MAX)
+      if i <= i1
+      then let i2 ← lift (IScalar.hcast .U32 i)
+           ok (some i2)
+      else ok none
+    else ok none
+  | h5i_app_sql.Val.Bool _ => ok none
+  | h5i_app_sql.Val.Text _ => ok none
+  | h5i_app_sql.Val.Bytes _ => ok none
+  | h5i_app_sql.Val.Null => ok none
+
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for bool}::to_val]:
     Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a19667c/crates/h5i-app-sql/src/lib.rs', lines 55:4-55:27
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<bool>}::to_val]
@@ -201,8 +233,8 @@ structure Payment where
   id : Std.U64
   merchant : Std.U64
   amount : Std.U64
-  currency : Std.U64
-  status : Std.U64
+  currency : Std.U32
+  status : Std.U32
   manual_capture : Bool
   attempts : Std.U64
   authorized : Std.U64
@@ -217,7 +249,7 @@ structure Refund where
   id : Std.U64
   payment : Std.U64
   amount : Std.U64
-  status : Std.U64
+  status : Std.U32
 
 /-- [payment_domain::Event]
     Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a19667c/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
@@ -300,9 +332,9 @@ def Payment.to_row
   let out1 ← alloc.vec.Vec.push out v1
   let v2 ← U64.Insts.H5i_app_sqlColumn.to_val self.amount
   let out2 ← alloc.vec.Vec.push out1 v2
-  let v3 ← U64.Insts.H5i_app_sqlColumn.to_val self.currency
+  let v3 ← U32.Insts.H5i_app_sqlColumn.to_val self.currency
   let out3 ← alloc.vec.Vec.push out2 v3
-  let v4 ← U64.Insts.H5i_app_sqlColumn.to_val self.status
+  let v4 ← U32.Insts.H5i_app_sqlColumn.to_val self.status
   let out4 ← alloc.vec.Vec.push out3 v4
   let v5 ← Bool.Insts.H5i_app_sqlColumn.to_val self.manual_capture
   let out5 ← alloc.vec.Vec.push out4 v5
@@ -328,7 +360,7 @@ def Refund.to_row
   let out1 ← alloc.vec.Vec.push out v1
   let v2 ← U64.Insts.H5i_app_sqlColumn.to_val self.amount
   let out2 ← alloc.vec.Vec.push out1 v2
-  let v3 ← U64.Insts.H5i_app_sqlColumn.to_val self.status
+  let v3 ← U32.Insts.H5i_app_sqlColumn.to_val self.status
   alloc.vec.Vec.push out2 v3
 
 /-- [payment_domain::{payment_domain::Event}::to_row]:
@@ -422,7 +454,7 @@ def Payment.from_row
           let v3 ←
             alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
               h5i_app_sql.Val) row i13
-          let o3 ← U64.Insts.H5i_app_sqlColumn.from_val v3
+          let o3 ← U32.Insts.H5i_app_sqlColumn.from_val v3
           match o3 with
           | none => ok none
           | some x3 =>
@@ -430,7 +462,7 @@ def Payment.from_row
             let v4 ←
               alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
                 h5i_app_sql.Val) row i14
-            let o4 ← U64.Insts.H5i_app_sqlColumn.from_val v4
+            let o4 ← U32.Insts.H5i_app_sqlColumn.from_val v4
             match o4 with
             | none => ok none
             | some x4 =>
@@ -540,7 +572,7 @@ def Refund.from_row
           let v3 ←
             alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
               h5i_app_sql.Val) row i6
-          let o3 ← U64.Insts.H5i_app_sqlColumn.from_val v3
+          let o3 ← U32.Insts.H5i_app_sqlColumn.from_val v3
           match o3 with
           | none => ok none
           | some x3 =>
@@ -1847,47 +1879,47 @@ structure Principal where
 /-- [payment_domain::CREATED]
     Source: 'crates/payment-domain/src/lib.rs', lines 41:0-41:27
     Visibility: public -/
-@[global_simps, irreducible] def CREATED : Std.U64 := 0#u64
+@[global_simps, irreducible] def CREATED : Std.U32 := 0#u32
 
 /-- [payment_domain::PROCESSING]
     Source: 'crates/payment-domain/src/lib.rs', lines 42:0-42:30
     Visibility: public -/
-@[global_simps, irreducible] def PROCESSING : Std.U64 := 1#u64
+@[global_simps, irreducible] def PROCESSING : Std.U32 := 1#u32
 
 /-- [payment_domain::AUTHORIZED]
     Source: 'crates/payment-domain/src/lib.rs', lines 43:0-43:30
     Visibility: public -/
-@[global_simps, irreducible] def AUTHORIZED : Std.U64 := 2#u64
+@[global_simps, irreducible] def AUTHORIZED : Std.U32 := 2#u32
 
 /-- [payment_domain::CAPTURED]
     Source: 'crates/payment-domain/src/lib.rs', lines 44:0-44:28
     Visibility: public -/
-@[global_simps, irreducible] def CAPTURED : Std.U64 := 3#u64
+@[global_simps, irreducible] def CAPTURED : Std.U32 := 3#u32
 
 /-- [payment_domain::CANCELED]
     Source: 'crates/payment-domain/src/lib.rs', lines 45:0-45:28
     Visibility: public -/
-@[global_simps, irreducible] def CANCELED : Std.U64 := 4#u64
+@[global_simps, irreducible] def CANCELED : Std.U32 := 4#u32
 
 /-- [payment_domain::FAILED]
     Source: 'crates/payment-domain/src/lib.rs', lines 46:0-46:26
     Visibility: public -/
-@[global_simps, irreducible] def FAILED : Std.U64 := 5#u64
+@[global_simps, irreducible] def FAILED : Std.U32 := 5#u32
 
 /-- [payment_domain::REFUND_PENDING]
     Source: 'crates/payment-domain/src/lib.rs', lines 48:0-48:34
     Visibility: public -/
-@[global_simps, irreducible] def REFUND_PENDING : Std.U64 := 0#u64
+@[global_simps, irreducible] def REFUND_PENDING : Std.U32 := 0#u32
 
 /-- [payment_domain::REFUND_SUCCEEDED]
     Source: 'crates/payment-domain/src/lib.rs', lines 49:0-49:36
     Visibility: public -/
-@[global_simps, irreducible] def REFUND_SUCCEEDED : Std.U64 := 1#u64
+@[global_simps, irreducible] def REFUND_SUCCEEDED : Std.U32 := 1#u32
 
 /-- [payment_domain::REFUND_FAILED]
     Source: 'crates/payment-domain/src/lib.rs', lines 50:0-50:33
     Visibility: public -/
-@[global_simps, irreducible] def REFUND_FAILED : Std.U64 := 2#u64
+@[global_simps, irreducible] def REFUND_FAILED : Std.U32 := 2#u32
 
 /-- [payment_domain::PspResult]
     Source: 'crates/payment-domain/src/lib.rs', lines 112:0-119:1
@@ -1906,7 +1938,7 @@ inductive PspResult where
     Visibility: public -/
 @[discriminant isize]
 inductive Command where
-| Create : Std.U64 → Std.U64 → Bool → Command
+| Create : Std.U64 → Std.U32 → Bool → Command
 | BeginAuthorize : Std.U64 → Command
 | Cancel : Std.U64 → Command
 | RequestRefund : Std.U64 → Std.U64 → Command
@@ -1925,7 +1957,7 @@ inductive Command where
 @[discriminant isize]
 inductive Reply where
 | Created : Std.U64 → Reply
-| Status : Std.U64 → Reply
+| Status : Std.U32 → Reply
 | Unchanged : Reply
 | Duplicate : Reply
 | Stale : Reply
@@ -2097,7 +2129,7 @@ def may_manage (actor : Principal) (p : Payment) : Result Bool := do
 /-- [payment_domain::with_status]:
     Source: 'crates/payment-domain/src/lib.rs', lines 256:0-270:1 -/
 def with_status
-  (p : Payment) (status : Std.U64) (authorized : Std.U64) (captured : Std.U64)
+  (p : Payment) (status : Std.U32) (authorized : Std.U64) (captured : Std.U64)
   :
   Result Payment
   := do
@@ -2114,7 +2146,7 @@ def with_refunds
 /-- [payment_domain::create]:
     Source: 'crates/payment-domain/src/lib.rs', lines 289:0-312:1 -/
 def create
-  (actor : Principal) (s : Snapshot) (amount : Std.U64) (currency : Std.U64)
+  (actor : Principal) (s : Snapshot) (amount : Std.U64) (currency : Std.U32)
   (manual_capture : Bool) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
   := do

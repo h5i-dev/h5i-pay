@@ -16,9 +16,15 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Payments | `payment_domain.Theorems.status_steps_allowed`, `terminal_final`, `captured_final`, `refund_safety`, `refunded_le_captured`, `event_dedup`, `reachable_inv` | the extracted `crates/payment-domain/src/lib.rs` (`proofs/payments/generated/PaymentDomain.lean`) |
 | Policies | `payment_domain.Policies.check_sound` | the extracted `crates/payment-domain/src/policy.rs` |
 
-Gate results at the M5 commit: `h5i app check crates/payment-ledger` — 145
-theorems in 11 modules; `h5i app check crates/payment-domain` — 121
-theorems in 6 modules; both on the three standard axioms only.
+Gate results (h5i-app at rev `a19667c`, u32 currency/code/status
+columns): `h5i app check crates/payment-ledger` — 145 theorems in 11
+modules; `h5i app check crates/payment-domain` — 122 theorems in 6 modules
+(121 at M5, plus `u32_val_eq`); both on the three standard axioms only.
+
+Ledger `currency` and `code`, and payment `currency` and `status`, are
+`u32` columns. They are stored as `BIGINT` like `u64` columns; on load,
+h5i-app-schema's `from_val` refuses a value outside `0..=u32::MAX`
+(`u32_from_val` in `generated/*Schema.lean`), so `db_inv` covers them.
 
 The specifications were tested against deliberately wrong kernels
 (`h5i app mutate`, mutants listed in each crate's `h5i-app.toml`); every

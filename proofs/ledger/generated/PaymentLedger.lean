@@ -57,6 +57,38 @@ def U64.Insts.H5i_app_sqlColumn.from_val
   | h5i_app_sql.Val.Bytes _ => ok none
   | h5i_app_sql.Val.Null => ok none
 
+/-- [h5i_app_sql::{impl h5i_app_sql::Column for u32}::to_val]:
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a19667c/crates/h5i-app-sql/src/lib.rs', lines 37:4-37:27
+    Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u32>}::to_val]
+    Visibility: public -/
+@[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u32>}::to_val"]
+def U32.Insts.H5i_app_sqlColumn.to_val
+  (self : Std.U32) : Result h5i_app_sql.Val := do
+  let i ← lift (UScalar.hcast .I64 self)
+  ok (h5i_app_sql.Val.Int i)
+
+/-- [h5i_app_sql::{impl h5i_app_sql::Column for u32}::from_val]:
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a19667c/crates/h5i-app-sql/src/lib.rs', lines 40:4-40:39
+    Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u32>}::from_val]
+    Visibility: public -/
+@[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u32>}::from_val"]
+def U32.Insts.H5i_app_sqlColumn.from_val
+  (v : h5i_app_sql.Val) : Result (Option Std.U32) := do
+  match v with
+  | h5i_app_sql.Val.Int i =>
+    if i >= 0#i64
+    then
+      let i1 ← lift (UScalar.hcast .I64 core.num.U32.MAX)
+      if i <= i1
+      then let i2 ← lift (IScalar.hcast .U32 i)
+           ok (some i2)
+      else ok none
+    else ok none
+  | h5i_app_sql.Val.Bool _ => ok none
+  | h5i_app_sql.Val.Text _ => ok none
+  | h5i_app_sql.Val.Bytes _ => ok none
+  | h5i_app_sql.Val.Null => ok none
+
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for bool}::to_val]:
     Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a19667c/crates/h5i-app-sql/src/lib.rs', lines 55:4-55:27
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<bool>}::to_val]
@@ -174,8 +206,8 @@ inductive h5i_app_sql.Write where
 structure Account where
   id : Std.U64
   owner : Std.U64
-  currency : Std.U64
-  code : Std.U64
+  currency : Std.U32
+  code : Std.U32
   no_overdraft : Bool
   no_overcredit : Bool
   debits : Std.U64
@@ -189,8 +221,8 @@ structure Transfer where
   debit : Std.U64
   credit : Std.U64
   amount : Std.U64
-  currency : Std.U64
-  code : Std.U64
+  currency : Std.U32
+  code : Std.U32
 
 /-- [payment_ledger::Ledger]
     Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a19667c/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
@@ -237,9 +269,9 @@ def Account.to_row
   let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Val) v
   let v1 ← U64.Insts.H5i_app_sqlColumn.to_val self.owner
   let out1 ← alloc.vec.Vec.push out v1
-  let v2 ← U64.Insts.H5i_app_sqlColumn.to_val self.currency
+  let v2 ← U32.Insts.H5i_app_sqlColumn.to_val self.currency
   let out2 ← alloc.vec.Vec.push out1 v2
-  let v3 ← U64.Insts.H5i_app_sqlColumn.to_val self.code
+  let v3 ← U32.Insts.H5i_app_sqlColumn.to_val self.code
   let out3 ← alloc.vec.Vec.push out2 v3
   let v4 ← Bool.Insts.H5i_app_sqlColumn.to_val self.no_overdraft
   let out4 ← alloc.vec.Vec.push out3 v4
@@ -263,9 +295,9 @@ def Transfer.to_row
   let out2 ← alloc.vec.Vec.push out1 v2
   let v3 ← U64.Insts.H5i_app_sqlColumn.to_val self.amount
   let out3 ← alloc.vec.Vec.push out2 v3
-  let v4 ← U64.Insts.H5i_app_sqlColumn.to_val self.currency
+  let v4 ← U32.Insts.H5i_app_sqlColumn.to_val self.currency
   let out4 ← alloc.vec.Vec.push out3 v4
-  let v5 ← U64.Insts.H5i_app_sqlColumn.to_val self.code
+  let v5 ← U32.Insts.H5i_app_sqlColumn.to_val self.code
   alloc.vec.Vec.push out4 v5
 
 /-- [payment_ledger::{payment_ledger::Ledger}::to_row]:
@@ -329,7 +361,7 @@ def Account.from_row
         let v2 ←
           alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
             h5i_app_sql.Val) row i9
-        let o2 ← U64.Insts.H5i_app_sqlColumn.from_val v2
+        let o2 ← U32.Insts.H5i_app_sqlColumn.from_val v2
         match o2 with
         | none => ok none
         | some x2 =>
@@ -337,7 +369,7 @@ def Account.from_row
           let v3 ←
             alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
               h5i_app_sql.Val) row i10
-          let o3 ← U64.Insts.H5i_app_sqlColumn.from_val v3
+          let o3 ← U32.Insts.H5i_app_sqlColumn.from_val v3
           match o3 with
           | none => ok none
           | some x3 =>
@@ -435,7 +467,7 @@ def Transfer.from_row
             let v4 ←
               alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
                 h5i_app_sql.Val) row i9
-            let o4 ← U64.Insts.H5i_app_sqlColumn.from_val v4
+            let o4 ← U32.Insts.H5i_app_sqlColumn.from_val v4
             match o4 with
             | none => ok none
             | some x4 =>
@@ -443,7 +475,7 @@ def Transfer.from_row
               let v5 ←
                 alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
                   h5i_app_sql.Val) row i10
-              let o5 ← U64.Insts.H5i_app_sqlColumn.from_val v5
+              let o5 ← U32.Insts.H5i_app_sqlColumn.from_val v5
               match o5 with
               | none => ok none
               | some x5 =>
@@ -1204,14 +1236,14 @@ structure TransferReq where
   debit : Std.U64
   credit : Std.U64
   amount : Std.U64
-  code : Std.U64
+  code : Std.U32
 
 /-- [payment_ledger::Command]
     Source: 'crates/payment-ledger/src/lib.rs', lines 95:0-108:1
     Visibility: public -/
 @[discriminant isize]
 inductive Command where
-| Open : Std.U64 → Std.U64 → Std.U64 → Bool → Bool → Command
+| Open : Std.U64 → Std.U32 → Std.U32 → Bool → Bool → Command
 | Transfer : TransferReq → Command
 | Batch : alloc.vec.Vec TransferReq → Command
 | Account : Std.U64 → Command
@@ -1372,8 +1404,8 @@ def may_debit (actor : Principal) (a : Account) : Result Bool := do
 /-- [payment_ledger::open]:
     Source: 'crates/payment-ledger/src/lib.rs', lines 203:0-226:1 -/
 def «open»
-  (actor : Principal) (s : Snapshot) (owner : Std.U64) (currency : Std.U64)
-  (code : Std.U64) (no_overdraft : Bool) (no_overcredit : Bool) :
+  (actor : Principal) (s : Snapshot) (owner : Std.U64) (currency : Std.U32)
+  (code : Std.U32) (no_overdraft : Bool) (no_overcredit : Bool) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
   := do
   if actor.operator

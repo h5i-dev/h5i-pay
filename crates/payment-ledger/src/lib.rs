@@ -53,8 +53,8 @@ h5i_app_schema::schema! {
     pub struct Account in "accounts" {
         key { id: u64 }
         owner: u64,
-        currency: u64,
-        code: u64,
+        currency: u32,
+        code: u32,
         no_overdraft: bool,
         no_overcredit: bool,
         debits: u64,
@@ -68,8 +68,8 @@ h5i_app_schema::schema! {
         debit: u64,
         credit: u64,
         amount: u64,
-        currency: u64,
-        code: u64,
+        currency: u32,
+        code: u32,
     }
 
     /// The tenant's counters.
@@ -88,14 +88,14 @@ pub struct TransferReq {
     pub debit: u64,
     pub credit: u64,
     pub amount: u64,
-    pub code: u64,
+    pub code: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
     /// Open an account for `owner`: the caller itself, or anyone for an
     /// operator. `code` is the application's account type.
-    Open { owner: u64, currency: u64, code: u64, no_overdraft: bool, no_overcredit: bool },
+    Open { owner: u64, currency: u32, code: u32, no_overdraft: bool, no_overcredit: bool },
     Transfer { t: TransferReq },
     /// A linked batch: all transfers commit, in order, or none does.
     Batch { transfers: Vec<TransferReq> },
@@ -200,7 +200,7 @@ pub fn may_debit(actor: &Principal, a: &Account) -> bool {
     actor.operator || a.owner == actor.user
 }
 
-fn open(actor: &Principal, s: &Snapshot, owner: u64, currency: u64, code: u64, no_overdraft: bool, no_overcredit: bool) -> Outcome {
+fn open(actor: &Principal, s: &Snapshot, owner: u64, currency: u32, code: u32, no_overdraft: bool, no_overcredit: bool) -> Outcome {
     if !actor.operator && owner != actor.user {
         return Err(Error::Forbidden);
     }
@@ -435,7 +435,7 @@ mod tests {
         TransferReq { id, debit, credit, amount, code: 1 }
     }
 
-    fn sums(s: &Snapshot, cur: u64) -> (u128, u128, u128) {
+    fn sums(s: &Snapshot, cur: u32) -> (u128, u128, u128) {
         let d = s.accounts.iter().filter(|a| a.currency == cur).map(|a| a.debits as u128).sum();
         let c = s.accounts.iter().filter(|a| a.currency == cur).map(|a| a.credits as u128).sum();
         let j = s.transfers.iter().filter(|t| t.currency == cur).map(|t| t.amount as u128).sum();

@@ -180,6 +180,28 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### u32 columns
+
+- Ledger: `Account.currency`, `Account.code`, `Transfer.currency`,
+  `Transfer.code`, `TransferReq.code`, `Command::Open { currency, code }`.
+  Payments: `Payment.currency`, `Payment.status`, `Refund.status`, the
+  status constants and `Reply::Status`. Amounts, ids and counters stay
+  `u64`.
+- No migration: h5i-app-schema stores `u32` as `BIGINT` and range-checks it
+  on load (`u32_from_val`).
+- Proof changes: `journalRow`/`open_spec` take `U32`; `post_spec` closes
+  `a.currency = b.currency` with `UScalar.eq_of_val_eq`; `Payments.Commands`
+  adds `u32_val_eq` (h5i_app_lib has only `u64_val_eq`) and retypes
+  `with_status_spec`/`create_spec`.
+- Side effect: the orchestrator used to pass `currency as u32` to the PSP
+  from a `u64` kernel field, so a currency of 2³²+392 would have been
+  charged as 392 (JPY) while the kernel stored another value. The casts
+  are gone; the API answers 400 for a currency past `u32::MAX` (checked
+  by hand on `/v1/payments` and `/v1/ledger`).
+- Verified: extract --check, check (145 / 122 theorems), mutate (5/5,
+  6/6), lake build, `cargo test --workspace` (including `tests/tls`),
+  clippy with and without CUDA, GPU differential tests.
+
 ### SEC-01 closed: verified TLS to PostgreSQL
 
 - `payment-storage` enables h5i-app-pg's `tls` feature. `DbTls::from_env`
@@ -242,8 +264,8 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
   - The Stripe test-mode round trip was skipped (no `STRIPE_SECRET_KEY`).
   - Terraform was validated, never planned against or applied to AWS.
 
-- u32 columns break the Lean that `h5i-app-schema` 0.1.4 renders (its
-  generated proofs fail on `int ↑(u32)`), so every kernel column is `u64`.
+- u32 columns broke the Lean that `h5i-app-schema` 0.1.4 rendered, so M1–M5
+  used `u64` everywhere. Fixed upstream (#769); see "u32 columns" above.
 - Every command loads the whole tenant snapshot (h5i-app's default
   `Store::load`). Correct, but O(rows) per request; a `load_for` with a frame
   theorem is the scaling path (see `docs/proof-assumptions.md`).

@@ -54,7 +54,7 @@ theorem findTr_eq (s : Snapshot) (id : U64) :
     s.transfers.val.find? (fun t => t.id.val = id.val) = findTr (Snapshot.toSt s) id.val := rfl
 
 /-- The journal row a posting writes. -/
-def journalRow (t : TransferReq) (cur : U64) : Transfer :=
+def journalRow (t : TransferReq) (cur : U32) : Transfer :=
   { id := t.id, debit := t.debit, credit := t.credit, amount := t.amount, currency := cur, code := t.code }
 
 /-- The arithmetic of a posting: same currency, the debit account's debits
@@ -71,13 +71,13 @@ and the credit account's credits both grow by the amount, within limits. -/
   step*
   all_goals try (simp only [core.num.U64.MAX, U64.rMax] at *; scalar_tac)
   all_goals (intro ws rep h; obtain ⟨rfl, rfl⟩ := ok_inj h)
-  all_goals (refine ⟨by simp_all, rfl, debits, credits, debits_post, credits_post, ?_⟩; simp_all [journalRow]; try scalar_tac)
+  all_goals (refine ⟨UScalar.eq_of_val_eq (by simp_all), rfl, debits, credits, debits_post, credits_post, ?_⟩; simp_all [journalRow]; try scalar_tac)
 
 /-! ## What a successful command writes -/
 
 /-- An account for `owner` (the caller, unless an operator opens it), with
 the next id and nothing posted. -/
-theorem open_spec (actor : Principal) (s : Snapshot) (owner : U64) (cur code : U64) (nod noc : Bool) :
+theorem open_spec (actor : Principal) (s : Snapshot) (owner : U64) (cur code : U32) (nod noc : Bool) :
     «open» actor s owner cur code nod noc ⦃ r => ∀ ws rep, r = .Ok (ws, rep) →
       (actor.operator = true ∨ owner = actor.user) ∧ ¬(nod = true ∧ noc = true) ∧
       ∃ n : U64, n.val = s.ledger.next_account.val + 1 ∧

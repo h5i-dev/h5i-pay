@@ -45,7 +45,7 @@ pub mod ledger {
         k::Principal { org, user, operator: false }
     }
 
-    pub fn open(owner: u64, currency: u64, no_overdraft: bool) -> k::Command {
+    pub fn open(owner: u64, currency: u32, no_overdraft: bool) -> k::Command {
         k::Command::Open { owner, currency, code: 0, no_overdraft, no_overcredit: false }
     }
 

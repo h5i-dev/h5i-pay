@@ -17,7 +17,7 @@ use payment_storage::{schema_pool, LEDGER_SCHEMA};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-const JPY: u64 = 392;
+const JPY: u32 = 392;
 
 async fn engine(url: &str, tenant_lock: bool, pool: usize) -> Arc<Engine<LedgerApp, LedgerStore>> {
     let cfg = EngineConfig { tenant_lock, max_attempts: 200, ..EngineConfig::default() };

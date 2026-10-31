@@ -31,23 +31,23 @@ use std::sync::{Arc, Mutex};
 
 /// Ledger account codes the orchestrator owns; client-opened accounts use
 /// codes below `SYSTEM_ACCOUNT_CODES` (enforced when decoding).
-pub const SYSTEM_CODES: u64 = SYSTEM_ACCOUNT_CODES;
+pub const SYSTEM_CODES: u32 = SYSTEM_ACCOUNT_CODES;
 /// Owed to us by the PSP (debit-normal, unconstrained).
-pub const PSP_CLEARING: u64 = 1001;
+pub const PSP_CLEARING: u32 = 1001;
 /// Owed by us to the merchant (`no_overdraft`: refunds need a balance).
-pub const MERCHANT_PAYABLE: u64 = 1002;
+pub const MERCHANT_PAYABLE: u32 = 1002;
 /// Refunds reserved but not settled by the PSP yet.
-pub const REFUND_HOLDING: u64 = 1003;
+pub const REFUND_HOLDING: u32 = 1003;
 
 /// Ledger transfer kinds the orchestrator posts.
-pub const POST_CAPTURE: u64 = 1;
-pub const POST_REFUND_RESERVE: u64 = 2;
-pub const POST_REFUND_SETTLE: u64 = 3;
-pub const POST_REFUND_RELEASE: u64 = 4;
+pub const POST_CAPTURE: u32 = 1;
+pub const POST_REFUND_RESERVE: u32 = 2;
+pub const POST_REFUND_SETTLE: u32 = 3;
+pub const POST_REFUND_RELEASE: u32 = 4;
 
 /// The ledger transfer id of posting `kind` for payment or refund `id`.
-pub fn system_transfer_id(kind: u64, id: u64) -> u64 {
-    SYSTEM_TRANSFER_BIT | (kind << 56) | (id & ((1 << 56) - 1))
+pub fn system_transfer_id(kind: u32, id: u64) -> u64 {
+    SYSTEM_TRANSFER_BIT | (u64::from(kind & 0x7f) << 56) | (id & ((1 << 56) - 1))
 }
 
 #[derive(Debug)]
@@ -90,7 +90,7 @@ pub struct Orchestrator {
     pub ledger: Arc<LedgerEngine>,
     pub payments: Arc<PaymentsEngine>,
     pub psp: Arc<dyn Psp>,
-    accounts: Mutex<HashMap<(u64, u64, u64, u64), u64>>,
+    accounts: Mutex<HashMap<(u64, u64, u32, u32), u64>>,
 }
 
 fn op_l(tenant: u64) -> l::Principal {
@@ -176,12 +176,12 @@ impl Orchestrator {
         merchant: &d::Principal,
         idempotency_key: Option<&str>,
         amount: u64,
-        currency: u64,
+        currency: u32,
         manual_capture: bool,
         payment_method: &str,
     ) -> Result<View> {
         psp::check_payment_method(payment_method).map_err(OrchError::Psp)?;
-        if psp::currency_alpha(currency as u32).is_none() {
+        if psp::currency_alpha(currency).is_none() {
             return Err(OrchError::BadRequest(format!("unsupported currency {currency}")));
         }
         let cmd = d::Command::Create { amount, currency, manual_capture };
@@ -215,7 +215,7 @@ impl Orchestrator {
         let req = AuthorizeRequest {
             key: PaymentKey { tenant, payment: id },
             amount: p.amount,
-            currency: p.currency as u32,
+            currency: p.currency,
             manual_capture: p.manual_capture,
             payment_method: payment_method.to_string(),
         };
@@ -358,7 +358,7 @@ impl Orchestrator {
             .checkout(&CheckoutRequest {
                 key: PaymentKey { tenant: merchant.org, payment: id },
                 amount: req.amount,
-                currency: req.currency as u32,
+                currency: req.currency,
                 manual_capture: req.manual_capture,
                 description: req.description,
                 success_url: req.success_url,
@@ -397,7 +397,7 @@ impl Orchestrator {
 
     /// The ledger account `(owner, currency, code)` of a tenant, opened once
     /// (the idempotency key makes concurrent first uses open one account).
-    async fn account(&self, tenant: u64, owner: u64, currency: u64, code: u64, no_overdraft: bool) -> Result<u64> {
+    async fn account(&self, tenant: u64, owner: u64, currency: u32, code: u32, no_overdraft: bool) -> Result<u64> {
         let k = (tenant, owner, currency, code);
         if let Some(id) = self.accounts.lock().unwrap().get(&k) {
             return Ok(*id);
@@ -542,14 +542,14 @@ impl Orchestrator {
             if t.id & SYSTEM_TRANSFER_BIT == 0 {
                 continue;
             }
-            let kind = (t.id >> 56) & 0x7f;
+            let kind = ((t.id >> 56) & 0x7f) as u32;
             let id = t.id & ((1 << 56) - 1);
             let k = match kind {
                 POST_CAPTURE => payment_reconcile::rules::key(payment_reconcile::rules::KIND_CAPTURE, id),
                 POST_REFUND_SETTLE => payment_reconcile::rules::key(payment_reconcile::rules::KIND_REFUND, id),
                 _ => continue,
             };
-            ledger_rows.push(payment_reconcile::Record { key: k, amount: t.amount, currency: t.currency as u32, status: payment_reconcile::inputs::SETTLED });
+            ledger_rows.push(payment_reconcile::Record { key: k, amount: t.amount, currency: t.currency, status: payment_reconcile::inputs::SETTLED });
         }
         let settled_internal: Vec<_> = internal.iter().copied().filter(|r| r.status == payment_reconcile::inputs::SETTLED).collect();
         Ok(ReconInputs {
@@ -561,7 +561,7 @@ impl Orchestrator {
 
 pub struct CheckoutParams {
     pub amount: u64,
-    pub currency: u64,
+    pub currency: u32,
     pub manual_capture: bool,
     pub description: String,
     pub success_url: String,

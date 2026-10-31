@@ -193,12 +193,12 @@ enum Currency {
 }
 
 impl Currency {
-    fn numeric(&self) -> Result<u64, Response> {
+    fn numeric(&self) -> Result<u32, Response> {
+        let unsupported = || reply(StatusCode::BAD_REQUEST, error_body("unsupported currency"));
         match self {
-            Currency::Numeric(n) => Ok(*n),
-            Currency::Alpha(a) => payment_connectors::currency_numeric(a)
-                .map(u64::from)
-                .ok_or_else(|| reply(StatusCode::BAD_REQUEST, error_body("unsupported currency"))),
+            // Out of u32 range is refused here, never truncated.
+            Currency::Numeric(n) => u32::try_from(*n).map_err(|_| unsupported()),
+            Currency::Alpha(a) => payment_connectors::currency_numeric(a).ok_or_else(unsupported),
         }
     }
 }

@@ -14,7 +14,7 @@ pub fn internal_records(s: &d::Snapshot) -> Vec<Record> {
     let mut out = Vec::new();
     for p in &s.payments {
         if p.status == d::CAPTURED {
-            out.push(Record { key: key(KIND_CAPTURE, p.id), amount: p.captured, currency: p.currency as u32, status: SETTLED });
+            out.push(Record { key: key(KIND_CAPTURE, p.id), amount: p.captured, currency: p.currency, status: SETTLED });
         }
     }
     for r in &s.refunds {
@@ -23,7 +23,7 @@ pub fn internal_records(s: &d::Snapshot) -> Vec<Record> {
             d::REFUND_PENDING => PENDING,
             _ => continue,
         };
-        let currency = s.payments.iter().find(|p| p.id == r.payment).map_or(0, |p| p.currency as u32);
+        let currency = s.payments.iter().find(|p| p.id == r.payment).map_or(0, |p| p.currency);
         out.push(Record { key: key(KIND_REFUND, r.id), amount: r.amount, currency, status });
     }
     out

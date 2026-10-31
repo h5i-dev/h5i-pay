@@ -75,9 +75,10 @@ pub enum CommandJson {
         /// Defaults to the caller.
         #[serde(default)]
         owner: Option<u64>,
-        currency: u64,
+        /// ISO 4217 numeric code; anything past `u32::MAX` is a 400.
+        currency: u32,
         #[serde(default)]
-        code: u64,
+        code: u32,
         #[serde(default)]
         no_overdraft: bool,
         #[serde(default)]
@@ -98,7 +99,7 @@ pub struct TransferJson {
     pub credit: u64,
     pub amount: u64,
     #[serde(default)]
-    pub code: u64,
+    pub code: u32,
 }
 
 impl From<TransferJson> for k::TransferReq {
@@ -129,7 +130,7 @@ pub const SYSTEM_TRANSFER_BIT: u64 = 1 << 63;
 
 /// Account codes from here up are the orchestrator's (PSP clearing,
 /// merchant payable, refund holding); only operators may open them.
-pub const SYSTEM_ACCOUNT_CODES: u64 = 1000;
+pub const SYSTEM_ACCOUNT_CODES: u32 = 1000;
 
 /// Decode a client's ledger command. `Api::decode_command` has no caller,
 /// so the HTTP handler uses this instead.
@@ -157,8 +158,8 @@ pub fn account_json(a: &k::Account) -> Out {
     Out::obj([
         ("id", a.id.into()),
         ("owner", a.owner.into()),
-        ("currency", a.currency.into()),
-        ("code", a.code.into()),
+        ("currency", u64::from(a.currency).into()),
+        ("code", u64::from(a.code).into()),
         ("no_overdraft", a.no_overdraft.into()),
         ("no_overcredit", a.no_overcredit.into()),
         ("debits", a.debits.into()),
@@ -172,8 +173,8 @@ pub fn transfer_json(t: &k::Transfer) -> Out {
         ("debit", t.debit.into()),
         ("credit", t.credit.into()),
         ("amount", t.amount.into()),
-        ("currency", t.currency.into()),
-        ("code", t.code.into()),
+        ("currency", u64::from(t.currency).into()),
+        ("code", u64::from(t.code).into()),
     ])
 }
 
@@ -230,10 +231,10 @@ enum StoredReply {
     // Reads are stored too (a keyed read is a write of its reply).
     Account(StoredAccount),
     Accounts(Vec<StoredAccount>),
-    Transfers(Vec<(u64, u64, u64, u64, u64, u64)>),
+    Transfers(Vec<(u64, u64, u64, u64, u32, u32)>),
 }
 
-type StoredAccount = (u64, u64, u64, u64, bool, bool, u64, u64);
+type StoredAccount = (u64, u64, u32, u32, bool, bool, u64, u64);
 
 fn store_account(a: &k::Account) -> StoredAccount {
     (a.id, a.owner, a.currency, a.code, a.no_overdraft, a.no_overcredit, a.debits, a.credits)
@@ -285,7 +286,7 @@ impl ReplyCodec<LedgerApp> for LedgerStore {
 }
 
 /// Per-currency totals of a snapshot, for audits and tests: (debits, credits, journal).
-pub fn currency_totals(s: &k::Snapshot, currency: u64) -> (u128, u128, u128) {
+pub fn currency_totals(s: &k::Snapshot, currency: u32) -> (u128, u128, u128) {
     let d = s.accounts.iter().filter(|a| a.currency == currency).map(|a| u128::from(a.debits)).sum();
     let c = s.accounts.iter().filter(|a| a.currency == currency).map(|a| u128::from(a.credits)).sum();
     let j = s.transfers.iter().filter(|t| t.currency == currency).map(|t| u128::from(t.amount)).sum();
@@ -296,7 +297,7 @@ pub fn currency_totals(s: &k::Snapshot, currency: u64) -> (u128, u128, u128) {
 /// per-currency debits = credits = journal total, and no constrained
 /// account past its limit. Used by tests and by the audit endpoint.
 pub fn audit(s: &k::Snapshot) -> Result<(), String> {
-    let mut currencies: Vec<u64> = s.accounts.iter().map(|a| a.currency).chain(s.transfers.iter().map(|t| t.currency)).collect();
+    let mut currencies: Vec<u32> = s.accounts.iter().map(|a| a.currency).chain(s.transfers.iter().map(|t| t.currency)).collect();
     currencies.sort_unstable();
     currencies.dedup();
     for c in currencies {

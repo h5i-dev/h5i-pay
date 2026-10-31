@@ -60,7 +60,7 @@ impl Store<PaymentsApp> for PaymentsStore {
     }
 }
 
-pub fn status_name(s: u64) -> &'static str {
+pub fn status_name(s: u32) -> &'static str {
     match s {
         k::CREATED => "created",
         k::PROCESSING => "processing",
@@ -72,7 +72,7 @@ pub fn status_name(s: u64) -> &'static str {
     }
 }
 
-pub fn refund_status_name(s: u64) -> &'static str {
+pub fn refund_status_name(s: u32) -> &'static str {
     match s {
         k::REFUND_PENDING => "pending",
         k::REFUND_SUCCEEDED => "succeeded",
@@ -86,7 +86,7 @@ pub fn payment_json(p: &k::Payment) -> Out {
         ("id", p.id.into()),
         ("merchant", p.merchant.into()),
         ("amount", p.amount.into()),
-        ("currency", p.currency.into()),
+        ("currency", u64::from(p.currency).into()),
         ("status", status_name(p.status).into()),
         ("manual_capture", p.manual_capture.into()),
         ("attempts", p.attempts.into()),
@@ -162,7 +162,7 @@ impl h5i_app_http::Api<PaymentsApp> for PaymentsStore {
     }
 }
 
-type StoredPayment = (u64, u64, u64, u64, u64, bool, u64, u64, u64, u64, u64);
+type StoredPayment = (u64, u64, u64, u32, u32, bool, u64, u64, u64, u64, u64);
 
 fn store_payment(p: &k::Payment) -> StoredPayment {
     (p.id, p.merchant, p.amount, p.currency, p.status, p.manual_capture, p.attempts, p.authorized, p.captured, p.refunded, p.refund_pending)
@@ -177,14 +177,14 @@ fn load_payment(
 #[derive(Serialize, Deserialize)]
 enum StoredReply {
     Created(u64),
-    Status(u64),
+    Status(u32),
     Unchanged,
     Duplicate,
     Stale,
     Payment(StoredPayment),
     Payments(Vec<StoredPayment>),
-    Refund((u64, u64, u64, u64)),
-    Refunds(Vec<(u64, u64, u64, u64)>),
+    Refund((u64, u64, u64, u32)),
+    Refunds(Vec<(u64, u64, u64, u32)>),
     Ref(Vec<u8>),
 }
 

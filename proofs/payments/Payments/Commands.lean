@@ -12,11 +12,18 @@ namespace payment_domain.Commands
 
 attribute [local simp] H5iAppLib.u64_val_eq
 
+/-- `u64_val_eq` for the `u32` columns (statuses, currency); h5i_app_lib has
+only the `U64` version. -/
+theorem u32_val_eq (x y : U32) : x.val = y.val ↔ x = y :=
+  ⟨fun h => by scalar_tac, fun h => h ▸ rfl⟩
+
+attribute [local simp] u32_val_eq
+
 @[step] theorem one_spec (a : Write) : one a ⦃ v => v.val = [a] ⦄ := by unfold one; step*
 @[step] theorem two_spec (a b : Write) : two a b ⦃ v => v.val = [a, b] ⦄ := by unfold two; step*
 @[step] theorem three_spec (a b c : Write) : three a b c ⦃ v => v.val = [a, b, c] ⦄ := by unfold three; step*
 
-@[step] theorem with_status_spec (p : Payment) (st a c : U64) :
+@[step] theorem with_status_spec (p : Payment) (st : U32) (a c : U64) :
     with_status p st a c ⦃ q => q = { p with status := st, authorized := a, captured := c } ⦄ := by
   unfold with_status; step*
 
@@ -224,7 +231,7 @@ theorem event_spec (a : Principal) (s : Snapshot) (ev id : U64) (res : PspResult
 
 /-! ## Merchant commands -/
 
-theorem create_spec (a : Principal) (s : Snapshot) (amt cur : U64) (mc : Bool) :
+theorem create_spec (a : Principal) (s : Snapshot) (amt : U64) (cur : U32) (mc : Bool) :
     create a s amt cur mc ⦃ r => ∀ ws rep, r = .Ok (ws, rep) → ∃ n : U64, n.val = s.counter.next_id.val + 1 ∧
       ws.val = [.PutPayment ⟨s.counter.next_id, a.user, amt, cur, CREATED, mc, 0#u64, 0#u64, 0#u64, 0#u64, 0#u64⟩,
         .SetCounter ⟨n⟩] ⦄ := by

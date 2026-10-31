@@ -38,16 +38,16 @@ pub struct Principal {
     pub operator: bool,
 }
 
-pub const CREATED: u64 = 0;
-pub const PROCESSING: u64 = 1;
-pub const AUTHORIZED: u64 = 2;
-pub const CAPTURED: u64 = 3;
-pub const CANCELED: u64 = 4;
-pub const FAILED: u64 = 5;
+pub const CREATED: u32 = 0;
+pub const PROCESSING: u32 = 1;
+pub const AUTHORIZED: u32 = 2;
+pub const CAPTURED: u32 = 3;
+pub const CANCELED: u32 = 4;
+pub const FAILED: u32 = 5;
 
-pub const REFUND_PENDING: u64 = 0;
-pub const REFUND_SUCCEEDED: u64 = 1;
-pub const REFUND_FAILED: u64 = 2;
+pub const REFUND_PENDING: u32 = 0;
+pub const REFUND_SUCCEEDED: u32 = 1;
+pub const REFUND_FAILED: u32 = 2;
 
 h5i_app_schema::schema! {
     mapping payment_tables for payment_domain, writes Write, lean "../../proofs/payments/generated/PaymentsSchema.lean";
@@ -68,8 +68,8 @@ h5i_app_schema::schema! {
         key { id: u64 }
         merchant: u64,
         amount: u64,
-        currency: u64,
-        status: u64,
+        currency: u32,
+        status: u32,
         manual_capture: bool,
         attempts: u64,
         authorized: u64,
@@ -83,7 +83,7 @@ h5i_app_schema::schema! {
         key { id: u64 }
         payment: u64,
         amount: u64,
-        status: u64,
+        status: u32,
     }
 
     /// A PSP event that has been processed (webhook deduplication).
@@ -121,7 +121,7 @@ pub enum PspResult {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Command {
     /// A merchant creates a payment.
-    Create { amount: u64, currency: u64, manual_capture: bool },
+    Create { amount: u64, currency: u32, manual_capture: bool },
     /// The orchestrator is about to ask the PSP to authorize.
     BeginAuthorize { id: u64 },
     /// Cancel a payment that never reached the PSP.
@@ -160,7 +160,7 @@ pub enum Write {
 pub enum Reply {
     Created(u64),
     /// The payment's new status.
-    Status(u64),
+    Status(u32),
     /// The result was already recorded; nothing changed.
     Unchanged,
     /// The event was processed before.
@@ -253,7 +253,7 @@ pub fn may_manage(actor: &Principal, p: &Payment) -> bool {
 }
 
 /// `p` with a new status (and the authorized and captured amounts).
-fn with_status(p: Payment, status: u64, authorized: u64, captured: u64) -> Payment {
+fn with_status(p: Payment, status: u32, authorized: u64, captured: u64) -> Payment {
     Payment {
         id: p.id,
         merchant: p.merchant,
@@ -286,7 +286,7 @@ fn with_refunds(p: Payment, refunded: u64, refund_pending: u64) -> Payment {
     }
 }
 
-fn create(actor: &Principal, s: &Snapshot, amount: u64, currency: u64, manual_capture: bool) -> Outcome {
+fn create(actor: &Principal, s: &Snapshot, amount: u64, currency: u32, manual_capture: bool) -> Outcome {
     if amount == 0 {
         return Err(Error::InvalidAmount);
     }
