@@ -7,12 +7,49 @@ schema = true
 include = ["h5i_app_sql"]
 
 [proofs]
-dir = "../../proofs"
+# The same Lake project as the ledger; extraction goes to proofs/generated/.
+dir = "../../proofs/payments"
 
 [check]
 theorems = [
-  "payment_domain.Transitions.status_steps_allowed",
-  "payment_domain.Refunds.refund_safety",
-  "payment_domain.Refunds.reachable_inv",
+  "payment_domain.Theorems.status_steps_allowed",
+  "payment_domain.Theorems.terminal_final",
+  "payment_domain.Theorems.captured_final",
+  "payment_domain.Theorems.refund_safety",
+  "payment_domain.Theorems.refunded_le_captured",
+  "payment_domain.Theorems.event_dedup",
+  "payment_domain.Theorems.reachable_inv",
   "payment_domain.Policies.check_sound",
 ]
+
+# Bugs the proofs must reject (`h5i app mutate crates/payment-domain`).
+[[mutant]]
+name = "refund_past_capture"
+old = "} else if p.refunded + (p.refund_pending + amount) > p.captured {"
+new = "} else if p.refunded + (p.refund_pending + amount) > p.captured + 1 {"
+
+[[mutant]]
+name = "capture_beyond_authorization"
+old = "if amount == 0 || amount > p.authorized {"
+new = "if amount == 0 {"
+
+[[mutant]]
+name = "decline_after_capture"
+old = "fn record_declined(p: Payment) -> Outcome {\n    if p.status == PROCESSING {"
+new = "fn record_declined(p: Payment) -> Outcome {\n    if p.status == PROCESSING || p.status == CAPTURED {"
+
+[[mutant]]
+name = "webhook_not_deduplicated"
+old = "Some(_) => Ok((Vec::new(), Reply::Duplicate)),"
+new = "Some(_) => record(actor, s, id, result),"
+
+[[mutant]]
+name = "blocked_recipient_approved"
+file = "src/policy.rs"
+old = "if contains_linear(blocked, n_blocked, r.recipient) {"
+new = "if false && contains_linear(blocked, n_blocked, r.recipient) {"
+
+[[mutant]]
+name = "refund_success_without_release"
+old = "let p2 = with_refunds(p, p.refunded + r.amount, p.refund_pending - r.amount);"
+new = "let p2 = with_refunds(p, p.refunded + r.amount, p.refund_pending);"

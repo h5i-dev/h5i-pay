@@ -1,6 +1,11 @@
 //! Routes and shared state.
 
-use axum::extract::{FromRef, State};
+// Handlers return early with a finished axum `Response` as the error, as
+// h5i-app-http's `H5iApp::run` does; boxing it would only add unboxing.
+#![allow(clippy::result_large_err)]
+
+use crate::orchestrator::{CheckoutParams, OrchError, Orchestrator, View};
+use axum::extract::{FromRef, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, post};
@@ -8,14 +13,21 @@ use axum::{Json, Router};
 use h5i_app_core::TenantId;
 use h5i_app_http::{error_body, reply, Actor, Auth, H5iApp, HmacAuth};
 use h5i_app_json::Value as Out;
+use payment_connectors::{Psp, WebhookError};
+use payment_domain as d;
+use payment_reconcile::{rules, Engine, Report};
 use payment_storage::ledger::{self, LedgerApp, LedgerStore};
-use payment_storage::LedgerEngine;
+use payment_storage::payments::{self, PaymentsApp, PaymentsStore};
+use payment_storage::{LedgerEngine, PaymentsEngine};
+use serde::Deserialize;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
     pub ledger: H5iApp<LedgerApp, LedgerStore>,
+    pub payments: H5iApp<PaymentsApp, PaymentsStore>,
     pub ledger_engine: Arc<LedgerEngine>,
+    pub orchestrator: Option<Arc<Orchestrator>>,
 }
 
 impl FromRef<AppState> for Auth<LedgerApp> {
@@ -24,10 +36,36 @@ impl FromRef<AppState> for Auth<LedgerApp> {
     }
 }
 
+impl FromRef<AppState> for Auth<PaymentsApp> {
+    fn from_ref(s: &AppState) -> Self {
+        Auth::from_ref(&s.payments)
+    }
+}
+
 impl AppState {
+    /// The ledger only (no PSP configured).
     pub fn new(ledger_engine: Arc<LedgerEngine>, secret: &str) -> Self {
+        Self::build(ledger_engine, None, None, secret)
+    }
+
+    /// Ledger, payments and the orchestrator with a PSP.
+    pub fn with_payments(ledger_engine: Arc<LedgerEngine>, payments_engine: Arc<PaymentsEngine>, psp: Arc<dyn Psp>, secret: &str) -> Self {
+        let orch = Arc::new(Orchestrator::new(ledger_engine.clone(), payments_engine.clone(), psp));
+        Self::build(ledger_engine, Some(payments_engine), Some(orch), secret)
+    }
+
+    fn build(ledger_engine: Arc<LedgerEngine>, payments_engine: Option<Arc<PaymentsEngine>>, orchestrator: Option<Arc<Orchestrator>>, secret: &str) -> Self {
         let ledger = H5iApp::new(ledger_engine.clone(), HmacAuth::<LedgerApp>::new(secret.to_string(), ledger::principal));
-        AppState { ledger, ledger_engine }
+        let payments_engine = payments_engine.unwrap_or_else(|| {
+            // A payments engine on the same pool configuration is still needed
+            // for the type; without a PSP its routes answer 503.
+            Arc::new(PaymentsEngine::new(
+                h5i_app_pg::pool("postgres://invalid.invalid/none", 1).expect("pool config"),
+                h5i_app_pg::EngineConfig::default(),
+            ))
+        });
+        let payments = H5iApp::new(payments_engine, HmacAuth::<PaymentsApp>::new(secret.to_string(), payments::principal));
+        AppState { ledger, payments, ledger_engine, orchestrator }
     }
 }
 
@@ -36,6 +74,16 @@ pub fn router(state: AppState) -> Router {
         .route("/healthz", get(|| async { "ok" }))
         .route("/v1/ledger", post(ledger_rpc))
         .route("/v1/ledger/audit", get(ledger_audit))
+        .route("/v1/payments", post(create_payment))
+        .route("/v1/payments/rpc", post(payments_rpc))
+        .route("/v1/payments/{id}", get(get_payment))
+        .route("/v1/payments/{id}/capture", post(capture_payment))
+        .route("/v1/payments/{id}/cancel", post(cancel_payment))
+        .route("/v1/payments/{id}/refunds", post(refund_payment))
+        .route("/v1/checkout", post(checkout))
+        .route("/v1/webhooks/{psp}", post(webhook))
+        .route("/v1/recover", post(recover))
+        .route("/v1/reconcile", post(reconcile))
         .with_state(state)
 }
 
@@ -74,5 +122,377 @@ async fn ledger_audit(State(st): State<AppState>, actor: Actor<LedgerApp>) -> Re
             tracing::error!(error = %e, "audit failed");
             reply(StatusCode::SERVICE_UNAVAILABLE, error_body("unavailable"))
         }
+    }
+}
+
+/// Read-only payment commands (`get`, `list`, `get_refund`, `refunds`).
+async fn payments_rpc(State(st): State<AppState>, actor: Actor<PaymentsApp>, headers: HeaderMap, Json(body): Json<serde_json::Value>) -> Response {
+    if st.orchestrator.is_none() {
+        return unavailable();
+    }
+    match <PaymentsStore as h5i_app_http::Api<PaymentsApp>>::decode_command(body) {
+        Ok(cmd) => st.payments.respond(&actor, cmd, &headers).await,
+        Err(m) => reply(StatusCode::BAD_REQUEST, error_body(&m)),
+    }
+}
+
+fn unavailable() -> Response {
+    reply(StatusCode::SERVICE_UNAVAILABLE, error_body("payments are not configured"))
+}
+
+fn orch(st: &AppState) -> Result<&Arc<Orchestrator>, Response> {
+    st.orchestrator.as_ref().ok_or_else(unavailable)
+}
+
+fn view_json(v: &View) -> Out {
+    let mut fields = match payments::payment_json(&v.payment) {
+        Out::Obj(f) => f,
+        _ => unreachable!(),
+    };
+    fields.push((b"refunds".to_vec(), Out::Arr(v.refunds.iter().map(payments::refund_json).collect())));
+    fields.push((b"psp_reference".to_vec(), v.reference.as_deref().map_or(Out::Null, Out::str)));
+    fields.push((b"psp_pending".to_vec(), v.pending_psp.into()));
+    Out::Obj(fields)
+}
+
+fn view_reply(v: &View) -> Response {
+    let status = if v.pending_psp { StatusCode::ACCEPTED } else { StatusCode::OK };
+    reply(status, view_json(v))
+}
+
+fn orch_error(e: OrchError) -> Response {
+    match e {
+        OrchError::Payment(e) => {
+            let (status, code) = payments::error_code(&e);
+            reply(status, error_body(code))
+        }
+        OrchError::Ledger(e) => {
+            let (status, code) = ledger::error_code(&e);
+            reply(status, error_body(code))
+        }
+        OrchError::MerchantBalance => reply(StatusCode::CONFLICT, error_body("merchant_balance_insufficient")),
+        OrchError::BadRequest(m) => reply(StatusCode::BAD_REQUEST, error_body(&m)),
+        OrchError::Psp(payment_connectors::PspError::Config(m)) => reply(StatusCode::BAD_REQUEST, error_body(&m)),
+        OrchError::Psp(e) => {
+            tracing::warn!(error = %e, "PSP error");
+            reply(StatusCode::BAD_GATEWAY, error_body("psp_error"))
+        }
+        OrchError::Db(e) => {
+            tracing::error!(error = %e, "database error");
+            reply(StatusCode::SERVICE_UNAVAILABLE, error_body("unavailable"))
+        }
+    }
+}
+
+/// A currency as ISO 4217 numeric (392) or alphabetic ("jpy").
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Currency {
+    Numeric(u64),
+    Alpha(String),
+}
+
+impl Currency {
+    fn numeric(&self) -> Result<u64, Response> {
+        match self {
+            Currency::Numeric(n) => Ok(*n),
+            Currency::Alpha(a) => payment_connectors::currency_numeric(a)
+                .map(u64::from)
+                .ok_or_else(|| reply(StatusCode::BAD_REQUEST, error_body("unsupported currency"))),
+        }
+    }
+}
+
+#[derive(Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum CaptureMethod {
+    #[default]
+    Automatic,
+    Manual,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CreatePayment {
+    amount: u64,
+    currency: Currency,
+    #[serde(default)]
+    capture: CaptureMethod,
+    /// A PSP token (`pm_card_visa`, `tok_visa`), never a card number.
+    payment_method: String,
+}
+
+fn key(headers: &HeaderMap) -> Option<&str> {
+    headers.get("idempotency-key").and_then(|v| v.to_str().ok())
+}
+
+async fn create_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, headers: HeaderMap, Json(body): Json<CreatePayment>) -> Response {
+    let o = match orch(&st) {
+        Ok(o) => o,
+        Err(r) => return r,
+    };
+    let currency = match body.currency.numeric() {
+        Ok(c) => c,
+        Err(r) => return r,
+    };
+    match o.create(actor.principal(), key(&headers), body.amount, currency, body.capture == CaptureMethod::Manual, &body.payment_method).await {
+        Ok(v) => view_reply(&v),
+        Err(e) => orch_error(e),
+    }
+}
+
+async fn get_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, Path(id): Path<u64>) -> Response {
+    let o = match orch(&st) {
+        Ok(o) => o,
+        Err(r) => return r,
+    };
+    match o.view(actor.principal(), id).await {
+        Ok(v) => view_reply(&v),
+        Err(e) => orch_error(e),
+    }
+}
+
+#[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
+struct CaptureBody {
+    amount: Option<u64>,
+}
+
+async fn capture_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, Path(id): Path<u64>, body: Option<Json<CaptureBody>>) -> Response {
+    let o = match orch(&st) {
+        Ok(o) => o,
+        Err(r) => return r,
+    };
+    let amount = body.and_then(|b| b.0.amount);
+    match o.capture(actor.principal(), id, amount).await {
+        Ok(v) => view_reply(&v),
+        Err(e) => orch_error(e),
+    }
+}
+
+async fn cancel_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, Path(id): Path<u64>) -> Response {
+    let o = match orch(&st) {
+        Ok(o) => o,
+        Err(r) => return r,
+    };
+    match o.cancel(actor.principal(), id).await {
+        Ok(v) => view_reply(&v),
+        Err(e) => orch_error(e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RefundBody {
+    amount: u64,
+}
+
+async fn refund_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, headers: HeaderMap, Path(id): Path<u64>, Json(body): Json<RefundBody>) -> Response {
+    let o = match orch(&st) {
+        Ok(o) => o,
+        Err(r) => return r,
+    };
+    match o.refund(actor.principal(), key(&headers), id, body.amount).await {
+        Ok((rid, v)) => {
+            let mut j = view_json(&v);
+            if let Out::Obj(f) = &mut j {
+                f.insert(0, (b"refund_id".to_vec(), rid.into()));
+            }
+            let pending = v.refunds.iter().any(|r| r.id == rid && r.status == d::REFUND_PENDING);
+            reply(if pending { StatusCode::ACCEPTED } else { StatusCode::OK }, j)
+        }
+        Err(e) => orch_error(e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CheckoutBody {
+    amount: u64,
+    currency: Currency,
+    #[serde(default)]
+    capture: CaptureMethod,
+    description: String,
+    success_url: String,
+    cancel_url: String,
+}
+
+async fn checkout(State(st): State<AppState>, actor: Actor<PaymentsApp>, headers: HeaderMap, Json(body): Json<CheckoutBody>) -> Response {
+    let o = match orch(&st) {
+        Ok(o) => o,
+        Err(r) => return r,
+    };
+    let currency = match body.currency.numeric() {
+        Ok(c) => c,
+        Err(r) => return r,
+    };
+    let params = CheckoutParams {
+        amount: body.amount,
+        currency,
+        manual_capture: body.capture == CaptureMethod::Manual,
+        description: body.description,
+        success_url: body.success_url,
+        cancel_url: body.cancel_url,
+    };
+    match o.checkout(actor.principal(), key(&headers), params).await {
+        Ok((v, session)) => {
+            let mut j = view_json(&v);
+            if let Out::Obj(f) = &mut j {
+                f.push((b"checkout_url".to_vec(), Out::str(&session.url)));
+                f.push((b"checkout_session".to_vec(), Out::str(&session.id)));
+            }
+            reply(StatusCode::OK, j)
+        }
+        Err(e) => orch_error(e),
+    }
+}
+
+/// A PSP webhook. No bearer token: the PSP's signature authenticates it.
+async fn webhook(State(st): State<AppState>, Path(name): Path<String>, headers: HeaderMap, body: axum::body::Bytes) -> Response {
+    let o = match orch(&st) {
+        Ok(o) => o,
+        Err(r) => return r,
+    };
+    if name != o.psp.name() {
+        return reply(StatusCode::NOT_FOUND, error_body("unknown psp"));
+    }
+    let sig = headers.get("stripe-signature").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let ev = match o.psp.verify_webhook(sig, &body, now) {
+        Ok(ev) => ev,
+        Err(WebhookError::Ignored(what)) => {
+            return reply(StatusCode::OK, Out::obj([("status", "ignored".into()), ("event", Out::str(what))]));
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "webhook rejected");
+            return reply(StatusCode::BAD_REQUEST, error_body("invalid webhook"));
+        }
+    };
+    match o.webhook(&ev).await {
+        Ok(r) => {
+            let status = match r {
+                d::Reply::Duplicate => "duplicate",
+                d::Reply::Stale => "stale",
+                _ => "processed",
+            };
+            reply(StatusCode::OK, Out::obj([("status", status.into())]))
+        }
+        // An event for a payment we do not know: acknowledge, so the PSP
+        // stops retrying, and leave it to reconciliation.
+        Err(OrchError::Payment(d::Error::NotFound)) => reply(StatusCode::OK, Out::obj([("status", "unknown_payment".into())])),
+        Err(e) => orch_error(e),
+    }
+}
+
+#[derive(Deserialize, Default)]
+struct RecoverQuery {
+    #[serde(default)]
+    fail_unsubmitted: bool,
+}
+
+/// Finish payments and refunds left half done (operators only).
+async fn recover(State(st): State<AppState>, actor: Actor<PaymentsApp>, Query(q): Query<RecoverQuery>) -> Response {
+    let o = match orch(&st) {
+        Ok(o) => o,
+        Err(r) => return r,
+    };
+    let p = actor.principal();
+    if !p.operator {
+        return reply(StatusCode::FORBIDDEN, error_body("forbidden"));
+    }
+    match o.recover(p.org, q.fail_unsubmitted).await {
+        Ok(r) => reply(
+            StatusCode::OK,
+            Out::obj([
+                ("payments_resolved", r.payments_resolved.into()),
+                ("payments_failed", r.payments_failed.into()),
+                ("payments_unresolved", r.payments_unresolved.into()),
+                ("refunds_resolved", r.refunds_resolved.into()),
+                ("ledger_synced", r.ledger_synced.into()),
+            ]),
+        ),
+        Err(e) => orch_error(e),
+    }
+}
+
+#[derive(Deserialize, Default)]
+struct ReconcileQuery {
+    /// `single` (default), `parallel`, `simd` or `reference`.
+    engine: Option<String>,
+}
+
+const CODE_NAMES: [&str; rules::CODES] =
+    ["matched", "amount_mismatch", "currency_mismatch", "status_mismatch", "missing_external", "duplicate_external", "duplicate_internal", "extra_external"];
+
+fn describe(key: u64) -> Out {
+    let kind = match key >> 56 {
+        rules::KIND_CAPTURE => "capture",
+        rules::KIND_REFUND => "refund",
+        _ => "other",
+    };
+    Out::obj([("kind", kind.into()), ("id", (key & ((1 << 56) - 1)).into())])
+}
+
+fn report_json(r: &payment_reconcile::Recon, rep: &Report) -> Out {
+    let (ci, ce) = rep.counts();
+    let counts = |c: [u64; rules::CODES]| Out::obj(CODE_NAMES.iter().zip(c).filter(|(_, n)| *n > 0).map(|(k, n)| (*k, n.into())));
+    let mut exceptions = Vec::new();
+    for (i, c) in rep.internal.iter().enumerate() {
+        if *c != rules::MATCHED && exceptions.len() < 100 {
+            exceptions.push(Out::obj([
+                ("side", "internal".into()),
+                ("code", CODE_NAMES[*c as usize].into()),
+                ("record", describe(r.internal[i].key)),
+                ("amount", r.internal[i].amount.into()),
+            ]));
+        }
+    }
+    for (j, c) in rep.external.iter().enumerate() {
+        if *c != rules::MATCHED && *c != rules::DUPLICATE_INTERNAL && exceptions.len() < 100 {
+            exceptions.push(Out::obj([
+                ("side", "external".into()),
+                ("code", CODE_NAMES[*c as usize].into()),
+                ("record", describe(r.external[j].key)),
+                ("amount", r.external[j].amount.into()),
+            ]));
+        }
+    }
+    Out::obj([
+        ("internal", (r.internal.len() as u64).into()),
+        ("external", (r.external.len() as u64).into()),
+        ("internal_codes", counts(ci)),
+        ("external_codes", counts(ce)),
+        ("exceptions", (rep.exceptions() as u64).into()),
+        ("first_exceptions", Out::Arr(exceptions)),
+    ])
+}
+
+/// Compare the payment kernel with the PSP's settlement report and with the
+/// ledger journal. A report only: corrections are separate, audited ledger
+/// transfers. Operators only.
+async fn reconcile(State(st): State<AppState>, actor: Actor<PaymentsApp>, Query(q): Query<ReconcileQuery>) -> Response {
+    let o = match orch(&st) {
+        Ok(o) => o,
+        Err(r) => return r,
+    };
+    let p = actor.principal();
+    if !p.operator {
+        return reply(StatusCode::FORBIDDEN, error_body("forbidden"));
+    }
+    let engine = match q.engine.as_deref().unwrap_or("single") {
+        "single" => Engine::Single,
+        "parallel" => Engine::Parallel,
+        "simd" => Engine::Simd,
+        "reference" => Engine::Reference,
+        other => return reply(StatusCode::BAD_REQUEST, error_body(&format!("unknown engine {other}"))),
+    };
+    let inputs = match o.reconcile_inputs(p.org).await {
+        Ok(i) => i,
+        Err(e) => return orch_error(e),
+    };
+    let run = |r: &payment_reconcile::Recon| engine.run(r).map(|rep| report_json(r, &rep));
+    match (run(&inputs.psp), run(&inputs.ledger)) {
+        (Ok(a), Ok(b)) => reply(StatusCode::OK, Out::obj([("psp", a), ("ledger", b)])),
+        (Err(e), _) | (_, Err(e)) => reply(StatusCode::UNPROCESSABLE_ENTITY, error_body(&e.to_string())),
     }
 }

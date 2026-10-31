@@ -29,6 +29,8 @@ payment-ledger.workspace = true
 payment-domain.workspace = true
 payment-storage = { workspace = true, features = ["testing"] }
 payment-api.workspace = true
+payment-connectors.workspace = true
+payment-reconcile.workspace = true
 tokio.workspace = true
 serde_json.workspace = true
 reqwest.workspace = true

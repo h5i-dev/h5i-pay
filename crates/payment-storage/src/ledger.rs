@@ -127,6 +127,10 @@ impl CommandJson {
 /// derived by the orchestrator from payment and refund ids.
 pub const SYSTEM_TRANSFER_BIT: u64 = 1 << 63;
 
+/// Account codes from here up are the orchestrator's (PSP clearing,
+/// merchant payable, refund holding); only operators may open them.
+pub const SYSTEM_ACCOUNT_CODES: u64 = 1000;
+
 /// Decode a client's ledger command. `Api::decode_command` has no caller,
 /// so the HTTP handler uses this instead.
 pub fn decode_for(actor: &k::Principal, body: serde_json::Value) -> Result<k::Command, String> {
@@ -139,6 +143,9 @@ pub fn decode_for(actor: &k::Principal, body: serde_json::Value) -> Result<k::Co
         }
     };
     match &c {
+        CommandJson::Open { code, .. } if *code >= SYSTEM_ACCOUNT_CODES && !actor.operator => {
+            return Err(format!("account code {code} is reserved"));
+        }
         CommandJson::Transfer(t) => check(t)?,
         CommandJson::Batch { transfers } => transfers.iter().try_for_each(check)?,
         _ => {}

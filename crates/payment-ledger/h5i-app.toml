@@ -8,7 +8,7 @@ include = ["h5i_app_sql"]
 
 [proofs]
 # One Lake project for every kernel; the extraction goes to proofs/generated/.
-dir = "../../proofs"
+dir = "../../proofs/ledger"
 
 [check]
 theorems = [

@@ -6,6 +6,7 @@ members = [
     "crates/payment-storage",
     "crates/payment-connectors",
     "crates/payment-api",
+    "crates/payment-reconcile",
     "tests",
 ]
 # The CUDA device crate is built separately for nvptx64 (see crates/payment-gpu/device).

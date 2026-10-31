@@ -10,14 +10,13 @@ require aeneas from git
 require h5i_app_lib from git
   "https://github.com/h5i-dev/h5i" @ "v0.5.2" / "crates/h5i-app-core/proofs"
 
-package h5i_pay_proofs
+package h5i_pay_ledger_proofs
 
--- Generated Lean: the extracted kernels (`h5i app extract crates/payment-ledger`,
--- `h5i app extract crates/payment-domain`) and their `schema!` Lean. Do not edit.
+-- Generated Lean: `h5i app extract crates/payment-ledger` and its `schema!` Lean. Do not edit.
 lean_lib Generated where
   srcDir := "generated"
-  roots := #[`PaymentLedger, `LedgerSchema, `PaymentDomain, `PaymentsSchema]
+  roots := #[`PaymentLedger, `LedgerSchema]
 
 -- Hand-written specifications and proofs.
 @[default_target] lean_lib Proofs where
-  roots := #[`Ledger, `Batch, `Payments, `Policies, `Models]
+  roots := #[`Ledger, `Batch, `Models]

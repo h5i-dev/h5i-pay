@@ -12,7 +12,9 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Ledger | `payment_ledger.Theorems.conservation`, `journal_balanced`, `no_overdraft`, `no_overcredit`, `posting_balanced`, `replay_is_noop`, `only_owner_or_operator_debits`, `reachable_inv` | the Lean that Charon+Aeneas extract from `crates/payment-ledger/src/lib.rs` (`proofs/generated/PaymentLedger.lean`) |
 | Batch | `payment_ledger.Batch.batch_serial` | the extracted `batch` loop |
 | Storage | `payment_ledger.Storage.db_inv` | the extracted `sql_writes`/`decode` and h5i-app's SQL model (`H5iAppLib.Pg`) |
-| Engine model | `Models.isolation`, `noninterference`, `others_commute`, `keyed_replay`, `keyed_conflict`, `ledger_isolation` | a hand-written Lean model of the engine (`proofs/Models/Engine.lean`) |
+| Engine model | `Models.isolation`, `noninterference`, `others_commute`, `keyed_replay`, `keyed_conflict`, `ledger_isolation` | a hand-written Lean model of the engine (`proofs/ledger/Models/Engine.lean`) |
+| Payments | `payment_domain.Theorems.status_steps_allowed`, `terminal_final`, `captured_final`, `refund_safety`, `refunded_le_captured`, `event_dedup`, `reachable_inv` | the extracted `crates/payment-domain/src/lib.rs` (`proofs/payments/generated/PaymentDomain.lean`) |
+| Policies | `payment_domain.Policies.check_sound` | the extracted `crates/payment-domain/src/policy.rs` |
 
 "Reachable" (`Spec.Reachable`) means: reached from the empty ledger by any
 sequence of commands that the kernel accepted, from any callers, in any
@@ -46,6 +48,26 @@ committed history is such a sequence.
    whoever holds the HMAC secret can mint any principal.
 
 ## Not proven (known limits)
+
+- **The orchestrator is not verified.** The payment kernel guarantees that
+  whatever is recorded is a valid transition with consistent amounts; the
+  orchestrator decides *what* to record from PSP answers. A wrong mapping
+  from a PSP answer to a `PspResult` would be a valid, wrong record.
+  Reconciliation against the PSP report is the check on that.
+- **Ledger and payments are separate kernels.** The ledger postings for a
+  payment are made after the payment kernel commits, with deterministic
+  transfer ids; they converge (recovery re-posts) but are not atomic with
+  the payment record. Reconciliation of payments against the ledger journal
+  reports any gap. Merging the two kernels into one transaction is the
+  alternative, at the cost of one larger kernel and proof.
+- **Webhook event ids are hashed to 64 bits** (SHA-256 prefix of
+  `psp\0event_id`). Two different events colliding would make the second
+  one a "duplicate"; the chance is about n²/2⁶⁵ for n events per tenant.
+- **Policy completeness** is not claimed: `check_sound` says approval implies
+  every rule holds. The merchant allowlist uses binary search, which may
+  miss a merchant on an unsorted list (refusing, never wrongly approving).
+- **CPU/GPU equivalence** of the batch engines is checked by differential
+  tests on the inputs they cover, not proven (see `docs/benchmarks.md`).
 
 - **Tenant isolation inside PostgreSQL** is proven for the SQL model and the
   engine model, not for the real engine or database.

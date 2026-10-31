@@ -1,0 +1,13 @@
+[package]
+name = "payment-reconcile"
+description = "h5i-pay: reconciliation of internal records against PSP settlement reports (reference, CPU single-thread, CPU multithread, SIMD)"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dependencies]
+rayon.workspace = true
+payment-domain.workspace = true
+
+[dev-dependencies]

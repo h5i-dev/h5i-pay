@@ -32,7 +32,7 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
   ledger (PostgreSQL schema `ledger`), plus `audit()` that re-checks the
   proven invariants on loaded rows.
 - `crates/payment-api`: axum server, `POST /v1/ledger`, `GET /v1/ledger/audit`.
-- Lean (`proofs/Ledger`, `proofs/Batch`, `proofs/Models`), all on the
+- Lean (`proofs/ledger/{Ledger,Batch,Models}`), all on the
   extracted code except `Models/Engine.lean` (a model of the trusted engine):
   `conservation`, `journal_balanced`, `no_overdraft`, `no_overcredit`,
   `posting_balanced`, `replay_is_noop`, `only_owner_or_operator_debits`,
@@ -40,8 +40,9 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
   `Models.noninterference`, `Models.keyed_replay`, `Models.ledger_isolation`.
   `h5i app check crates/payment-ledger`: 145 theorems in 13 modules on the
   standard axioms only; no `sorry`.
-- Mutants (`h5i app mutate crates/payment-ledger`): see the M1 commit message
-  for the result.
+- Mutants (`h5i app mutate crates/payment-ledger`): 5/5 caught
+  (self transfer, overdraft, anyone may debit, short credit side, replay
+  ignoring the amount).
 - Tests (`H5I_APP_TEST_DATABASE_URL=postgres://h5i:h5i@127.0.0.1:55432/h5i`):
   - concurrency: 16 tasks × 40 random transfers with SERIALIZABLE retries
     (1119 retries in one run) and with the tenant lock; concurrent duplicates
@@ -54,7 +55,50 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
   - integration: the ledger over HTTP, idempotency keys, tenant isolation.
 - `cargo build`, `cargo test --workspace`, `cargo clippy --workspace --all-targets -- -D warnings`, `lake build` pass.
 
-## M2 — Payment Orchestration: in progress
+## M2 — Payment Orchestration: done
+
+- `crates/payment-domain`: payment kernel (statuses CREATED → PROCESSING →
+  AUTHORIZED → CAPTURED, CANCELED, FAILED; refunds reserved against the
+  capture; PSP references; webhook events deduplicated by id and tolerant of
+  reordering) and the stateless batch policy rules (`policy::check`).
+- `crates/payment-connectors`: `Psp` trait; `MockPsp` (idempotency keys,
+  manual/automatic capture, partial capture, refunds, Stripe-shaped signed
+  webhooks, settlement report, fault injection: fail before effect, lose the
+  response, pending payments, tampered settlement); `StripePsp` (test keys
+  only, live keys refused; PaymentIntents, capture, cancel, refunds, search,
+  hosted Checkout; `Stripe-Signature` verification with 300 s tolerance);
+  raw card numbers refused before any PSP call.
+- `crates/payment-api/src/orchestrator.rs`: create/authorize/capture/cancel/
+  refund/checkout, webhooks, recovery (`POST /v1/recover`), ledger postings
+  with deterministic transfer ids (capture, refund reserve/settle/release),
+  reconciliation inputs (payments vs PSP report, payments vs ledger journal).
+- `crates/payment-reconcile`: rules, reference oracle, CPU single-thread
+  (M3 adds the other engines' benchmarks).
+- Lean (`proofs/payments/{Payments,Policies}`), on the extracted kernel:
+  `status_steps_allowed`, `terminal_final`, `captured_final`,
+  `refund_safety`, `refunded_le_captured`, `event_dedup`, `reachable_inv`,
+  `Policies.check_sound`. `h5i app check crates/payment-domain`: 121
+  theorems in 6 modules, standard axioms only. `h5i app mutate
+  crates/payment-domain`: 6/6 caught.
+- The proofs are now two Lake projects, `proofs/ledger` and
+  `proofs/payments`: `h5i app check`'s axiom gate imports every module of a
+  project into one Lean environment, and the two extracted kernels both
+  declare `h5i_app_sql.*`, so they cannot share one. Both have the same
+  `require`s; here `proofs/payments/.lake/packages` is a symlink to the
+  ledger's packages and `H5I_LAKE_CACHE=off` (the disk has room for one
+  Mathlib); with h5i's default shared cache no symlink is needed.
+- Tests: `tests/integration/payments_api.rs` (11 HTTP end-to-end tests with
+  the Mock PSP: automatic and manual capture, partial capture and refunds,
+  refund limits, declines, cancels, card-number refusal, a pending payment
+  completed by 10 concurrent deliveries of one webhook (1 processed, 9
+  duplicates), out-of-order webhooks, lost PSP responses recovered for
+  payments and refunds, PSP outage, merchant balance too low for a refund,
+  reconciliation with tampered settlement under all four CPU engines,
+  idempotency key creating one payment); Stripe connector against a local
+  fake of the Stripe API (request encoding, declines, refunds, 404s,
+  signatures) and a live test-mode round trip that runs only when
+  `STRIPE_SECRET_KEY=sk_test_…` is set (no key on this machine, so it was
+  skipped).
 
 ## M3 — GPU Batch Processing: not started
 

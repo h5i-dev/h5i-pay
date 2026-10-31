@@ -37,7 +37,7 @@ pub struct Principal {
 pub const MAX_BATCH: usize = 8192;
 
 h5i_app_schema::schema! {
-    mapping ledger_tables for payment_ledger, writes Write, lean "../../proofs/generated/LedgerSchema.lean";
+    mapping ledger_tables for payment_ledger, writes Write, lean "../../proofs/ledger/generated/LedgerSchema.lean";
 
     /// One tenant's ledger.
     #[derive(Clone, Debug, Default, PartialEq, Eq)]

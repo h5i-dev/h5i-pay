@@ -50,7 +50,7 @@ pub const REFUND_SUCCEEDED: u64 = 1;
 pub const REFUND_FAILED: u64 = 2;
 
 h5i_app_schema::schema! {
-    mapping payment_tables for payment_domain, writes Write, lean "../../proofs/generated/PaymentsSchema.lean";
+    mapping payment_tables for payment_domain, writes Write, lean "../../proofs/payments/generated/PaymentsSchema.lean";
 
     /// One tenant's payments.
     #[derive(Clone, Debug, Default, PartialEq, Eq)]
