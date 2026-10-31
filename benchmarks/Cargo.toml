@@ -1,0 +1,23 @@
+[package]
+name = "h5i-pay-benchmarks"
+description = "h5i-pay: CPU single-thread / CPU multithread / SIMD / GPU benchmarks for reconciliation and batch policy validation"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "bench"
+path = "src/main.rs"
+
+[features]
+gpu = ["payment-gpu/cuda"]
+
+[dependencies]
+h5i-app-gpu.workspace = true
+payment-batch.workspace = true
+payment-gpu.workspace = true
+payment-reconcile.workspace = true
+payment-domain.workspace = true
+serde_json.workspace = true
+rayon.workspace = true

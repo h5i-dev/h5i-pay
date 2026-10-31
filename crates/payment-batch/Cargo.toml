@@ -1,0 +1,13 @@
+[package]
+name = "payment-batch"
+description = "h5i-pay: batch API — policy validation and reconciliation on CPU threads, SIMD and (via payment-gpu) CUDA, behind h5i-app-gpu's Backend"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dependencies]
+h5i-app-gpu.workspace = true
+payment-domain.workspace = true
+payment-reconcile.workspace = true
+rayon.workspace = true

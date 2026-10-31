@@ -7,10 +7,11 @@ members = [
     "crates/payment-connectors",
     "crates/payment-api",
     "crates/payment-reconcile",
+    "crates/payment-batch",
+    "crates/payment-gpu",
+    "benchmarks",
     "tests",
 ]
-# The CUDA device crate is built separately for nvptx64 (see crates/payment-gpu/device).
-exclude = ["crates/payment-gpu/device"]
 
 [workspace.package]
 edition = "2024"

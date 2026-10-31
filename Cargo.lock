@@ -12,6 +12,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "approx"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -99,6 +108,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
+name = "bimap"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "230c5f1ca6a325a32553f8640d31ac9b49f2411e901e427570154868b46da4f7"
+
+[[package]]
+name = "bindgen"
+version = "0.71.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f58bf3d7db68cfbac37cfc485a8d711e87e064c3d0fe0435b92f7a407f9d6b3"
+dependencies = [
+ "bitflags",
+ "cexpr",
+ "clang-sys",
+ "itertools",
+ "log",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash",
+ "shlex 1.3.0",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -147,6 +182,12 @@ name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+
+[[package]]
+name = "bytemuck"
+version = "1.25.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95832e849adfb21180ccb6826a99da14e5d266ae5c2e668e1602cf234f153797"
 
 [[package]]
 name = "byteorder"
@@ -249,7 +290,7 @@ version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc7459e07732f6de74001fcf73a3fdfbb0f368e4fd8e2392f4a2206a065e6e95"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "cc",
  "pkg-config",
 ]
@@ -305,6 +346,53 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2376ffd6f96d8a9db59875b4b6b0237d6900b5baf64279714e05493ce64828a"
 dependencies = [
  "cmov",
+]
+
+[[package]]
+name = "cust"
+version = "0.3.2"
+source = "git+https://github.com/Rust-GPU/rust-cuda?rev=3a82c35a7196731fb60eebdac2a40d2b1bf0ba95#3a82c35a7196731fb60eebdac2a40d2b1bf0ba95"
+dependencies = [
+ "bitflags",
+ "bytemuck",
+ "cust_core",
+ "cust_derive",
+ "cust_raw",
+ "glam",
+ "mint",
+ "serde_json",
+ "vek",
+]
+
+[[package]]
+name = "cust_core"
+version = "0.1.1"
+source = "git+https://github.com/Rust-GPU/rust-cuda?rev=3a82c35a7196731fb60eebdac2a40d2b1bf0ba95#3a82c35a7196731fb60eebdac2a40d2b1bf0ba95"
+dependencies = [
+ "cust_derive",
+ "glam",
+ "mint",
+ "vek",
+]
+
+[[package]]
+name = "cust_derive"
+version = "0.2.0"
+source = "git+https://github.com/Rust-GPU/rust-cuda?rev=3a82c35a7196731fb60eebdac2a40d2b1bf0ba95#3a82c35a7196731fb60eebdac2a40d2b1bf0ba95"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "cust_raw"
+version = "0.11.3"
+source = "git+https://github.com/Rust-GPU/rust-cuda?rev=3a82c35a7196731fb60eebdac2a40d2b1bf0ba95#3a82c35a7196731fb60eebdac2a40d2b1bf0ba95"
+dependencies = [
+ "bimap",
+ "bindgen 0.71.1",
+ "cc",
 ]
 
 [[package]]
@@ -490,6 +578,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "glam"
+version = "0.30.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19fc433e8437a212d1b6f1e68c7824af3aed907da60afa994e7f542d18d12aa9"
+dependencies = [
+ "libm",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -518,6 +615,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d750574335c3cdfbcddaa560a0b486db0c2e5dc259c528085811f5e5f82d9ff"
 dependencies = [
  "h5i-app-std",
+]
+
+[[package]]
+name = "h5i-app-gpu"
+version = "0.1.4"
+source = "git+https://github.com/h5i-dev/h5i?tag=v0.5.2#17b7d922000a7b8bb8b88235ecc7a963043efee8"
+
+[[package]]
+name = "h5i-app-gpu-backend-nvvm"
+version = "0.1.0"
+source = "git+https://github.com/h5i-dev/h5i?tag=v0.5.2#17b7d922000a7b8bb8b88235ecc7a963043efee8"
+dependencies = [
+ "cust",
+ "h5i-app-gpu",
 ]
 
 [[package]]
@@ -593,16 +704,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e666e061fc12608293c270445972c5b2b3962a02355def6ee8a6ab866f22a734"
 
 [[package]]
+name = "h5i-pay-benchmarks"
+version = "0.1.0"
+dependencies = [
+ "h5i-app-gpu",
+ "payment-batch",
+ "payment-domain",
+ "payment-gpu",
+ "payment-reconcile",
+ "rayon",
+ "serde_json",
+]
+
+[[package]]
 name = "h5i-pay-tests"
 version = "0.1.0"
 dependencies = [
  "axum",
  "h5i-app-core",
+ "h5i-app-gpu",
  "h5i-app-http",
  "h5i-app-pg",
  "payment-api",
+ "payment-batch",
  "payment-connectors",
  "payment-domain",
+ "payment-gpu",
  "payment-ledger",
  "payment-reconcile",
  "payment-storage",
@@ -1008,6 +1135,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "libm"
+version = "0.2.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
+
+[[package]]
 name = "libredox"
 version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1087,6 +1220,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
+name = "mint"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e53debba6bda7a793e5f99b8dacf19e626084f525f7829104ba9898f367d85ff"
+
+[[package]]
 name = "mio"
 version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1142,6 +1281,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+ "libm",
 ]
 
 [[package]]
@@ -1215,6 +1355,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "payment-batch"
+version = "0.1.0"
+dependencies = [
+ "h5i-app-gpu",
+ "payment-domain",
+ "payment-reconcile",
+ "rayon",
+]
+
+[[package]]
 name = "payment-connectors"
 version = "0.1.0"
 dependencies = [
@@ -1235,6 +1385,18 @@ version = "0.1.0"
 dependencies = [
  "h5i-app-schema",
  "h5i-app-sql",
+]
+
+[[package]]
+name = "payment-gpu"
+version = "0.1.0"
+dependencies = [
+ "cust",
+ "h5i-app-gpu",
+ "h5i-app-gpu-backend-nvvm",
+ "payment-batch",
+ "payment-domain",
+ "payment-reconcile",
 ]
 
 [[package]]
@@ -1599,6 +1761,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b1e7f9a428571be2dc5bc0505c13fb6bf936822b894ec87abf8a08a4e51742d"
 
 [[package]]
+name = "rustc_version"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
+dependencies = [
+ "semver",
+]
+
+[[package]]
 name = "rustls"
 version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1650,6 +1821,12 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "semver"
+version = "1.0.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 
 [[package]]
 name = "serde"
@@ -2181,6 +2358,18 @@ name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
+
+[[package]]
+name = "vek"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25215c4675beead435b254fc510932ff7f519cbc585b1b9fe2539ee9f20ca331"
+dependencies = [
+ "approx",
+ "num-integer",
+ "num-traits",
+ "rustc_version",
+]
 
 [[package]]
 name = "version_check"

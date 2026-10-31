@@ -100,7 +100,40 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
   `STRIPE_SECRET_KEY=sk_test_…` is set (no key on this machine, so it was
   skipped).
 
-## M3 — GPU Batch Processing: not started
+## M3 — GPU Batch Processing: done
+
+- `crates/payment-reconcile`: four engines with one `Report` — reference
+  (`BTreeMap` oracle), CPU single-thread (open addressing), CPU
+  multithread (rayon radix partition + per-partition hash join), SIMD
+  (AVX2 4-lane probes).
+- `crates/payment-batch`: the batch API on h5i-app-gpu's `Backend`;
+  policy validation with the verified `policy::check` single-thread,
+  rayon, and AVX2 (`policy_simd.rs`); `run_policy` / `run_reconcile`
+  with `ExecutionPolicy` (CPU / GPU / Auto with a row threshold, no CPU
+  replay after a GPU failure, output length validated); synthetic data.
+- `crates/payment-gpu` (feature `cuda`): CUDA C kernels
+  (`kernels/batch.cu`: atomic hash-table build, probes, policy check)
+  compiled to PTX by nvcc (`compute_75`, JIT on T4/A10G/L4), launched
+  through `h5i-app-gpu-backend-nvvm`/`cust` at the pinned Rust-CUDA rev;
+  `Gpu` implements `Backend` for both workloads with H2D/kernel/D2H timing.
+  `h5i-pay-batch` worker binary (CSV in, JSON report out; Auto selection).
+  The Rust-CUDA single-source toolchain (rustc_codegen_nvvm) was not used:
+  h5i pins it to CUDA 12.6 on Ubuntu, this host has CUDA 13.2 on Amazon
+  Linux. Equivalence of the CUDA C with the Rust spec rests on differential
+  tests. libclang (`dnf install clang-libs clang-devel`) is needed for cust.
+- `tests/differential`: every CPU engine vs the reference, and with
+  `--features gpu` the GPU vs the reference on every row (empty batches,
+  block boundaries, hot keys, hash collisions, malformed policies, unsorted
+  allowlists, 100k/200k synthetic sets), repeat determinism, partition
+  independence, corrupted-output rejection. All pass on the A10G.
+- `benchmarks` (`bench all`): 10k/100k/1M/10M rows, p50/p95, throughput,
+  H2D/kernel/D2H, peak RSS increase, device memory, $/M rows; results and
+  analysis in `docs/benchmarks.md`. Summary: with a warm context the GPU
+  wins from ~100k rows (reconciliation 5.2× / 8.6× the 4-thread CPU at
+  1M / 10M; policy 3.9× / 3.4×); below ~10k rows, and for one-shot jobs
+  under ~2–3M rows (136 ms context + JIT), the CPU wins; policy is
+  transfer-bound (kernel 2.55 of 57.6 ms at 10M); SIMD reconciliation is
+  slower than scalar on this Zen 2 CPU.
 
 ## M4 — AWS Deployment (IaC only): not started
 

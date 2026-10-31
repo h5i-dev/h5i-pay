@@ -1,0 +1,24 @@
+[package]
+name = "payment-gpu"
+description = "h5i-pay: CUDA engines for reconciliation and batch policy checks, through h5i-app-gpu's Rust-CUDA backend"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[features]
+default = []
+# The CUDA engines. Needs nvcc (to compile kernels/batch.cu to PTX), the CUDA
+# driver, and libclang for cust's bindings. Without it this crate only
+# reports that no GPU engine is built, and every caller falls back to CPU.
+cuda = ["dep:h5i-app-gpu-backend-nvvm", "dep:cust"]
+
+[dependencies]
+h5i-app-gpu.workspace = true
+payment-batch.workspace = true
+payment-reconcile.workspace = true
+payment-domain.workspace = true
+# The same Rust-CUDA revision h5i-app-gpu-backend-nvvm pins.
+h5i-app-gpu-backend-nvvm = { git = "https://github.com/h5i-dev/h5i", tag = "v0.5.2", optional = true }
+cust = { git = "https://github.com/Rust-GPU/rust-cuda", rev = "3a82c35a7196731fb60eebdac2a40d2b1bf0ba95", optional = true }
