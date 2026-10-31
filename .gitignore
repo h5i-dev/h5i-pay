@@ -30,7 +30,8 @@ rustc-ice-*.txt
 .env
 .env.*
 *.pem
-
+# Public CA certificates only (no keys): the Amazon RDS trust bundle.
+!/infra/docker/rds-global-bundle.pem
 # Benchmark scratch output and device builds
 /benchmarks/out/
 *.ptx.tmp
