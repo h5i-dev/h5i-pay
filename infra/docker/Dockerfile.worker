@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1.7
+# The batch worker (AWS Batch; GPU instances, or Fargate for the CPU
+# fallback). Build from the repository root:
+#   docker build -f infra/docker/Dockerfile.worker -t h5i-pay/worker .
+FROM nvidia/cuda:13.2.0-devel-ubuntu24.04 AS build
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates build-essential pkg-config libclang-dev \
+ && rm -rf /var/lib/apt/lists/*
+ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo PATH=/opt/cargo/bin:$PATH
+RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.99.1
+WORKDIR /src
+COPY . .
+# compute_75 PTX: the driver JIT-compiles it for T4 (g4dn), A10G (g5), L4 (g6).
+RUN --mount=type=cache,target=/opt/cargo/registry \
+    --mount=type=cache,target=/opt/cargo/git \
+    --mount=type=cache,target=/src/target \
+    PAYMENT_GPU_ARCH=compute_75 cargo build --release --locked -p payment-gpu --features cuda --bin h5i-pay-batch \
+ && cp target/release/h5i-pay-batch /h5i-pay-batch
+
+# The CUDA driver comes from the host (ECS GPU AMI); without a GPU the
+# worker uses the multithreaded CPU engine.
+FROM nvidia/cuda:13.2.0-base-ubuntu24.04
+RUN apt-get update && apt-get install -y --no-install-recommends awscli ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --uid 10001 --create-home worker
+COPY --from=build /h5i-pay-batch /usr/local/bin/h5i-pay-batch
+COPY infra/docker/batch-entrypoint.sh /usr/local/bin/batch-entrypoint.sh
+USER 10001
+WORKDIR /home/worker
+ENTRYPOINT ["/usr/local/bin/batch-entrypoint.sh"]

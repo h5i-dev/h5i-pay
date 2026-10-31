@@ -135,7 +135,28 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
   transfer-bound (kernel 2.55 of 57.6 ms at 10M); SIMD reconciliation is
   slower than scalar on this Zen 2 CPU.
 
-## M4 — AWS Deployment (IaC only): not started
+## M4 — AWS Deployment (IaC only): done (files only; nothing applied)
+
+- `infra/terraform`: VPC (public / private / isolated data subnets, NAT,
+  VPC endpoints, flow logs), security groups, KMS, Secrets Manager, RDS
+  PostgreSQL 17 Multi-AZ, S3 (settlements, batch, Object-Lock audit),
+  SQS + DLQ, ECR, ALB + WAF + Route 53, ECS Fargate API (circuit breaker,
+  alarm rollback, autoscaling, ADOT sidecar), AWS Batch GPU (g4dn/g5 from
+  zero) and Fargate CPU queues, IAM per actor, GitHub OIDC deploy role,
+  CloudWatch alarms (ledger invariant, posting refused, reconciliation
+  exceptions, 5xx, DLQ, queue lag, RDS), AWS Backup + restore testing.
+  `terraform fmt -check` and `terraform validate` pass (Terraform 1.9.8,
+  providers downloaded to /tmp and removed; no credentials, no apply).
+- `infra/docker`: API and worker Dockerfiles, Batch entrypoint, compose.
+  Not built locally (disk); CI builds them.
+- `.github/workflows/ci.yml`: Rust (PostgreSQL service), CUDA build, GPU
+  runner tests (opt-in), proofs (extract --check, check, mutate),
+  Terraform checks, ECR images via OIDC, deploy to `test` with approval.
+- `payment-api` reads RDS-managed credentials (`DB_HOST`/`DB_NAME`/
+  `DB_CREDENTIALS`); `h5i-pay-batch` prints a JSON summary line for the
+  reconciliation-exceptions metric filter.
+- Known gap: h5i-app-pg connects without TLS, so `rds.force_ssl = 0`
+  (`docs/security-review.md`).
 
 ## M5 — Production Hardening (docs): not started
 

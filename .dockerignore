@@ -1,0 +1,6 @@
+target
+**/.lake
+.git
+benchmarks/results
+*.tfstate*
+.terraform

@@ -1,7 +1,9 @@
 //! `h5i-pay`: the payment API server.
 //!
 //! Environment:
-//! * `DATABASE_URL` (required) — PostgreSQL;
+//! * `DATABASE_URL` — PostgreSQL; or `DB_HOST`, `DB_NAME` (and optional
+//!   `DB_PORT`) with `DB_CREDENTIALS`, the JSON `{"username","password"}` of
+//!   an RDS-managed secret (as the ECS task definition injects it);
 //! * `H5I_APP_SECRET` (required) — the HMAC key for bearer tokens;
 //! * `LISTEN` — default `127.0.0.1:8080`;
 //! * `H5I_PAY_PSP` — `mock` (default) or `stripe` (test mode only: reads
@@ -25,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", HmacAuth::<LedgerApp>::new(secret, ledger::principal).issue(o.parse()?, u.parse()?, 86_400));
         return Ok(());
     }
-    let url = std::env::var("DATABASE_URL").map_err(|_| "DATABASE_URL is required")?;
+    let url = database_url()?;
     let addr = std::env::var("LISTEN").unwrap_or_else(|_| "127.0.0.1:8080".into());
     let psp: Arc<dyn Psp> = match std::env::var("H5I_PAY_PSP").as_deref().unwrap_or("mock") {
         "mock" => Arc::new(MockPsp::new(std::env::var("H5I_PAY_MOCK_WEBHOOK_SECRET").unwrap_or_else(|_| "whsec_mock_dev".into()))),
@@ -42,4 +44,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     })
     .await?;
     Ok(())
+}
+
+/// `DATABASE_URL`, or one built from the RDS-managed credentials secret.
+fn database_url() -> Result<String, Box<dyn std::error::Error>> {
+    if let Ok(u) = std::env::var("DATABASE_URL") {
+        return Ok(u);
+    }
+    let creds = std::env::var("DB_CREDENTIALS").map_err(|_| "DATABASE_URL or DB_HOST/DB_NAME/DB_CREDENTIALS is required")?;
+    let v: serde_json::Value = serde_json::from_str(&creds)?;
+    let user = v["username"].as_str().ok_or("DB_CREDENTIALS has no username")?;
+    let pass = v["password"].as_str().ok_or("DB_CREDENTIALS has no password")?;
+    let host = std::env::var("DB_HOST")?;
+    let db = std::env::var("DB_NAME")?;
+    let port = std::env::var("DB_PORT").unwrap_or_else(|_| "5432".into());
+    Ok(format!("postgres://{}:{}@{host}:{port}/{db}", encode(user), encode(pass)))
+}
+
+/// Percent-encode a URL userinfo component.
+fn encode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
 }

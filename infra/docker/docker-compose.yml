@@ -1,0 +1,27 @@
+# Local development: PostgreSQL 17 and the API with the Mock PSP.
+#   docker compose -f infra/docker/docker-compose.yml up --build
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: h5i
+      POSTGRES_PASSWORD: h5i
+      POSTGRES_DB: h5i
+    ports: ["127.0.0.1:55432:5432"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "h5i"]
+      interval: 2s
+      retries: 30
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    environment:
+      DATABASE_URL: postgres://h5i:h5i@db:5432/h5i
+      H5I_APP_SECRET: dev-secret-change-me
+      H5I_PAY_PSP: mock
+      RUST_LOG: info
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on:
+      db:
+        condition: service_healthy

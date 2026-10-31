@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1.7
+# The h5i-pay API (ECS Fargate). Build from the repository root:
+#   docker build -f infra/docker/Dockerfile.api -t h5i-pay/api .
+FROM rust:1.99-bookworm AS build
+WORKDIR /src
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/src/target \
+    cargo build --release --locked -p payment-api --bin h5i-pay \
+ && cp target/release/h5i-pay /h5i-pay
+
+# No shell, no package manager; runs as uid 65532.
+FROM gcr.io/distroless/cc-debian12:nonroot
+COPY --from=build /h5i-pay /usr/local/bin/h5i-pay
+USER 65532:65532
+ENV LISTEN=0.0.0.0:8080
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/h5i-pay"]

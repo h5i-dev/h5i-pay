@@ -1,0 +1,206 @@
+# Build, test, prove, check the infrastructure; on main, build images and
+# deploy the test environment (approval through the `test` environment).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: "1.99.1"
+  # Keep in sync with proofs/*/lakefile.lean (h5i v0.5.2 pins).
+  AENEAS_REV: b86120db3183b0107eb5f2637b11c424cd06ef1c
+  H5I_TAG: v0.5.2
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: h5i
+          POSTGRES_PASSWORD: h5i
+          POSTGRES_DB: h5i
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U h5i" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      H5I_APP_TEST_DATABASE_URL: postgres://h5i:h5i@127.0.0.1:5432/h5i
+      # `secrets` is not available in `if:`; expose whether the key exists.
+      HAS_STRIPE_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --workspace --all-targets --locked
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # Unit, integration (HTTP + Mock PSP + PostgreSQL), concurrency,
+      # fault-injection and CPU differential tests.
+      - run: cargo test --workspace --locked
+      - name: Stripe test-mode round trip (only with a test key)
+        if: env.HAS_STRIPE_KEY == 'true'
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+        run: cargo test --locked -p payment-connectors live_test_mode_roundtrip -- --nocapture
+
+  # The CUDA build compiles everywhere; the GPU tests need a GPU runner.
+  cuda-build:
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:13.2.0-devel-ubuntu24.04
+    steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends curl ca-certificates build-essential pkg-config libclang-dev git
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy
+      - run: cargo clippy --locked --all-targets -p payment-gpu -p h5i-pay-tests -p h5i-pay-benchmarks --features payment-gpu/cuda,h5i-pay-tests/gpu,h5i-pay-benchmarks/gpu -- -D warnings
+
+  gpu-tests:
+    if: ${{ vars.GPU_RUNNER == 'true' }}
+    runs-on: [self-hosted, linux, gpu]
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo test --release --locked -p h5i-pay-tests --features gpu --test differential
+      # A quick performance regression check (sizes up to 1M rows).
+      - run: cargo run --release --locked -p h5i-pay-benchmarks --features gpu -- all --sizes 100000,1000000 --out bench.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench
+          path: bench.json
+
+  proofs:
+    runs-on: ubuntu-latest
+    env:
+      H5I_SKIP_WEB_BUILD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - name: Install elan
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+      - name: h5i CLI ${{ env.H5I_TAG }}
+        run: cargo install --locked --git https://github.com/h5i-dev/h5i --tag "$H5I_TAG" h5i
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/h5i/lake
+          key: lake-${{ hashFiles('proofs/*/lean-toolchain', 'proofs/*/lakefile.lean', 'proofs/*/lake-manifest.json') }}
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            extra-substituters = https://hacl.cachix.org
+            extra-trusted-public-keys = hacl.cachix.org-1:FzsZ2xsByOwKwIWNPII7yMOelJNDZ12mDAj3d1eGX0c=
+      - name: Charon and Aeneas at the pinned commit
+        run: |
+          nix build "github:AeneasVerif/aeneas/$AENEAS_REV" -o "$RUNNER_TEMP/aeneas" -L
+          nix build "github:AeneasVerif/aeneas/$AENEAS_REV#charon" -o "$RUNNER_TEMP/charon" -L
+          echo "$RUNNER_TEMP/aeneas/bin" >> "$GITHUB_PATH"
+          echo "$RUNNER_TEMP/charon/bin" >> "$GITHUB_PATH"
+      - run: h5i app doctor
+      # The committed Lean is exactly what the kernels extract to.
+      - run: h5i app extract --check crates/payment-ledger crates/payment-domain
+      # lake build + no sorry/native_decide/axiom + standard axioms only.
+      - run: h5i app check crates/payment-ledger crates/payment-domain
+      # Every listed bug must break a proof (main only: ~12 full builds).
+      - if: github.ref == 'refs/heads/main'
+        run: h5i app mutate crates/payment-ledger crates/payment-domain
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+
+  images:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [rust, cuda-build, proofs, terraform]
+    runs-on: ubuntu-latest
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/setup-buildx-action@v3
+      - name: API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile.api
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/h5i-pay/api:${{ github.sha }}
+          provenance: true
+          sbom: true
+      - name: Worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile.worker
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/h5i-pay/worker:${{ github.sha }}
+          provenance: true
+          sbom: true
+
+  deploy-test:
+    needs: images
+    runs-on: ubuntu-latest
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      CLUSTER: h5i-pay-test
+      SERVICE: api
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: New task definition revision with this commit's image
+        run: |
+          family=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query 'services[0].taskDefinition' --output text)
+          aws ecs describe-task-definition --task-definition "$family" --query taskDefinition > td.json
+          jq --arg img "${{ steps.ecr.outputs.registry }}/h5i-pay/api:${{ github.sha }}" \
+            '.containerDefinitions |= map(if .name == "api" then .image = $img else . end)
+             | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' td.json > td-new.json
+          arn=$(aws ecs register-task-definition --cli-input-json file://td-new.json --query taskDefinition.taskDefinitionArn --output text)
+          echo "TASK_DEF=$arn" >> "$GITHUB_ENV"
+      # Rolling update; the circuit breaker and the 5xx / ledger-invariant
+      # alarms roll it back automatically.
+      - run: aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --task-definition "$TASK_DEF"
+      - run: aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICE"
+      - name: Smoke test
+        run: curl -fsS "${{ vars.API_URL }}/healthz"

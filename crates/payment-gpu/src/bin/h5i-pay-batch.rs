@@ -131,6 +131,13 @@ fn main() -> Res<()> {
         }
     }
     writeln!(out, "]}}")?;
-    eprintln!("{used}: {} internal, {} external rows, {} exceptions in {elapsed_ms:.1} ms", r.internal.len(), r.external.len(), report.exceptions());
+    out.flush()?;
+    // One JSON line for the logs (CloudWatch metric filter on exceptions_count).
+    println!(
+        "{{\"event\":\"reconciliation\",\"engine\":\"{used}\",\"internal_rows\":{},\"external_rows\":{},\"exceptions_count\":{},\"elapsed_ms\":{elapsed_ms:.3}}}",
+        r.internal.len(),
+        r.external.len(),
+        report.exceptions()
+    );
     Ok(())
 }

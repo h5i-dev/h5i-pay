@@ -1,0 +1,6 @@
+# Copy to backend.hcl (not committed) and `terraform init -backend-config=backend.hcl`.
+bucket         = "REPLACE-terraform-state"
+key            = "h5i-pay/test/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "REPLACE-terraform-locks"
+encrypt        = true
