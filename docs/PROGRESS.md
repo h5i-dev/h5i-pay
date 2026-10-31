@@ -180,6 +180,32 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### Scheduled recovery
+
+- `h5i-pay recover` (same binary and task definition as the API, command
+  override): one pass over every tenant `payment_storage::tenants_to_recover`
+  finds (payments `PROCESSING`, `AUTHORIZED` with automatic capture,
+  `CAPTURED`, or with a refund pending), running `Orchestrator::recover`
+  per tenant. A failing tenant does not stop the others; exit 1 if any
+  failed. It never passes `fail_unsubmitted`. Prints one JSON line
+  (`"event":"recovery"`). `tenants_to_recover` is the only cross-tenant
+  query: read-only transaction, reads `tenant_id` only, outside the
+  kernels; it also works over verified TLS.
+- `infra/terraform/recovery.tf`: EventBridge Scheduler every 5 minutes
+  (`recover_schedule`), Fargate RunTask of the API family's latest
+  revision (so it follows CI deploys) in the private subnets with the API
+  security group; a scheduler role limited to RunTask on that family in
+  this cluster plus PassRole of the task's two roles; metric filters and
+  alarms (tenants failed, payments unresolved for an hour, no pass in an
+  hour). `terraform validate` passes. Terraform `required_version` is now
+  `>= 1.9.0` (the SEC-05 cross-variable validation needs it).
+- Test `recovery_job::scheduled_recovery_covers_every_tenant` (own scratch
+  database, since the job sees all tenants): three tenants, two with a
+  lost PSP response; one pass resolves both, audits pass, a second pass
+  changes nothing; an empty database has nothing to recover. The binary
+  was also run against the dev database (65 tenants, 97 payments re-synced,
+  exit 0).
+
 ### SEC-05 closed: the Mock PSP is out of production builds
 
 - `payment-connectors` feature `mock` gates `mock::MockPsp`;
@@ -274,9 +300,7 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
     `docs/security-review.md`.
   - No test kills the API process itself mid-request; fault injection
     kills the database backend and drops connections instead.
-  - Nothing calls `POST /v1/recover` on a schedule; an EventBridge rule or
-    a cron task is still needed (runbook `psp-incidents.md` describes the
-    manual call).
+  - The recovery schedule is written and validated but has not run on AWS.
   - Docker images are built locally now. The worker image did not build
     before (Ubuntu 24.04 has no `awscli` package); fixed by installing AWS
     CLI v2.39.0 from its release zip, pinned by SHA-256 after a PGP check.

@@ -16,6 +16,12 @@
 //!   or `mock`, only in builds with the `mock-psp` feature (then the default);
 //! * `H5I_PAY_MOCK_WEBHOOK_SECRET` — the Mock PSP's signing secret (`mock-psp` builds);
 //! * `H5I_APP_ISSUE=<tenant>:<user>` — print a one-day token and exit.
+//!
+//! `h5i-pay recover` runs one recovery pass over every tenant with work
+//! (the scheduled ECS task), prints a JSON summary line and exits: 0 when
+//! every tenant was processed, 1 when any tenant failed. Payments the PSP
+//! has no record of stay `PROCESSING` (`payments_unresolved`); failing them
+//! is left to an operator.
 
 use h5i_app_http::HmacAuth;
 use h5i_app_pg::EngineConfig;
@@ -27,6 +33,11 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
+    let recover = match std::env::args().nth(1).as_deref() {
+        None => false,
+        Some("recover") => true,
+        Some(other) => return Err(format!("unknown command {other:?}; expected none or `recover`").into()),
+    };
     let secret = std::env::var("H5I_APP_SECRET").map_err(|_| "H5I_APP_SECRET is required")?;
     if let Ok(spec) = std::env::var("H5I_APP_ISSUE") {
         let (o, u) = spec.split_once(':').ok_or("H5I_APP_ISSUE=<tenant>:<user>")?;
@@ -43,6 +54,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let psp = select_psp(std::env::var("H5I_PAY_PSP").ok().as_deref())?;
     let (ledger_engine, payments_engine) = payment_storage::engines_with(&url, 16, EngineConfig::default(), &tls).await?;
     tracing::info!(psp = psp.name(), db_tls = matches!(tls, payment_storage::DbTls::Verified(_)), "payment provider and database");
+    if recover {
+        let o = payment_api::orchestrator::Orchestrator::new(ledger_engine, payments_engine, psp);
+        let r = payment_api::jobs::recover_all(&o, &url, &tls).await?;
+        println!("{}", r.summary_json());
+        std::process::exit(if r.failed.is_empty() { 0 } else { 1 });
+    }
     let state = AppState::with_payments(ledger_engine, payments_engine, psp, &secret);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!(%addr, "h5i-pay listening");

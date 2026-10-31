@@ -7,7 +7,8 @@
 # State lives in an S3 bucket with DynamoDB locking (backend.hcl, not in git).
 
 terraform {
-  required_version = ">= 1.6.0"
+  # 1.9: variable validations that refer to other variables (psp_mode).
+  required_version = ">= 1.9.0"
 
   required_providers {
     aws = {

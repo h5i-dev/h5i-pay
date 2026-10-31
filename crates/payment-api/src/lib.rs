@@ -9,7 +9,9 @@
 //!   ([`orchestrator`]), which records PSP outcomes through the payment
 //!   kernel (`payment_domain`) and posts the matching ledger transfers;
 //! * `POST /v1/webhooks/{psp}` — signed PSP webhooks, deduplicated by the kernel;
-//! * `POST /v1/recover` — finishes payments and refunds left half done;
+//! * `POST /v1/recover` — finishes payments and refunds left half done (one
+//!   tenant); `h5i-pay recover` does it for every tenant, on a schedule
+//!   ([`jobs::recover_all`]);
 //! * `POST /v1/reconcile` — compares payments with the PSP's settlement
 //!   report and with the ledger journal; a report only, it moves no money.
 //!
@@ -17,6 +19,7 @@
 //! user 0 of a tenant is its operator. `Idempotency-Key` makes a request run
 //! at most once.
 
+pub mod jobs;
 pub mod orchestrator;
 pub mod routes;
 

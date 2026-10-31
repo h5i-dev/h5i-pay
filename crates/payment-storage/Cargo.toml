@@ -22,3 +22,7 @@ payment-domain.workspace = true
 axum.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# One cross-tenant read for scheduled recovery (`tenants_to_recover`), on
+# the same tokio-postgres h5i-app-pg uses.
+tokio-postgres = "0.7"
+tokio.workspace = true

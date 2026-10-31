@@ -11,7 +11,7 @@ crate's unit tests.
 | Connection dies after the writes, before `COMMIT` (outcome unknown) | Without an idempotency key the client gets `CommitUnknown` (HTTP 503); with one the engine retries itself | Ledger transfer ids are idempotent: a retried transfer is `Exists`, never a second posting. Idempotency keys replay the stored reply | tests `unknown_commit_then_client_retry`, `unknown_commit_with_idempotency_key_is_retried_once`; proof `replay_is_noop`, model `Models.keyed_replay` |
 | PostgreSQL unreachable or retries exhausted | 503; nothing committed | Infrastructure errors are distinct from kernel refusals; no reply is invented | tests `persistent_failure_leaves_the_ledger_untouched`, `unreachable_database` |
 | Two requests race on the same accounts | One serializes after the other (or retries) | SERIALIZABLE isolation; the kernel decides on the snapshot it read | tests `concurrent_transfers_*` (1,119 serialization retries in one run), `concurrent_duplicates_commit_once`, `concurrent_batches_are_atomic`; proofs `conservation`, `no_overdraft` over every interleaving the engine serializes |
-| PSP times out after charging (response lost) | Payment stays `PROCESSING`, HTTP 202 | PSP idempotency key `h5i-pay-<tenant>-payment-<id>-authorize`; `POST /v1/recover` asks the PSP (by reference or by metadata) and records the answer | test `payments_api::timeouts_are_recovered` |
+| PSP times out after charging (response lost) | Payment stays `PROCESSING`, HTTP 202 | PSP idempotency key `h5i-pay-<tenant>-payment-<id>-authorize`; recovery (scheduled every 5 minutes for every tenant, or `POST /v1/recover` for one) asks the PSP (by reference or by metadata) and records the answer | tests `payments_api::timeouts_are_recovered`, `recovery_job::scheduled_recovery_covers_every_tenant` |
 | PSP unavailable before it saw the request | Payment stays `PROCESSING` | Recovery finds nothing at the PSP; an operator may fail it (`fail_unsubmitted=true`) since no money moved | same test, last part |
 | Refund response lost | Refund stays `PENDING`, reserved in the payment kernel and the ledger | Reservation means the in-flight amount cannot be refunded twice; recovery retrieves the refund by metadata | test `timeouts_are_recovered`; proof `refund_safety` |
 | Merchant cannot cover a refund | 409 before any PSP call; refund recorded `FAILED` | Ledger reservation (`no_overdraft` merchant account) happens before the PSP is asked | test `refund_needs_merchant_funds_in_the_ledger`; proof `no_overdraft` |
@@ -31,5 +31,8 @@ crate's unit tests.
   (the tests kill database connections and drop PSP responses instead).
 - No chaos test on a real Multi-AZ failover; the runbook describes the
   manual drill.
-- Recovery is triggered by `POST /v1/recover` (an operator or a scheduled
-  job); no scheduler is deployed by the Terraform yet.
+- Scheduled recovery (`h5i-pay recover` every 5 minutes,
+  `infra/terraform/recovery.tf`) is tested in-process
+  (`recovery_job::scheduled_recovery_covers_every_tenant`) and the binary
+  was run against a local database; the EventBridge schedule itself has
+  not run on AWS.

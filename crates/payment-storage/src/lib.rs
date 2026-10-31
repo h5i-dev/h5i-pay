@@ -88,3 +88,58 @@ pub async fn engines_with(
     payments.install_schema().await?;
     Ok((ledger, payments))
 }
+
+/// Tenants with a payment that `POST /v1/recover` would act on: in
+/// `PROCESSING`, `AUTHORIZED` with automatic capture, `CAPTURED` (ledger
+/// postings to re-sync), or with a refund pending. The same condition the
+/// orchestrator's per-tenant recovery applies to each payment.
+///
+/// This is the one query that crosses tenants, and it is outside the
+/// kernels: it reads only `tenant_id`, writes nothing, and runs in a
+/// read-only transaction. The scheduled `h5i-pay recover` job uses it to
+/// know which tenants to recover; every change is still made per tenant
+/// through the engines.
+pub async fn tenants_to_recover(url: &str, tls: &DbTls) -> Result<Vec<u64>, DbError> {
+    let sql = format!(
+        "SELECT DISTINCT tenant_id FROM {PAYMENTS_SCHEMA}.payments \
+         WHERE status IN ({processing}, {captured}) \
+            OR (status = {authorized} AND NOT manual_capture) \
+            OR refund_pending > 0 \
+         ORDER BY tenant_id",
+        processing = payment_domain::PROCESSING,
+        captured = payment_domain::CAPTURED,
+        authorized = payment_domain::AUTHORIZED,
+    );
+    let mut cfg: tokio_postgres::Config = url.parse()?;
+    let (mut client, conn) = match tls {
+        DbTls::Off => {
+            let (c, conn) = cfg.connect(tokio_postgres::NoTls).await?;
+            (c, tokio::spawn(conn))
+        }
+        DbTls::Verified(roots) => {
+            if cfg.get_ssl_mode() == tokio_postgres::config::SslMode::Disable {
+                return Err(DbError::Pool("TLS requested but the URL says sslmode=disable".into()));
+            }
+            cfg.ssl_mode(tokio_postgres::config::SslMode::Require);
+            let (c, conn) = cfg.connect(h5i_app_pg::tls::RustlsConnect::new(roots)?).await?;
+            (c, tokio::spawn(conn))
+        }
+    };
+    let tx = client.build_transaction().read_only(true).start().await?;
+    let rows = tx.query(sql.as_str(), &[]).await;
+    let rows = match rows {
+        Ok(r) => r,
+        // No payments table yet: nothing to recover.
+        Err(e) if e.code() == Some(&tokio_postgres::error::SqlState::UNDEFINED_TABLE) => Vec::new(),
+        Err(e) => return Err(e.into()),
+    };
+    drop(tx);
+    drop(client);
+    let _ = conn.await;
+    rows.iter()
+        .map(|r| {
+            let t: i64 = r.get(0);
+            u64::try_from(t).map_err(|_| DbError::Decode(format!("tenant id {t} out of range")))
+        })
+        .collect()
+}

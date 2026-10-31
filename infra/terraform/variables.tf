@@ -167,3 +167,14 @@ variable "enable_otel_collector" {
   type        = bool
   default     = true
 }
+
+variable "recover_schedule" {
+  description = "EventBridge Scheduler expression for `h5i-pay recover` (rate(...) or cron(...)); empty disables the schedule."
+  type        = string
+  default     = "rate(5 minutes)"
+
+  validation {
+    condition     = var.recover_schedule == "" || can(regex("^(rate|cron)\\(.+\\)$", var.recover_schedule))
+    error_message = "recover_schedule must be empty, rate(...) or cron(...)."
+  }
+}
