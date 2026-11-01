@@ -18,6 +18,7 @@ theorems = [
   "payment_ledger.Theorems.replay_is_noop",
   "payment_ledger.Theorems.replay_needs_debit_right",
   "payment_ledger.Theorems.only_owner_or_operator_debits",
+  "payment_ledger.Theorems.transfers_record_operator",
   "payment_ledger.Storage.db_inv",
   # Read plans (`reads`, `LedgerStore::load_for`): the extracted plans are
   # `readsA`, a plan's rows decode to `Snapshot.load`, and `transition` on
@@ -41,7 +42,7 @@ new = "if a.no_overdraft && debits > a.credits + 1 {"
 
 [[mutant]]
 name = "anyone_may_debit"
-old = "actor.operator || a.owner == actor.user"
+old = "is_operator(actor) || a.owner == user_of(actor)"
 new = "true"
 
 [[mutant]]
@@ -68,3 +69,15 @@ new = "pub const ACCOUNT_OWNER: u32 = 2;"
 name = "replay_answers_anyone"
 old = "            if !may_debit(actor, &a) {\n                Err(Error::Forbidden)\n            } else {\n                match find_transfer(&s.transfers, t.id) {"
 new = "            if !may_debit(actor, &a) && find_transfer(&s.transfers, t.id).is_none() {\n                Err(Error::Forbidden)\n            } else {\n                match find_transfer(&s.transfers, t.id) {"
+
+# SEC-02: a user's principal must never count as an operator.
+[[mutant]]
+name = "user_acts_as_operator"
+old = "        Actor::User(_) => false,\n        Actor::Operator(_) => true,"
+new = "        Actor::User(_) => true,\n        Actor::Operator(_) => true,"
+
+# SEC-02: the journal must record which operator posted.
+[[mutant]]
+name = "operator_id_dropped"
+old = "Some(b) => post(s, t, a, b, operator_of(actor)),"
+new = "Some(b) => post(s, t, a, b, 0),"

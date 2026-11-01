@@ -43,9 +43,9 @@ theorem find_transfer_eq (v : alloc.vec.Vec Transfer) (id : U64) :
 
 theorem may_debit_eq (actor : Principal) (a : Account) :
     may_debit actor a = ok (actor.operator || decide (a.owner = actor.user)) := by
-  unfold may_debit; cases actor.operator <;> simp
+  unfold may_debit; simp only [is_operator_eq, user_of_eq, bind_tc_ok, bind_ok]; cases actor.operator <;> simp
 
-theorem post_irrel (s s' : Snapshot) (t : TransferReq) (a b : Account) : post s' t a b = post s t a b := by
+theorem post_irrel (s s' : Snapshot) (t : TransferReq) (a b : Account) (op : U64) : post s' t a b op = post s t a b op := by
   unfold post; rfl
 
 /-- A transfer reads its id in the journal and its two accounts, nothing else. -/
@@ -418,7 +418,7 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
         simp [Snapshot.load_accounts, pickRows, Pred.holds]
       simp only [this]
   | Transfers =>
-    simp only [transition]
+    simp only [transition, is_operator_eq, bind_tc_ok, bind_ok]
     cases ho : a.operator
     · simp
     · simp only [readsA, ho, if_true, Option.some.injEq] at hp; subst hp

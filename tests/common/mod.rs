@@ -23,7 +23,12 @@ pub fn user_token(org: u64, user: u64) -> String {
 
 /// An operator token for tenant `org` (operator id 1).
 pub fn operator_token(org: u64) -> String {
-    keys().issue_operator(org, 1, 600).unwrap()
+    operator_token_for(org, 1)
+}
+
+/// An operator token for operator `id` of tenant `org`.
+pub fn operator_token_for(org: u64, id: u64) -> String {
+    keys().issue_operator(org, id, 600).unwrap()
 }
 
 pub fn database_url() -> Option<String> {
@@ -57,11 +62,11 @@ pub mod ledger {
     use payment_ledger as k;
 
     pub fn op(org: u64) -> k::Principal {
-        k::Principal { org, user: 0, operator: true }
+        k::Principal { org, actor: k::Actor::Operator(1) }
     }
 
     pub fn user(org: u64, user: u64) -> k::Principal {
-        k::Principal { org, user, operator: false }
+        k::Principal { org, actor: k::Actor::User(user) }
     }
 
     pub fn open(owner: u64, currency: u32, no_overdraft: bool) -> k::Command {

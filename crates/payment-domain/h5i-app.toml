@@ -19,6 +19,9 @@ theorems = [
   "payment_domain.Theorems.refunded_le_captured",
   "payment_domain.Theorems.event_dedup",
   "payment_domain.Theorems.reachable_inv",
+  # SEC-02: operators only, and every row names who wrote it.
+  "payment_domain.Theorems.operator_only",
+  "payment_domain.Theorems.writes_record_operator",
   "payment_domain.Policies.check_sound",
   # Read plans (`reads`, `PaymentsStore::load_for`).
   "payment_domain.Plan.reads_abs",
@@ -41,8 +44,8 @@ new = "if amount == 0 {"
 
 [[mutant]]
 name = "decline_after_capture"
-old = "fn record_declined(p: Payment) -> Outcome {\n    if p.status == PROCESSING {"
-new = "fn record_declined(p: Payment) -> Outcome {\n    if p.status == PROCESSING || p.status == CAPTURED {"
+old = "fn record_declined(p: Payment, op: u64) -> Outcome {\n    if p.status == PROCESSING {"
+new = "fn record_declined(p: Payment, op: u64) -> Outcome {\n    if p.status == PROCESSING || p.status == CAPTURED {"
 
 [[mutant]]
 name = "webhook_not_deduplicated"
@@ -57,8 +60,8 @@ new = "if false && contains_linear(blocked, n_blocked, r.recipient) {"
 
 [[mutant]]
 name = "refund_success_without_release"
-old = "let p2 = with_refunds(p, p.refunded + r.amount, p.refund_pending - r.amount);"
-new = "let p2 = with_refunds(p, p.refunded + r.amount, p.refund_pending);"
+old = "let p2 = with_refunds(p, p.refunded + r.amount, p.refund_pending - r.amount, op);"
+new = "let p2 = with_refunds(p, p.refunded + r.amount, p.refund_pending, op);"
 
 [[mutant]]
 name = "record_plan_misses_refund"
@@ -74,3 +77,15 @@ new = "out.push(rd_where(T_REFUNDS, p_eq(REFUND_ID, v_int(*payment))));"
 name = "view_plan_misses_reference"
 old = "            out.push(rd_where(T_REFS, p_eq(REF_PAYMENT, v_int(*id))));\n        }\n    }\n    Some(out)"
 new = "        }\n    }\n    Some(out)"
+
+# SEC-02: a user's principal must never count as an operator.
+[[mutant]]
+name = "user_acts_as_operator"
+old = "        Actor::User(_) => false,\n        Actor::Operator(_) => true,"
+new = "        Actor::User(_) => true,\n        Actor::Operator(_) => true,"
+
+# SEC-02: recorded PSP results must name the operator who recorded them.
+[[mutant]]
+name = "operator_id_dropped"
+old = "    let op = operator_of(actor);\n    match find_payment(&s.payments, id) {"
+new = "    let op = 0;\n    match find_payment(&s.payments, id) {"

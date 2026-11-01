@@ -111,7 +111,7 @@ async fn ledger_rpc(State(st): State<AppState>, actor: Actor<LedgerApp>, headers
 /// the committed rows of the caller's tenant. Operators only.
 async fn ledger_audit(State(st): State<AppState>, actor: Actor<LedgerApp>) -> Response {
     let p = actor.principal();
-    if !p.operator {
+    if !payment_ledger::is_operator(p) {
         return reply(StatusCode::FORBIDDEN, error_body("forbidden"));
     }
     match st.ledger_engine.snapshot(TenantId(p.org)).await {
@@ -408,9 +408,11 @@ async fn recover(State(st): State<AppState>, actor: Actor<PaymentsApp>, Query(q)
         Err(r) => return r,
     };
     let p = actor.principal();
-    if !p.operator {
+    if !payment_domain::is_operator(p) {
         return reply(StatusCode::FORBIDDEN, error_body("forbidden"));
     }
+    // Recovery's writes record the operator who asked for it (SEC-02).
+    let o = o.acting_as(payment_domain::operator_of(p));
     match o.recover(p.org, q.fail_unsubmitted).await {
         Ok(r) => reply(
             StatusCode::OK,
@@ -491,7 +493,7 @@ async fn reconcile(State(st): State<AppState>, actor: Actor<PaymentsApp>, Query(
         Err(r) => return r,
     };
     let p = actor.principal();
-    if !p.operator {
+    if !payment_domain::is_operator(p) {
         return reply(StatusCode::FORBIDDEN, error_body("forbidden"));
     }
     let engine = match q.engine.as_deref().unwrap_or("single") {
@@ -524,7 +526,7 @@ struct ReportsQuery {
 /// with its exceptions (operators only). Read-only; it moves no money.
 async fn reconcile_reports(State(st): State<AppState>, actor: Actor<PaymentsApp>, Query(q): Query<ReportsQuery>) -> Response {
     let p = actor.principal();
-    if !p.operator {
+    if !payment_domain::is_operator(p) {
         return reply(StatusCode::FORBIDDEN, error_body("forbidden"));
     }
     let Some(ops) = st.ops.clone() else {

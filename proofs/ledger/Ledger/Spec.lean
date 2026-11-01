@@ -16,6 +16,43 @@ satisfies:
 -/
 open Aeneas Aeneas.Std payment_ledger
 
+/-! ## Who acts
+
+The kernel's principal says who acts: `Actor.User u` or `Actor.Operator o`.
+`a.operator` and `a.user` read it as the kernel's `is_operator` and
+`user_of` do (an operator's `user` is 0, only ever consulted after
+`a.operator`); `a.opId` is the operator id the kernel records (`operator_of`). -/
+
+def payment_ledger.Principal.operator (a : Principal) : Bool :=
+  match a.actor with
+  | .User _ => false
+  | .Operator _ => true
+
+def payment_ledger.Principal.user (a : Principal) : U64 :=
+  match a.actor with
+  | .User u => u
+  | .Operator _ => 0#u64
+
+def payment_ledger.Principal.opId (a : Principal) : U64 :=
+  match a.actor with
+  | .User _ => 0#u64
+  | .Operator o => o
+
+@[simp] theorem is_operator_eq (a : Principal) : is_operator a = .ok a.operator := by
+  unfold is_operator Principal.operator; cases a.actor <;> rfl
+
+@[simp] theorem user_of_eq (a : Principal) : user_of a = .ok a.user := by
+  unfold user_of Principal.user; cases a.actor <;> rfl
+
+@[simp] theorem operator_of_eq (a : Principal) : operator_of a = .ok a.opId := by
+  unfold operator_of Principal.opId; cases a.actor <;> rfl
+
+/-- "An operator, or the user `u`", said with the actor itself. -/
+theorem operator_or_user_iff (a : Principal) (u : U64) :
+    (a.operator = true ∨ u = a.user) ↔ ((∃ o, a.actor = .Operator o) ∨ a.actor = .User u) := by
+  rcases a with ⟨org, act⟩
+  cases act <;> simp [Principal.operator, Principal.user] <;> exact eq_comm
+
 namespace payment_ledger.Spec
 
 /-- The state: the account counter, the accounts and the journal. -/

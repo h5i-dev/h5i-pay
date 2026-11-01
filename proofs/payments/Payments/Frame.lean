@@ -49,7 +49,7 @@ theorem find_ref_eq (v : alloc.vec.Vec PspRef) (id : U64) :
 
 theorem may_manage_eq (actor : Principal) (p : Payment) :
     may_manage actor p = ok (actor.operator || decide (p.merchant = actor.user)) := by
-  unfold may_manage; cases actor.operator <;> simp
+  unfold may_manage; simp only [is_operator_eq, user_of_eq, bind_tc_ok, bind_ok]; cases actor.operator <;> simp
 
 theorem vec_index_eq {α : Type} (v : alloc.vec.Vec α) (i : Usize) (h : i.val < v.val.length) :
     alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice α) v i = ok v.val[i.val] := by

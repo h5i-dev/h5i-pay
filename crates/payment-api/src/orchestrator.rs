@@ -25,7 +25,7 @@ use payment_connectors::{self as psp, AuthorizeRequest, CheckoutRequest, Checkou
 use payment_domain as d;
 use payment_ledger as l;
 use payment_storage::ledger::{SYSTEM_ACCOUNT_CODES, SYSTEM_TRANSFER_BIT};
-use payment_storage::{ledger, payments, LedgerEngine, PaymentsEngine};
+use payment_storage::{ledger, payments, LedgerEngine, PaymentsEngine, ORCHESTRATOR_OPERATOR};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -83,20 +83,46 @@ pub struct Orchestrator {
     pub ledger: Arc<LedgerEngine>,
     pub payments: Arc<PaymentsEngine>,
     pub psp: Arc<dyn Psp>,
-    accounts: Mutex<HashMap<(u64, u64, u32, u32), u64>>,
+    /// The operator id the orchestrator's own commands carry (SEC-02): the
+    /// kernels record it on every row they write for it.
+    operator: u64,
+    accounts: Arc<AccountCache>,
 }
 
-fn op_l(tenant: u64) -> l::Principal {
-    ledger::principal(tenant, 0)
-}
-
-fn op_p(tenant: u64) -> d::Principal {
-    payments::principal(tenant, 0)
-}
+/// Ledger account ids by (tenant, owner, currency, code), shared by every
+/// [`Orchestrator::acting_as`] copy.
+type AccountCache = Mutex<HashMap<(u64, u64, u32, u32), u64>>;
 
 impl Orchestrator {
+    /// Acting as the system operator [`ORCHESTRATOR_OPERATOR`].
     pub fn new(ledger: Arc<LedgerEngine>, payments: Arc<PaymentsEngine>, psp: Arc<dyn Psp>) -> Self {
-        Orchestrator { ledger, payments, psp, accounts: Mutex::new(HashMap::new()) }
+        Orchestrator { ledger, payments, psp, operator: ORCHESTRATOR_OPERATOR, accounts: Arc::new(Mutex::new(HashMap::new())) }
+    }
+
+    /// The same orchestrator (engines, PSP, account cache), acting as
+    /// operator `id`: the recovery job as [`payment_storage::RECOVERY_OPERATOR`],
+    /// `POST /v1/recover` as the operator who called it.
+    pub fn acting_as(&self, id: u64) -> Orchestrator {
+        Orchestrator {
+            ledger: self.ledger.clone(),
+            payments: self.payments.clone(),
+            psp: self.psp.clone(),
+            operator: id,
+            accounts: self.accounts.clone(),
+        }
+    }
+
+    /// The operator id this orchestrator acts as.
+    pub fn operator_id(&self) -> u64 {
+        self.operator
+    }
+
+    fn op_l(&self, tenant: u64) -> l::Principal {
+        ledger::operator(tenant, self.operator)
+    }
+
+    fn op_p(&self, tenant: u64) -> d::Principal {
+        payments::operator(tenant, self.operator)
     }
 
     async fn pay(&self, actor: &d::Principal, cmd: d::Command) -> Result<std::result::Result<d::Reply, d::Error>> {
@@ -119,7 +145,7 @@ impl Orchestrator {
     }
 
     async fn reference(&self, tenant: u64, id: u64) -> Result<Option<String>> {
-        match self.pay(&op_p(tenant), d::Command::GetRef { payment: id }).await? {
+        match self.pay(&self.op_p(tenant), d::Command::GetRef { payment: id }).await? {
             Ok(d::Reply::Ref(b)) => Ok(Some(String::from_utf8_lossy(&b).into_owned())),
             Ok(r) => unreachable!("getref replied {r:?}"),
             Err(d::Error::NotFound) => Ok(None),
@@ -129,7 +155,7 @@ impl Orchestrator {
 
     async fn attach(&self, tenant: u64, id: u64, reference: &str) -> Result<()> {
         let cmd = d::Command::AttachRef { payment: id, reference: reference.as_bytes().to_vec() };
-        match self.pay(&op_p(tenant), cmd).await? {
+        match self.pay(&self.op_p(tenant), cmd).await? {
             Ok(_) => Ok(()),
             Err(e) => Err(OrchError::Payment(e)),
         }
@@ -138,7 +164,7 @@ impl Orchestrator {
     /// Record a PSP result. A result the kernel finds out of date
     /// (`InvalidTransition`) means another path recorded a later one first.
     async fn record(&self, tenant: u64, id: u64, result: d::PspResult) -> Result<()> {
-        match self.pay(&op_p(tenant), d::Command::Record { payment: id, result }).await? {
+        match self.pay(&self.op_p(tenant), d::Command::Record { payment: id, result }).await? {
             Ok(_) | Err(d::Error::InvalidTransition) => Ok(()),
             Err(e) => Err(OrchError::Payment(e)),
         }
@@ -192,7 +218,7 @@ impl Orchestrator {
     /// Move a payment to `PROCESSING` and ask the PSP. Returns whether the
     /// outcome is still unknown.
     pub async fn authorize(&self, tenant: u64, id: u64, payment_method: &str) -> Result<bool> {
-        let p = match self.pay(&op_p(tenant), d::Command::BeginAuthorize { id }).await? {
+        let p = match self.pay(&self.op_p(tenant), d::Command::BeginAuthorize { id }).await? {
             // The kernel replies with the payment it moved to PROCESSING.
             Ok(d::Reply::Payment(p)) => p,
             Ok(r) => unreachable!("begin_authorize replied {r:?}"),
@@ -227,7 +253,7 @@ impl Orchestrator {
     }
 
     async fn payment(&self, tenant: u64, id: u64) -> Result<d::Payment> {
-        match self.pay_ok(&op_p(tenant), d::Command::Get { id }).await? {
+        match self.pay_ok(&self.op_p(tenant), d::Command::Get { id }).await? {
             d::Reply::Payment(p) => Ok(p),
             r => unreachable!("get replied {r:?}"),
         }
@@ -292,7 +318,7 @@ impl Orchestrator {
             d::Reply::Created(rid) => rid,
             r => unreachable!("refund replied {r:?}"),
         };
-        let v = self.view(&op_p(tenant), id).await?;
+        let v = self.view(&self.op_p(tenant), id).await?;
         let p = v.payment;
         let refund = *v.refunds.iter().find(|r| r.id == rid).expect("the refund just created");
         if refund.status == d::REFUND_PENDING {
@@ -335,7 +361,7 @@ impl Orchestrator {
             d::Reply::Created(id) => id,
             r => unreachable!("create replied {r:?}"),
         };
-        match self.pay(&op_p(merchant.org), d::Command::BeginAuthorize { id }).await? {
+        match self.pay(&self.op_p(merchant.org), d::Command::BeginAuthorize { id }).await? {
             Ok(_) | Err(d::Error::InvalidTransition) => {}
             Err(e) => return Err(OrchError::Payment(e)),
         }
@@ -369,7 +395,7 @@ impl Orchestrator {
             EventResult::RefundFailed { refund } => d::PspResult::RefundFailed { refund },
         };
         let event = psp::webhook::event_id(self.psp.name(), &ev.id);
-        let reply = self.pay_ok(&op_p(tenant), d::Command::Event { event, payment: id, result }).await?;
+        let reply = self.pay_ok(&self.op_p(tenant), d::Command::Event { event, payment: id, result }).await?;
         if let Some(r) = &ev.reference
             && self.reference(tenant, id).await?.is_none()
         {
@@ -390,7 +416,7 @@ impl Orchestrator {
         }
         let key = format!("system-account-{owner}-{currency}-{code}");
         let cmd = l::Command::Open { owner, currency, code, no_overdraft, no_overcredit: false };
-        let id = match self.ledger.execute_idempotent(&op_l(tenant), &key, &cmd).await?.map_err(OrchError::Ledger)? {
+        let id = match self.ledger.execute_idempotent(&self.op_l(tenant), &key, &cmd).await?.map_err(OrchError::Ledger)? {
             l::Reply::Created(id) => id,
             r => unreachable!("open replied {r:?}"),
         };
@@ -400,7 +426,7 @@ impl Orchestrator {
 
     async fn post(&self, tenant: u64, ts: Vec<l::TransferReq>) -> Result<std::result::Result<(), l::Error>> {
         let cmd = if ts.len() == 1 { l::Command::Transfer { t: ts[0] } } else { l::Command::Batch { transfers: ts } };
-        Ok(self.ledger.execute(&op_l(tenant), &cmd).await?.map(|_| ()))
+        Ok(self.ledger.execute(&self.op_l(tenant), &cmd).await?.map(|_| ()))
     }
 
     async fn reserve(&self, tenant: u64, p: &d::Payment, r: &d::Refund) -> Result<std::result::Result<(), l::Error>> {
@@ -416,7 +442,7 @@ impl Orchestrator {
     /// `MAX_PLANNED_BATCH` transfers (one command for a capture with up to
     /// 31 refunds).
     pub async fn sync_ledger(&self, tenant: u64, id: u64) -> Result<()> {
-        let v = self.view(&op_p(tenant), id).await?;
+        let v = self.view(&self.op_p(tenant), id).await?;
         let p = v.payment;
         if p.status != d::CAPTURED {
             return Ok(());
@@ -589,7 +615,7 @@ impl Orchestrator {
 
     /// Ask the PSP about a payment's pending refunds; how many it settled.
     async fn recover_refunds(&self, tenant: u64, id: u64) -> Result<u64> {
-        let v = self.view(&op_p(tenant), id).await?;
+        let v = self.view(&self.op_p(tenant), id).await?;
         let Some(reference) = v.reference else { return Ok(0) };
         let mut n = 0;
         for r in v.refunds {

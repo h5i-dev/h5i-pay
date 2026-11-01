@@ -23,14 +23,46 @@
 // branches are deliberate, so these style lints are off for this crate.
 #![allow(clippy::ptr_arg, clippy::vec_init_then_push, clippy::if_same_then_else, clippy::len_zero, clippy::manual_range_contains)]
 
-/// Who is calling: an organization (the tenant), a user in it, and whether
-/// the user is the tenant's operator (the payment orchestrator or an admin),
-/// who may debit any account of the tenant.
+/// Who acts inside a tenant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Actor {
+    /// A user (an account holder or merchant), by user id.
+    User(u64),
+    /// One of the tenant's operators (support staff, the orchestrator, the
+    /// recovery job), by operator id. An operator may debit any account of
+    /// the tenant; what it posts records its id.
+    Operator(u64),
+}
+
+/// Who is calling: an organization (the tenant) and who acts in it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Principal {
     pub org: u64,
-    pub user: u64,
-    pub operator: bool,
+    pub actor: Actor,
+}
+
+/// Is the caller one of the tenant's operators?
+pub fn is_operator(actor: &Principal) -> bool {
+    match actor.actor {
+        Actor::User(_) => false,
+        Actor::Operator(_) => true,
+    }
+}
+
+/// The acting user's id; 0 (the tenant's own accounts) for an operator.
+pub fn user_of(actor: &Principal) -> u64 {
+    match actor.actor {
+        Actor::User(u) => u,
+        Actor::Operator(_) => 0,
+    }
+}
+
+/// The acting operator's id, recorded on what it posts; 0 for a user.
+pub fn operator_of(actor: &Principal) -> u64 {
+    match actor.actor {
+        Actor::User(_) => 0,
+        Actor::Operator(o) => o,
+    }
 }
 
 /// The most transfers in one linked batch.
@@ -62,6 +94,7 @@ h5i_app_schema::schema! {
     }
 
     /// A committed transfer: the journal. Never updated or deleted.
+    /// `operator` is the operator who posted it (0: a user did).
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct Transfer in "transfers" {
         key { id: u64 }
@@ -70,6 +103,7 @@ h5i_app_schema::schema! {
         amount: u64,
         currency: u32,
         code: u32,
+        operator: u64,
     }
 
     /// The tenant's counters.
@@ -197,11 +231,11 @@ pub fn same_transfer(old: &Transfer, t: &TransferReq) -> bool {
 
 /// May `actor` debit (or read) account `a`?
 pub fn may_debit(actor: &Principal, a: &Account) -> bool {
-    actor.operator || a.owner == actor.user
+    is_operator(actor) || a.owner == user_of(actor)
 }
 
 fn open(actor: &Principal, s: &Snapshot, owner: u64, currency: u32, code: u32, no_overdraft: bool, no_overcredit: bool) -> Outcome {
-    if !actor.operator && owner != actor.user {
+    if !is_operator(actor) && owner != user_of(actor) {
         return Err(Error::Forbidden);
     }
     if no_overdraft && no_overcredit {
@@ -255,7 +289,7 @@ pub fn transfer(actor: &Principal, s: &Snapshot, t: &TransferReq) -> Outcome {
                     }
                     None => match find_account(&s.accounts, t.credit) {
                         None => Err(Error::NotFound),
-                        Some(b) => post(s, t, a, b),
+                        Some(b) => post(s, t, a, b, operator_of(actor)),
                     },
                 }
             }
@@ -263,8 +297,9 @@ pub fn transfer(actor: &Principal, s: &Snapshot, t: &TransferReq) -> Outcome {
     }
 }
 
-/// The arithmetic of a transfer between two different, existing accounts.
-fn post(s: &Snapshot, t: &TransferReq, a: Account, b: Account) -> Outcome {
+/// The arithmetic of a transfer between two different, existing accounts,
+/// posted by operator `op` (0: a user).
+fn post(s: &Snapshot, t: &TransferReq, a: Account, b: Account, op: u64) -> Outcome {
     let _ = s;
     if a.currency != b.currency {
         Err(Error::CurrencyMismatch)
@@ -307,6 +342,7 @@ fn post(s: &Snapshot, t: &TransferReq, a: Account, b: Account) -> Outcome {
                 amount: t.amount,
                 currency: a.currency,
                 code: t.code,
+                operator: op,
             };
             Ok((
                 three(Write::PutAccount(a2), Write::PutAccount(b2), Write::PutTransfer(tr)),
@@ -386,7 +422,7 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
         Command::Account { id } => read_account(actor, s, *id),
         Command::Accounts => Ok((Vec::new(), Reply::Accounts(visible_accounts(actor, s)))),
         Command::Transfers => {
-            if actor.operator {
+            if is_operator(actor) {
                 Ok((Vec::new(), Reply::Transfers(s.transfers.clone())))
             } else {
                 Err(Error::Forbidden)
@@ -482,16 +518,16 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
         }
         Command::Accounts => {
             let mut out = Vec::new();
-            if actor.operator {
+            if is_operator(actor) {
                 out.push(rd_where(T_ACCOUNTS, h5i_app_sql::Pred::All));
             } else {
-                out.push(rd_where(T_ACCOUNTS, p_eq(ACCOUNT_OWNER, v_int(actor.user))));
+                out.push(rd_where(T_ACCOUNTS, p_eq(ACCOUNT_OWNER, v_int(user_of(actor)))));
             }
             Some(out)
         }
         Command::Transfers => {
             let mut out = Vec::new();
-            if actor.operator {
+            if is_operator(actor) {
                 out.push(rd_where(T_TRANSFERS, h5i_app_sql::Pred::All));
             }
             Some(out)
@@ -522,11 +558,11 @@ mod tests {
     use super::*;
 
     fn op() -> Principal {
-        Principal { org: 1, user: 0, operator: true }
+        Principal { org: 1, actor: Actor::Operator(9) }
     }
 
     fn user(u: u64) -> Principal {
-        Principal { org: 1, user: u, operator: false }
+        Principal { org: 1, actor: Actor::User(u) }
     }
 
     fn run(s: &Snapshot, a: Principal, c: Command) -> (Snapshot, Result<Reply, Error>) {
@@ -600,6 +636,17 @@ mod tests {
         // The owner and the operator still get the replay.
         assert_eq!(run(&s, user(1), Command::Transfer { t: tr(11, 1, 2, 30) }).1, Ok(Reply::Exists(11)));
         assert_eq!(run(&s, op(), Command::Transfer { t: tr(11, 1, 2, 30) }).1, Ok(Reply::Exists(11)));
+    }
+
+    #[test]
+    fn the_journal_names_the_operator() {
+        let s = setup();
+        let (s, _) = run(&s, op(), Command::Transfer { t: tr(10, 0, 1, 100) });
+        let (s, _) = run(&s, user(1), Command::Transfer { t: tr(11, 1, 2, 30) });
+        let by = |s: &Snapshot, id| find_transfer(&s.transfers, id).unwrap().operator;
+        assert_eq!((by(&s, 10), by(&s, 11)), (9, 0));
+        // A user is never an operator, whatever its id.
+        assert_eq!(run(&s, user(9), Command::Transfers).1, Err(Error::Forbidden));
     }
 
     #[test]

@@ -23,8 +23,9 @@ migration), a restore of inconsistent data, or an engine/database fault.
    role), CloudTrail for `rds:ModifyDBInstance`/restores.
 4. Repair only by compensating ledger transfers posted through the API by
    an operator, each with an id in a reserved range and a ticket reference
-   in `code`; re-run the audit until `ok: true`. Never edit `accounts` or
-   `transfers` rows.
+   in `code`; the journal records your operator id on each (`operator` in
+   `{"cmd":"transfers"}`). Re-run the audit until `ok: true`. Never edit
+   `accounts` or `transfers` rows.
 5. Write the incident up against the assumption that failed
    (`docs/proof-assumptions.md`).
 

@@ -178,6 +178,42 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### F1: operators distinct inside the kernels (SEC-02 finished)
+
+- Both kernels' `Principal` is `{org, actor}` with `Actor::User(id)` or
+  `Actor::Operator(id)` (`is_operator`, `user_of`, `operator_of`). A user
+  is never an operator whatever its id; user ids no longer collide with
+  operators. `payment_storage::{ledger,payments}::{user, operator}` build
+  them; `payment_api::auth` maps an operator token to `Operator(id)`.
+- Audit field `operator` (the acting operator's id, 0 for a user) on ledger
+  `transfers` and on `payments`, `refunds`, `psp_events`, `psp_refs`; added
+  to existing tables by `ALTER TABLE … ADD COLUMN IF NOT EXISTS … DEFAULT 0`
+  at startup (old rows read 0). Shown in the JSON of transfers, payments
+  and refunds. Stored idempotent replies from before still decode (test
+  `replies_stored_before_the_operator_column_still_decode`); operators keep
+  one idempotency namespace per tenant (`u0`).
+- System operators (ids from 2^62, refused in tokens): orchestrator
+  2^62+1, recovery job 2^62+2, export 2^62+3 (`payment_storage::*_OPERATOR`).
+  `Orchestrator::acting_as(id)` shares engines and the account cache;
+  `POST /v1/recover` acts as the calling operator.
+- Proofs: ledger 236 theorems / 13 modules (was 227), payments 248 / 8
+  (was 228). Restated for the new principal: `only_owner_or_operator_debits`
+  and `replay_needs_debit_right` (the actor is `Operator _` or
+  `User owner`). New: ledger `transfers_record_operator`, payments
+  `operator_only` (`Record`, `Event`, `AttachRef`) and
+  `writes_record_operator`. The Lean readers `Principal.operator`/`.user`/
+  `.opId` in each `Spec.lean` mirror the kernel functions (proven equal).
+- Mutants: ledger 10/10 caught (new: `user_acts_as_operator`,
+  `operator_id_dropped`), payments 11/11 (same two new).
+- Tests: 82 pass (`cargo test --workspace`); new
+  `ledger_api::the_journal_names_the_operator`, operator ids asserted in
+  `payments_api` (orchestrator; recovery run by operator 1), kernel unit
+  tests, auth test for reserved ids. Clippy clean (plain, mock-psp, CUDA).
+- Left open (security-review SEC-02): the row's `operator` is the last
+  writer, not a history; scoped tokens, an identity provider, revoking one
+  operator.
+
+
 ### E (rest): static infrastructure checks; what still needs credentials
 
 - checkov 3.4.0 on `infra/terraform`: 54 findings at first. Fixed: rule
@@ -614,8 +650,9 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 ## Open items / decisions
 
 - Not done or not verifiable here:
-  - SEC-03, SEC-07, SEC-09 closed (E). SEC-02 is partly closed (separate operator key); the kernels still see
-    every operator as user 0. See `docs/security-review.md`.
+  - SEC-03, SEC-07, SEC-09 closed (E). SEC-02 closed for kernel identity
+    and audit (F1); scoped tokens, an identity provider and per-operator
+    revocation remain. See `docs/security-review.md`.
   - The recovery schedule and the nightly reconciliation are written and
     validated (terraform validate, checkov) but have not run on AWS.
   - Docker images are built locally now. The worker image did not build

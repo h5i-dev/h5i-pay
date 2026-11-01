@@ -90,7 +90,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (ledger_engine, payments_engine) = payment_storage::engines_with(&url, 16, EngineConfig::default(), &tls).await?;
     tracing::info!(psp = psp.name(), db_tls = matches!(tls, payment_storage::DbTls::Verified(_)), "payment provider and database");
     if let Some(job) = job {
-        let o = payment_api::orchestrator::Orchestrator::new(ledger_engine, payments_engine, psp);
+        // Each job acts as its own system operator (SEC-02): what it writes
+        // records which one.
+        let o = payment_api::orchestrator::Orchestrator::new(ledger_engine, payments_engine, psp).acting_as(match job {
+            Job::Recover => payment_storage::RECOVERY_OPERATOR,
+            Job::Export(_) | Job::Ingest(..) => payment_storage::EXPORT_OPERATOR,
+        });
         match job {
             Job::Recover => {
                 let r = payment_api::jobs::recover_all(&o, &url, &tls).await?;

@@ -33,9 +33,14 @@ impl Kernel for PaymentsApp {
     }
 }
 
-/// User 0 of every tenant is its operator.
-pub fn principal(org: u64, user: u64) -> k::Principal {
-    k::Principal { org, user, operator: user == 0 }
+/// User `user` (a merchant) of tenant `org`.
+pub fn user(org: u64, user: u64) -> k::Principal {
+    k::Principal { org, actor: k::Actor::User(user) }
+}
+
+/// Operator `id` of tenant `org`.
+pub fn operator(org: u64, id: u64) -> k::Principal {
+    k::Principal { org, actor: k::Actor::Operator(id) }
 }
 
 payment_domain::payment_tables!(PaymentsApp);
@@ -48,6 +53,10 @@ impl Store<PaymentsApp> for PaymentsStore {
     /// scheduled recovery's search for unfinished payments.
     fn ddl() -> Vec<String> {
         let mut ddl = schema_ddl();
+        // SEC-02 (F1): which operator last wrote a row. Older rows say 0 (unknown).
+        for t in ["payments", "refunds", "psp_events", "psp_refs"] {
+            ddl.push(crate::add_column(t, "operator", "BIGINT NOT NULL DEFAULT 0"));
+        }
         ddl.push("CREATE INDEX IF NOT EXISTS payments_merchant ON payments (tenant_id, merchant)".into());
         ddl.push("CREATE INDEX IF NOT EXISTS refunds_payment ON refunds (tenant_id, payment)".into());
         ddl.push(format!(
@@ -139,6 +148,7 @@ pub fn payment_json(p: &k::Payment) -> Out {
         ("captured", p.captured.into()),
         ("refunded", p.refunded.into()),
         ("refund_pending", p.refund_pending.into()),
+        ("operator", p.operator.into()),
     ])
 }
 
@@ -148,6 +158,7 @@ pub fn refund_json(r: &k::Refund) -> Out {
         ("payment", r.payment.into()),
         ("amount", r.amount.into()),
         ("status", refund_status_name(r.status).into()),
+        ("operator", r.operator.into()),
     ])
 }
 
@@ -214,16 +225,76 @@ impl h5i_app_http::Api<PaymentsApp> for PaymentsStore {
     }
 }
 
-type StoredPayment = (u64, u64, u64, u32, u32, bool, u64, u64, u64, u64, u64);
-
-fn store_payment(p: &k::Payment) -> StoredPayment {
-    (p.id, p.merchant, p.amount, p.currency, p.status, p.manual_capture, p.attempts, p.authorized, p.captured, p.refunded, p.refund_pending)
+/// A payment in a stored reply. Replies stored before SEC-02 are arrays
+/// without `operator`; serde reads them positionally, `operator` 0.
+#[derive(Serialize, Deserialize)]
+struct StoredPayment {
+    id: u64,
+    merchant: u64,
+    amount: u64,
+    currency: u32,
+    status: u32,
+    manual_capture: bool,
+    attempts: u64,
+    authorized: u64,
+    captured: u64,
+    refunded: u64,
+    refund_pending: u64,
+    #[serde(default)]
+    operator: u64,
 }
 
-fn load_payment(
-    (id, merchant, amount, currency, status, manual_capture, attempts, authorized, captured, refunded, refund_pending): StoredPayment,
-) -> k::Payment {
-    k::Payment { id, merchant, amount, currency, status, manual_capture, attempts, authorized, captured, refunded, refund_pending }
+fn store_payment(p: &k::Payment) -> StoredPayment {
+    StoredPayment {
+        id: p.id,
+        merchant: p.merchant,
+        amount: p.amount,
+        currency: p.currency,
+        status: p.status,
+        manual_capture: p.manual_capture,
+        attempts: p.attempts,
+        authorized: p.authorized,
+        captured: p.captured,
+        refunded: p.refunded,
+        refund_pending: p.refund_pending,
+        operator: p.operator,
+    }
+}
+
+fn load_payment(p: StoredPayment) -> k::Payment {
+    k::Payment {
+        id: p.id,
+        merchant: p.merchant,
+        amount: p.amount,
+        currency: p.currency,
+        status: p.status,
+        manual_capture: p.manual_capture,
+        attempts: p.attempts,
+        authorized: p.authorized,
+        captured: p.captured,
+        refunded: p.refunded,
+        refund_pending: p.refund_pending,
+        operator: p.operator,
+    }
+}
+
+/// A refund in a stored reply (older replies: arrays without `operator`).
+#[derive(Serialize, Deserialize)]
+struct StoredRefund {
+    id: u64,
+    payment: u64,
+    amount: u64,
+    status: u32,
+    #[serde(default)]
+    operator: u64,
+}
+
+fn store_refund(r: &k::Refund) -> StoredRefund {
+    StoredRefund { id: r.id, payment: r.payment, amount: r.amount, status: r.status, operator: r.operator }
+}
+
+fn load_refund(r: StoredRefund) -> k::Refund {
+    k::Refund { id: r.id, payment: r.payment, amount: r.amount, status: r.status, operator: r.operator }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -235,10 +306,10 @@ enum StoredReply {
     Stale,
     Payment(StoredPayment),
     Payments(Vec<StoredPayment>),
-    Refund((u64, u64, u64, u32)),
-    Refunds(Vec<(u64, u64, u64, u32)>),
+    Refund(StoredRefund),
+    Refunds(Vec<StoredRefund>),
     Ref(Vec<u8>),
-    View(StoredPayment, Vec<(u64, u64, u64, u32)>, Option<Vec<u8>>),
+    View(StoredPayment, Vec<StoredRefund>, Option<Vec<u8>>),
 }
 
 impl ReplyCodec<PaymentsApp> for PaymentsStore {
@@ -246,8 +317,10 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
         format!("{cmd:?}").into_bytes()
     }
 
+    /// Idempotency keys are per user; operators share the tenant's operator
+    /// namespace (`u0`, as before SEC-02).
     fn scope(actor: &k::Principal) -> String {
-        format!("u{}", actor.user)
+        format!("u{}", k::user_of(actor))
     }
 
     fn encode(r: &k::Reply) -> Vec<u8> {
@@ -259,11 +332,11 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
             k::Reply::Stale => StoredReply::Stale,
             k::Reply::Payment(p) => StoredReply::Payment(store_payment(p)),
             k::Reply::Payments(ps) => StoredReply::Payments(ps.iter().map(store_payment).collect()),
-            k::Reply::Refund(r) => StoredReply::Refund((r.id, r.payment, r.amount, r.status)),
-            k::Reply::Refunds(rs) => StoredReply::Refunds(rs.iter().map(|r| (r.id, r.payment, r.amount, r.status)).collect()),
+            k::Reply::Refund(r) => StoredReply::Refund(store_refund(r)),
+            k::Reply::Refunds(rs) => StoredReply::Refunds(rs.iter().map(store_refund).collect()),
             k::Reply::Ref(b) => StoredReply::Ref(b.clone()),
             k::Reply::View(p, rs, r) => {
-                StoredReply::View(store_payment(p), rs.iter().map(|r| (r.id, r.payment, r.amount, r.status)).collect(), r.clone())
+                StoredReply::View(store_payment(p), rs.iter().map(store_refund).collect(), r.clone())
             }
         };
         serde_json::to_vec(&stored).expect("stored replies serialize")
@@ -278,16 +351,10 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
             StoredReply::Stale => k::Reply::Stale,
             StoredReply::Payment(p) => k::Reply::Payment(load_payment(p)),
             StoredReply::Payments(ps) => k::Reply::Payments(ps.into_iter().map(load_payment).collect()),
-            StoredReply::Refund((id, payment, amount, status)) => k::Reply::Refund(k::Refund { id, payment, amount, status }),
-            StoredReply::Refunds(rs) => k::Reply::Refunds(
-                rs.into_iter().map(|(id, payment, amount, status)| k::Refund { id, payment, amount, status }).collect(),
-            ),
+            StoredReply::Refund(r) => k::Reply::Refund(load_refund(r)),
+            StoredReply::Refunds(rs) => k::Reply::Refunds(rs.into_iter().map(load_refund).collect()),
             StoredReply::Ref(b) => k::Reply::Ref(b),
-            StoredReply::View(p, rs, r) => k::Reply::View(
-                load_payment(p),
-                rs.into_iter().map(|(id, payment, amount, status)| k::Refund { id, payment, amount, status }).collect(),
-                r,
-            ),
+            StoredReply::View(p, rs, r) => k::Reply::View(load_payment(p), rs.into_iter().map(load_refund).collect(), r),
         })
     }
 }
@@ -317,4 +384,20 @@ pub fn audit(s: &k::Snapshot) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replies_stored_before_the_operator_column_still_decode() {
+        let old = br#"{"View":[[3,7,500,392,3,false,1,500,500,0,0],[[4,3,100,0]],null]}"#;
+        let k::Reply::View(p, rs, None) = <PaymentsStore as ReplyCodec<PaymentsApp>>::decode(old).unwrap() else { panic!() };
+        assert_eq!((p.id, p.captured, p.operator), (3, 500, 0));
+        assert_eq!((rs[0].id, rs[0].amount, rs[0].operator), (4, 100, 0));
+        let p2 = k::Payment { operator: 9, ..p };
+        let back = <PaymentsStore as ReplyCodec<PaymentsApp>>::encode(&k::Reply::Payment(p2));
+        assert_eq!(<PaymentsStore as ReplyCodec<PaymentsApp>>::decode(&back).unwrap(), k::Reply::Payment(p2));
+    }
 }

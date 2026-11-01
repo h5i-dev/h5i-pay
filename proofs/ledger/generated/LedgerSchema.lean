@@ -237,9 +237,9 @@ def Account.delWhereA (col : Nat) (val : Val) : AWrite Val := .delWhere Account.
 
 /-! ## `Transfer` (table `transfers`) -/
 
-/-- Columns `id`, `debit`, `credit`, `amount`, `currency`, `code`. -/
+/-- Columns `id`, `debit`, `credit`, `amount`, `currency`, `code`, `operator`. -/
 def Transfer.row (x : Transfer) : List Val :=
-  [int x.id.val, int x.debit.val, int x.credit.val, int x.amount.val, int x.currency.val, int x.code.val]
+  [int x.id.val, int x.debit.val, int x.credit.val, int x.amount.val, int x.currency.val, int x.code.val, int x.operator.val]
 
 def Transfer.table : Nat := 1
 def Transfer.keyLen : Nat := 1
@@ -249,6 +249,7 @@ def Transfer.col_credit : Nat := 2
 def Transfer.col_amount : Nat := 3
 def Transfer.col_currency : Nat := 4
 def Transfer.col_code : Nat := 5
+def Transfer.col_operator : Nat := 6
 
 @[simp] theorem Transfer.row_col_id (x : Transfer) :
     (Transfer.row x)[Transfer.col_id]? = some (int x.id.val) := by
@@ -274,7 +275,11 @@ def Transfer.col_code : Nat := 5
     (Transfer.row x)[Transfer.col_code]? = some (int x.code.val) := by
   simp [Transfer.row, Transfer.col_code]
 
-@[simp] theorem Transfer.row_length (x : Transfer) : (Transfer.row x).length = 6 := rfl
+@[simp] theorem Transfer.row_col_operator (x : Transfer) :
+    (Transfer.row x)[Transfer.col_operator]? = some (int x.operator.val) := by
+  simp [Transfer.row, Transfer.col_operator]
+
+@[simp] theorem Transfer.row_length (x : Transfer) : (Transfer.row x).length = 7 := rfl
 
 @[step] theorem Transfer.to_row_spec (x : Transfer) : Transfer.to_row x ⦃ v => v.val = Transfer.row x ⦄ := by
   have := usize_max_le
@@ -403,7 +408,7 @@ theorem Account.from_row_spec (x : Account) (v : alloc.vec.Vec Val) (h : v.val =
 
 theorem Transfer.from_row_spec (x : Transfer) (v : alloc.vec.Vec Val) (h : v.val = Transfer.row x) :
     Transfer.from_row v ⦃ o => o = some x ⦄ := by
-  have hl : v.length = 6 := by simp [alloc.vec.Vec.length, h, Transfer.row]
+  have hl : v.length = 7 := by simp [alloc.vec.Vec.length, h, Transfer.row]
   unfold Transfer.from_row; row_tac
 
 theorem Ledger.from_row_spec (x : Ledger) (v : alloc.vec.Vec Val) (h : v.val = Ledger.row x) :

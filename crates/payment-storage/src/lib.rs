@@ -22,6 +22,24 @@ pub type LedgerEngine = Engine<ledger::LedgerApp, ledger::LedgerStore>;
 pub type PaymentsEngine = Engine<payments::PaymentsApp, payments::PaymentsStore>;
 
 pub const LEDGER_SCHEMA: &str = "ledger";
+
+/// Operator ids from here up name the system's own processes, which act in
+/// process without a token; `payment_api::auth` refuses operator tokens for
+/// them, so people and processes never share an id (SEC-02).
+pub const SYSTEM_OPERATORS: u64 = 1 << 62;
+/// The orchestrator (payments, captures, refunds, webhooks, ledger postings).
+pub const ORCHESTRATOR_OPERATOR: u64 = SYSTEM_OPERATORS + 1;
+/// The scheduled recovery job.
+pub const RECOVERY_OPERATOR: u64 = SYSTEM_OPERATORS + 2;
+/// The nightly reconciliation export (reads only).
+pub const EXPORT_OPERATOR: u64 = SYSTEM_OPERATORS + 3;
+
+/// `ALTER TABLE … ADD COLUMN IF NOT EXISTS`: a column added to a kernel
+/// table after deployments created it (`CREATE TABLE IF NOT EXISTS` leaves
+/// existing tables alone).
+pub(crate) fn add_column(table: &str, column: &str, ty: &str) -> String {
+    format!("ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ty}")
+}
 pub const PAYMENTS_SCHEMA: &str = "payments";
 
 /// How connections to PostgreSQL are secured.

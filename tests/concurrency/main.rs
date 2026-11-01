@@ -275,11 +275,11 @@ async fn payments_load_for_matches_the_whole_tenant() {
     let Some(url) = database_url() else { return };
     let (_, pg) = payment_storage::engines(&url, 4, EngineConfig::default()).await.unwrap();
     let org = fresh_tenant();
-    let op = d::Principal { org, user: 0, operator: true };
+    let op = d::Principal { org, actor: d::Actor::Operator(1) };
     let mut rng = Rng(11);
     for i in 0..500u64 {
         let u = rng.below(4);
-        let actor = if u == 0 { op } else { d::Principal { org, user: u, operator: false } };
+        let actor = if u == 0 { op } else { d::Principal { org, actor: d::Actor::User(u) } };
         let id = |r: &mut Rng| r.below(8);
         // Few amounts, so PSP results often match and payments get captured.
         let amount = |r: &mut Rng| 100 * (1 + r.below(2));

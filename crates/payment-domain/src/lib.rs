@@ -29,13 +29,46 @@
 
 pub mod policy;
 
-/// Who is calling: the tenant, a user in it (a merchant), and whether the
-/// user is the tenant's operator (the orchestrator, webhooks, recovery).
+/// Who acts inside a tenant.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Actor {
+    /// A user (a merchant), by user id.
+    User(u64),
+    /// One of the tenant's operators (support staff, the orchestrator,
+    /// webhooks, the recovery job), by operator id. Only operators record
+    /// PSP results; every row an operator writes records its id.
+    Operator(u64),
+}
+
+/// Who is calling: the tenant and who acts in it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Principal {
     pub org: u64,
-    pub user: u64,
-    pub operator: bool,
+    pub actor: Actor,
+}
+
+/// Is the caller one of the tenant's operators?
+pub fn is_operator(actor: &Principal) -> bool {
+    match actor.actor {
+        Actor::User(_) => false,
+        Actor::Operator(_) => true,
+    }
+}
+
+/// The acting user's id; 0 for an operator.
+pub fn user_of(actor: &Principal) -> u64 {
+    match actor.actor {
+        Actor::User(u) => u,
+        Actor::Operator(_) => 0,
+    }
+}
+
+/// The acting operator's id, recorded on the rows it writes; 0 for a user.
+pub fn operator_of(actor: &Principal) -> u64 {
+    match actor.actor {
+        Actor::User(_) => 0,
+        Actor::Operator(o) => o,
+    }
 }
 
 pub const CREATED: u32 = 0;
@@ -63,6 +96,8 @@ h5i_app_schema::schema! {
     }
 
     /// A payment. Amounts are minor units of `currency` (ISO 4217 numeric).
+    /// `operator` (in every table): the operator whose command last wrote
+    /// the row, 0 if a user's did.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct Payment in "payments" {
         key { id: u64 }
@@ -76,6 +111,7 @@ h5i_app_schema::schema! {
         captured: u64,
         refunded: u64,
         refund_pending: u64,
+        operator: u64,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -84,6 +120,7 @@ h5i_app_schema::schema! {
         payment: u64,
         amount: u64,
         status: u32,
+        operator: u64,
     }
 
     /// A PSP event that has been processed (webhook deduplication).
@@ -91,6 +128,7 @@ h5i_app_schema::schema! {
     pub struct Event in "psp_events" {
         key { id: u64 }
         payment: u64,
+        operator: u64,
     }
 
     /// The PSP's reference for a payment (e.g. a Stripe PaymentIntent id).
@@ -98,6 +136,7 @@ h5i_app_schema::schema! {
     pub struct PspRef in "psp_refs" {
         key { payment: u64 }
         reference: Vec<u8>,
+        operator: u64,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -254,11 +293,12 @@ pub fn find_event(es: &Vec<Event>, id: u64) -> Option<Event> {
 
 /// May `actor` act on payment `p` as its merchant?
 pub fn may_manage(actor: &Principal, p: &Payment) -> bool {
-    actor.operator || p.merchant == actor.user
+    is_operator(actor) || p.merchant == user_of(actor)
 }
 
-/// `p` with a new status (and the authorized and captured amounts).
-fn with_status(p: Payment, status: u32, authorized: u64, captured: u64) -> Payment {
+/// `p` with a new status (and the authorized and captured amounts),
+/// written by operator `op` (0: a user).
+fn with_status(p: Payment, status: u32, authorized: u64, captured: u64, op: u64) -> Payment {
     Payment {
         id: p.id,
         merchant: p.merchant,
@@ -271,11 +311,12 @@ fn with_status(p: Payment, status: u32, authorized: u64, captured: u64) -> Payme
         captured,
         refunded: p.refunded,
         refund_pending: p.refund_pending,
+        operator: op,
     }
 }
 
-/// `p` with new refund counters.
-fn with_refunds(p: Payment, refunded: u64, refund_pending: u64) -> Payment {
+/// `p` with new refund counters, written by operator `op` (0: a user).
+fn with_refunds(p: Payment, refunded: u64, refund_pending: u64, op: u64) -> Payment {
     Payment {
         id: p.id,
         merchant: p.merchant,
@@ -288,6 +329,7 @@ fn with_refunds(p: Payment, refunded: u64, refund_pending: u64) -> Payment {
         captured: p.captured,
         refunded,
         refund_pending,
+        operator: op,
     }
 }
 
@@ -301,7 +343,7 @@ fn create(actor: &Principal, s: &Snapshot, amount: u64, currency: u32, manual_ca
     }
     let p = Payment {
         id: c.next_id,
-        merchant: actor.user,
+        merchant: user_of(actor),
         amount,
         currency,
         status: CREATED,
@@ -311,6 +353,7 @@ fn create(actor: &Principal, s: &Snapshot, amount: u64, currency: u32, manual_ca
         captured: 0,
         refunded: 0,
         refund_pending: 0,
+        operator: operator_of(actor),
     };
     let c2 = Counter { next_id: c.next_id + 1 };
     Ok((two(Write::PutPayment(p), Write::SetCounter(c2)), Reply::Created(p.id)))
@@ -339,6 +382,7 @@ fn begin_authorize(actor: &Principal, s: &Snapshot, id: u64) -> Outcome {
                     captured: p.captured,
                     refunded: p.refunded,
                     refund_pending: p.refund_pending,
+                    operator: operator_of(actor),
                 };
                 Ok((one(Write::PutPayment(p2)), Reply::Payment(p2)))
             }
@@ -358,7 +402,7 @@ fn cancel(actor: &Principal, s: &Snapshot, id: u64) -> Outcome {
                 // Once the PSP may have seen it, cancel through the PSP (void) and `Record`.
                 Err(Error::InvalidTransition)
             } else {
-                let p2 = with_status(p, CANCELED, p.authorized, p.captured);
+                let p2 = with_status(p, CANCELED, p.authorized, p.captured, operator_of(actor));
                 Ok((one(Write::PutPayment(p2)), Reply::Status(CANCELED)))
             }
         }
@@ -386,8 +430,9 @@ fn request_refund(actor: &Principal, s: &Snapshot, id: u64, amount: u64) -> Outc
                 if c.next_id == u64::MAX {
                     Err(Error::Overflow)
                 } else {
-                    let r = Refund { id: c.next_id, payment: p.id, amount, status: REFUND_PENDING };
-                    let p2 = with_refunds(p, p.refunded, p.refund_pending + amount);
+                    let op = operator_of(actor);
+                    let r = Refund { id: c.next_id, payment: p.id, amount, status: REFUND_PENDING, operator: op };
+                    let p2 = with_refunds(p, p.refunded, p.refund_pending + amount, op);
                     let c2 = Counter { next_id: c.next_id + 1 };
                     Ok((
                         three(Write::PutRefund(r), Write::PutPayment(p2), Write::SetCounter(c2)),
@@ -399,12 +444,12 @@ fn request_refund(actor: &Principal, s: &Snapshot, id: u64, amount: u64) -> Outc
     }
 }
 
-fn record_authorized(p: Payment, amount: u64) -> Outcome {
+fn record_authorized(p: Payment, amount: u64, op: u64) -> Outcome {
     if p.status == PROCESSING {
         if amount != p.amount {
             Err(Error::AmountMismatch)
         } else {
-            Ok((one(Write::PutPayment(with_status(p, AUTHORIZED, amount, p.captured))), Reply::Status(AUTHORIZED)))
+            Ok((one(Write::PutPayment(with_status(p, AUTHORIZED, amount, p.captured, op))), Reply::Status(AUTHORIZED)))
         }
     } else if p.status == AUTHORIZED && p.authorized == amount {
         Ok((Vec::new(), Reply::Unchanged))
@@ -413,9 +458,9 @@ fn record_authorized(p: Payment, amount: u64) -> Outcome {
     }
 }
 
-fn record_declined(p: Payment) -> Outcome {
+fn record_declined(p: Payment, op: u64) -> Outcome {
     if p.status == PROCESSING {
-        Ok((one(Write::PutPayment(with_status(p, FAILED, p.authorized, p.captured))), Reply::Status(FAILED)))
+        Ok((one(Write::PutPayment(with_status(p, FAILED, p.authorized, p.captured, op))), Reply::Status(FAILED)))
     } else if p.status == FAILED {
         Ok((Vec::new(), Reply::Unchanged))
     } else {
@@ -423,19 +468,19 @@ fn record_declined(p: Payment) -> Outcome {
     }
 }
 
-fn record_captured(p: Payment, amount: u64) -> Outcome {
+fn record_captured(p: Payment, amount: u64, op: u64) -> Outcome {
     if p.status == AUTHORIZED {
         if amount == 0 || amount > p.authorized {
             Err(Error::AmountMismatch)
         } else {
-            Ok((one(Write::PutPayment(with_status(p, CAPTURED, p.authorized, amount))), Reply::Status(CAPTURED)))
+            Ok((one(Write::PutPayment(with_status(p, CAPTURED, p.authorized, amount, op))), Reply::Status(CAPTURED)))
         }
     } else if p.status == PROCESSING {
         // Automatic capture reported without a separate authorization.
         if amount == 0 || amount > p.amount {
             Err(Error::AmountMismatch)
         } else {
-            Ok((one(Write::PutPayment(with_status(p, CAPTURED, amount, amount))), Reply::Status(CAPTURED)))
+            Ok((one(Write::PutPayment(with_status(p, CAPTURED, amount, amount, op))), Reply::Status(CAPTURED)))
         }
     } else if p.status == CAPTURED && p.captured == amount {
         Ok((Vec::new(), Reply::Unchanged))
@@ -444,9 +489,9 @@ fn record_captured(p: Payment, amount: u64) -> Outcome {
     }
 }
 
-fn record_canceled(p: Payment) -> Outcome {
+fn record_canceled(p: Payment, op: u64) -> Outcome {
     if p.status == CREATED || p.status == PROCESSING || p.status == AUTHORIZED {
-        Ok((one(Write::PutPayment(with_status(p, CANCELED, p.authorized, p.captured))), Reply::Status(CANCELED)))
+        Ok((one(Write::PutPayment(with_status(p, CANCELED, p.authorized, p.captured, op))), Reply::Status(CANCELED)))
     } else if p.status == CANCELED {
         Ok((Vec::new(), Reply::Unchanged))
     } else {
@@ -454,7 +499,7 @@ fn record_canceled(p: Payment) -> Outcome {
     }
 }
 
-fn record_refund(s: &Snapshot, p: Payment, refund: u64, succeeded: bool) -> Outcome {
+fn record_refund(s: &Snapshot, p: Payment, refund: u64, succeeded: bool, op: u64) -> Outcome {
     match find_refund(&s.refunds, refund) {
         None => Err(Error::NotFound),
         Some(r) => {
@@ -467,13 +512,13 @@ fn record_refund(s: &Snapshot, p: Payment, refund: u64, succeeded: bool) -> Outc
                     if p.refunded > u64::MAX - r.amount {
                         Err(Error::Overflow)
                     } else {
-                        let r2 = Refund { id: r.id, payment: r.payment, amount: r.amount, status: REFUND_SUCCEEDED };
-                        let p2 = with_refunds(p, p.refunded + r.amount, p.refund_pending - r.amount);
+                        let r2 = Refund { id: r.id, payment: r.payment, amount: r.amount, status: REFUND_SUCCEEDED, operator: op };
+                        let p2 = with_refunds(p, p.refunded + r.amount, p.refund_pending - r.amount, op);
                         Ok((two(Write::PutRefund(r2), Write::PutPayment(p2)), Reply::Status(p.status)))
                     }
                 } else {
-                    let r2 = Refund { id: r.id, payment: r.payment, amount: r.amount, status: REFUND_FAILED };
-                    let p2 = with_refunds(p, p.refunded, p.refund_pending - r.amount);
+                    let r2 = Refund { id: r.id, payment: r.payment, amount: r.amount, status: REFUND_FAILED, operator: op };
+                    let p2 = with_refunds(p, p.refunded, p.refund_pending - r.amount, op);
                     Ok((two(Write::PutRefund(r2), Write::PutPayment(p2)), Reply::Status(p.status)))
                 }
             } else if (succeeded && r.status == REFUND_SUCCEEDED) || (!succeeded && r.status == REFUND_FAILED) {
@@ -487,18 +532,19 @@ fn record_refund(s: &Snapshot, p: Payment, refund: u64, succeeded: bool) -> Outc
 
 /// What a PSP result does to payment `id`.
 pub fn record(actor: &Principal, s: &Snapshot, id: u64, result: &PspResult) -> Outcome {
-    if !actor.operator {
+    if !is_operator(actor) {
         return Err(Error::Forbidden);
     }
+    let op = operator_of(actor);
     match find_payment(&s.payments, id) {
         None => Err(Error::NotFound),
         Some(p) => match result {
-            PspResult::Authorized { amount } => record_authorized(p, *amount),
-            PspResult::Declined => record_declined(p),
-            PspResult::Captured { amount } => record_captured(p, *amount),
-            PspResult::Canceled => record_canceled(p),
-            PspResult::RefundSucceeded { refund } => record_refund(s, p, *refund, true),
-            PspResult::RefundFailed { refund } => record_refund(s, p, *refund, false),
+            PspResult::Authorized { amount } => record_authorized(p, *amount, op),
+            PspResult::Declined => record_declined(p, op),
+            PspResult::Captured { amount } => record_captured(p, *amount, op),
+            PspResult::Canceled => record_canceled(p, op),
+            PspResult::RefundSucceeded { refund } => record_refund(s, p, *refund, true, op),
+            PspResult::RefundFailed { refund } => record_refund(s, p, *refund, false, op),
         },
     }
 }
@@ -514,13 +560,13 @@ fn append(ws: &mut Vec<Write>, more: &Vec<Write>) {
 /// A webhook: at most one effect per event id, and stale results recorded
 /// without effect.
 pub fn event(actor: &Principal, s: &Snapshot, event: u64, id: u64, result: &PspResult) -> Outcome {
-    if !actor.operator {
+    if !is_operator(actor) {
         return Err(Error::Forbidden);
     }
     match find_event(&s.events, event) {
         Some(_) => Ok((Vec::new(), Reply::Duplicate)),
         None => {
-            let e = Event { id: event, payment: id };
+            let e = Event { id: event, payment: id, operator: operator_of(actor) };
             match record(actor, s, id, result) {
                 Ok((ws, reply)) => {
                     let mut out = Vec::new();
@@ -590,7 +636,7 @@ fn same_bytes(a: &Vec<u8>, b: &Vec<u8>) -> bool {
 }
 
 fn attach_ref(actor: &Principal, s: &Snapshot, payment: u64, reference: &Vec<u8>) -> Outcome {
-    if !actor.operator {
+    if !is_operator(actor) {
         return Err(Error::Forbidden);
     }
     match find_payment(&s.payments, payment) {
@@ -603,7 +649,7 @@ fn attach_ref(actor: &Principal, s: &Snapshot, payment: u64, reference: &Vec<u8>
                     Err(Error::RefConflict)
                 }
             }
-            None => Ok((one(Write::PutRef(PspRef { payment, reference: reference.clone() })), Reply::Unchanged)),
+            None => Ok((one(Write::PutRef(PspRef { payment, reference: reference.clone(), operator: operator_of(actor) })), Reply::Unchanged)),
         },
     }
 }
@@ -765,10 +811,10 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
         }
         Command::Get { id } => out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*id)))),
         Command::List => {
-            if actor.operator {
+            if is_operator(actor) {
                 out.push(rd_where(T_PAYMENTS, h5i_app_sql::Pred::All));
             } else {
-                out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_MERCHANT, v_int(actor.user))));
+                out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_MERCHANT, v_int(user_of(actor)))));
             }
         }
         Command::GetRefund { id } => {
@@ -826,9 +872,9 @@ fn sql_write(w: &Write, out: &mut Vec<h5i_app_sql::Write>) {
 mod tests {
     use super::*;
 
-    const OP: Principal = Principal { org: 1, user: 0, operator: true };
-    const M: Principal = Principal { org: 1, user: 7, operator: false };
-    const OTHER: Principal = Principal { org: 1, user: 8, operator: false };
+    const OP: Principal = Principal { org: 1, actor: Actor::Operator(9) };
+    const M: Principal = Principal { org: 1, actor: Actor::User(7) };
+    const OTHER: Principal = Principal { org: 1, actor: Actor::User(8) };
 
     fn run(s: &Snapshot, a: Principal, c: Command) -> (Snapshot, Result<Reply, Error>) {
         match transition(&a, s, &c) {
@@ -920,6 +966,23 @@ mod tests {
         assert_eq!(run(&s, OP, Command::AttachRef { payment: 0, reference: b"pi_2".to_vec() }).1, Err(Error::RefConflict));
         assert_eq!(run(&s, M, Command::GetRef { payment: 0 }).1, Ok(Reply::Ref(b"pi_1".to_vec())));
         assert_eq!(run(&s, OTHER, Command::GetRef { payment: 0 }).1, Err(Error::NotFound));
+    }
+
+    #[test]
+    fn rows_name_the_operator_who_wrote_them() {
+        let op2 = Principal { org: 1, actor: Actor::Operator(2) };
+        let (s, id) = captured(100);
+        // `captured` recorded as operator 9; the merchant's refund request as a user.
+        assert_eq!(pay(&s, id).operator, 9);
+        let (s, r) = run(&s, M, Command::RequestRefund { payment: id, amount: 10 });
+        let Ok(Reply::Created(rid)) = r else { panic!("{r:?}") };
+        assert_eq!((pay(&s, id).operator, find_refund(&s.refunds, rid).unwrap().operator), (0, 0));
+        let (s, _) = run(&s, op2, Command::Event { event: 5, payment: id, result: PspResult::RefundSucceeded { refund: rid } });
+        assert_eq!((pay(&s, id).operator, find_refund(&s.refunds, rid).unwrap().operator), (2, 2));
+        assert_eq!(find_event(&s.events, 5).unwrap().operator, 2);
+        // A user is never an operator, whatever its id.
+        let u9 = Principal { org: 1, actor: Actor::User(9) };
+        assert_eq!(run(&s, u9, Command::Record { payment: id, result: PspResult::Canceled }).1, Err(Error::Forbidden));
     }
 
     #[test]

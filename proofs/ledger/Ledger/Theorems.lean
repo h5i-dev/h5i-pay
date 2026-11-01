@@ -110,12 +110,12 @@ theorem inv_open (s : St) (a : Account) (n : U64) (hinv : Inv s) (hid : a.id.val
 
 /-- What a posting does to the sums of currency `c`: all three grow by the
 amount if the transfer is in `c`, and stay the same otherwise. -/
-theorem post_sums (s : St) (t : TransferReq) (a b : Account) (d k : U64) (c : Nat)
+theorem post_sums (s : St) (t : TransferReq) (a b : Account) (d k op : U64) (c : Nat)
     (ha : findAcc s t.debit.val = some a) (hb : findAcc s t.credit.val = some b) (hne : t.debit ≠ t.credit)
     (htr : findTr s t.id.val = none) (hcur : a.currency = b.currency)
     (hd : d.val = a.debits.val + t.amount.val) (hk : k.val = b.credits.val + t.amount.val) :
     let s' := applyAll s [.PutAccount { a with debits := d }, .PutAccount { b with credits := k },
-      .PutTransfer (journalRow t a.currency)]
+      .PutTransfer (journalRow t a.currency op)]
     let x := if a.currency.val = c then t.amount.val else 0
     debits c s' = debits c s + x ∧ credits c s' = credits c s + x ∧ journal c s' = journal c s + x := by
   intro s' x
@@ -130,13 +130,13 @@ theorem post_sums (s : St) (t : TransferReq) (a b : Account) (d k : U64) (c : Na
   have fa : findAcc s a'.id.val = some a := by simpa [a', hai] using ha
   have fb : findAcc s1 b'.id.val = some b := by
     simp only [s1, findAcc_put]; simp only [a', b']; rw [if_neg hne', hbi]; exact hb
-  have ft : findTr s2 (journalRow t a.currency).id.val = none := by
+  have ft : findTr s2 (journalRow t a.currency op).id.val = none := by
     simp only [s2, s1, findTr_putAcc]; simpa [journalRow] using htr
   have d1 := accounts_put s a' (debitIn c)
   have d2 := accounts_put s1 b' (debitIn c)
   have c1 := accounts_put s a' (creditIn c)
   have c2 := accounts_put s1 b' (creditIn c)
-  have j3 := transfers_put s2 (journalRow t a.currency) (amountIn c)
+  have j3 := transfers_put s2 (journalRow t a.currency op) (amountIn c)
   rw [fa] at d1 c1
   rw [fb] at d2 c2
   rw [ft] at j3
@@ -146,20 +146,20 @@ theorem post_sums (s : St) (t : TransferReq) (a b : Account) (d k : U64) (c : Na
   by_cases hc : a.currency.val = c <;> simp only [hc, if_true, if_false, x] at d1 d2 c1 c2 j3 ⊢ <;> omega
 
 /-- Posting a transfer keeps the invariant. -/
-theorem inv_post (s : St) (t : TransferReq) (a b : Account) (d k : U64) (hinv : Inv s)
+theorem inv_post (s : St) (t : TransferReq) (a b : Account) (d k op : U64) (hinv : Inv s)
     (ha : findAcc s t.debit.val = some a) (hb : findAcc s t.credit.val = some b) (hne : t.debit ≠ t.credit)
     (htr : findTr s t.id.val = none) (hcur : a.currency = b.currency)
     (hd : d.val = a.debits.val + t.amount.val) (hk : k.val = b.credits.val + t.amount.val)
     (hld : a.no_overdraft = true → d.val ≤ a.credits.val) (hlc : b.no_overcredit = true → k.val ≤ b.debits.val) :
     Inv (applyAll s [.PutAccount { a with debits := d }, .PutAccount { b with credits := k },
-      .PutTransfer (journalRow t a.currency)]) := by
+      .PutTransfer (journalRow t a.currency op)]) := by
   have ma := findAcc_mem ha
   have mb := findAcc_mem hb
   refine ⟨?_, fun c => ?_, ?_⟩
   · simp only [applyAll, List.foldl_cons, List.foldl_nil, applyWrite]
     exact fresh_upsert (a := { b with credits := k }) (fresh_upsert (a := { a with debits := d }) hinv.fresh
       (hinv.fresh a ma.1)) (hinv.fresh b mb.1)
-  · obtain ⟨e1, e2, e3⟩ := post_sums s t a b d k c ha hb hne htr hcur hd hk
+  · obtain ⟨e1, e2, e3⟩ := post_sums s t a b d k op c ha hb hne htr hcur hd hk
     obtain ⟨b1, b2⟩ := hinv.balanced c
     exact ⟨by rw [e1, e3, b1], by rw [e2, e3, b2]⟩
   · simp only [applyAll, List.foldl_cons, List.foldl_nil, applyWrite]
@@ -177,6 +177,6 @@ theorem inv_transfer (actor : Principal) (s : Snapshot) (t : TransferReq) ws r
   rcases post_of_ok (transfer_spec actor s t) h ws r rfl with
     ⟨old, _, _, _, _, _, hws, _⟩ | ⟨_, _, htr, hne, a, b, ha, _, hb, hcur, _, d, k, hd, hk, hld, hlc, hws⟩
   · rw [hws]; exact hinv
-  · rw [hws]; exact inv_post _ t a b d k hinv ha hb hne htr hcur hd hk hld hlc
+  · rw [hws]; exact inv_post _ t a b d k _ hinv ha hb hne htr hcur hd hk hld hlc
 
 end payment_ledger.Theorems

@@ -123,9 +123,9 @@ def sqlW : h5i_app_sql.Write → AWrite Val
 
 /-! ## `Payment` (table `payments`) -/
 
-/-- Columns `id`, `merchant`, `amount`, `currency`, `status`, `manual_capture`, `attempts`, `authorized`, `captured`, `refunded`, `refund_pending`. -/
+/-- Columns `id`, `merchant`, `amount`, `currency`, `status`, `manual_capture`, `attempts`, `authorized`, `captured`, `refunded`, `refund_pending`, `operator`. -/
 def Payment.row (x : Payment) : List Val :=
-  [int x.id.val, int x.merchant.val, int x.amount.val, int x.currency.val, int x.status.val, .Bool x.manual_capture, int x.attempts.val, int x.authorized.val, int x.captured.val, int x.refunded.val, int x.refund_pending.val]
+  [int x.id.val, int x.merchant.val, int x.amount.val, int x.currency.val, int x.status.val, .Bool x.manual_capture, int x.attempts.val, int x.authorized.val, int x.captured.val, int x.refunded.val, int x.refund_pending.val, int x.operator.val]
 
 def Payment.table : Nat := 0
 def Payment.keyLen : Nat := 1
@@ -140,6 +140,7 @@ def Payment.col_authorized : Nat := 7
 def Payment.col_captured : Nat := 8
 def Payment.col_refunded : Nat := 9
 def Payment.col_refund_pending : Nat := 10
+def Payment.col_operator : Nat := 11
 
 @[simp] theorem Payment.row_col_id (x : Payment) :
     (Payment.row x)[Payment.col_id]? = some (int x.id.val) := by
@@ -185,7 +186,11 @@ def Payment.col_refund_pending : Nat := 10
     (Payment.row x)[Payment.col_refund_pending]? = some (int x.refund_pending.val) := by
   simp [Payment.row, Payment.col_refund_pending]
 
-@[simp] theorem Payment.row_length (x : Payment) : (Payment.row x).length = 11 := rfl
+@[simp] theorem Payment.row_col_operator (x : Payment) :
+    (Payment.row x)[Payment.col_operator]? = some (int x.operator.val) := by
+  simp [Payment.row, Payment.col_operator]
+
+@[simp] theorem Payment.row_length (x : Payment) : (Payment.row x).length = 12 := rfl
 
 @[step] theorem Payment.to_row_spec (x : Payment) : Payment.to_row x ⦃ v => v.val = Payment.row x ⦄ := by
   have := usize_max_le
@@ -263,9 +268,9 @@ def Payment.delWhereA (col : Nat) (val : Val) : AWrite Val := .delWhere Payment.
 
 /-! ## `Refund` (table `refunds`) -/
 
-/-- Columns `id`, `payment`, `amount`, `status`. -/
+/-- Columns `id`, `payment`, `amount`, `status`, `operator`. -/
 def Refund.row (x : Refund) : List Val :=
-  [int x.id.val, int x.payment.val, int x.amount.val, int x.status.val]
+  [int x.id.val, int x.payment.val, int x.amount.val, int x.status.val, int x.operator.val]
 
 def Refund.table : Nat := 1
 def Refund.keyLen : Nat := 1
@@ -273,6 +278,7 @@ def Refund.col_id : Nat := 0
 def Refund.col_payment : Nat := 1
 def Refund.col_amount : Nat := 2
 def Refund.col_status : Nat := 3
+def Refund.col_operator : Nat := 4
 
 @[simp] theorem Refund.row_col_id (x : Refund) :
     (Refund.row x)[Refund.col_id]? = some (int x.id.val) := by
@@ -290,7 +296,11 @@ def Refund.col_status : Nat := 3
     (Refund.row x)[Refund.col_status]? = some (int x.status.val) := by
   simp [Refund.row, Refund.col_status]
 
-@[simp] theorem Refund.row_length (x : Refund) : (Refund.row x).length = 4 := rfl
+@[simp] theorem Refund.row_col_operator (x : Refund) :
+    (Refund.row x)[Refund.col_operator]? = some (int x.operator.val) := by
+  simp [Refund.row, Refund.col_operator]
+
+@[simp] theorem Refund.row_length (x : Refund) : (Refund.row x).length = 5 := rfl
 
 @[step] theorem Refund.to_row_spec (x : Refund) : Refund.to_row x ⦃ v => v.val = Refund.row x ⦄ := by
   have := usize_max_le
@@ -368,14 +378,15 @@ def Refund.delWhereA (col : Nat) (val : Val) : AWrite Val := .delWhere Refund.ta
 
 /-! ## `Event` (table `psp_events`) -/
 
-/-- Columns `id`, `payment`. -/
+/-- Columns `id`, `payment`, `operator`. -/
 def Event.row (x : Event) : List Val :=
-  [int x.id.val, int x.payment.val]
+  [int x.id.val, int x.payment.val, int x.operator.val]
 
 def Event.table : Nat := 2
 def Event.keyLen : Nat := 1
 def Event.col_id : Nat := 0
 def Event.col_payment : Nat := 1
+def Event.col_operator : Nat := 2
 
 @[simp] theorem Event.row_col_id (x : Event) :
     (Event.row x)[Event.col_id]? = some (int x.id.val) := by
@@ -385,7 +396,11 @@ def Event.col_payment : Nat := 1
     (Event.row x)[Event.col_payment]? = some (int x.payment.val) := by
   simp [Event.row, Event.col_payment]
 
-@[simp] theorem Event.row_length (x : Event) : (Event.row x).length = 2 := rfl
+@[simp] theorem Event.row_col_operator (x : Event) :
+    (Event.row x)[Event.col_operator]? = some (int x.operator.val) := by
+  simp [Event.row, Event.col_operator]
+
+@[simp] theorem Event.row_length (x : Event) : (Event.row x).length = 3 := rfl
 
 @[step] theorem Event.to_row_spec (x : Event) : Event.to_row x ⦃ v => v.val = Event.row x ⦄ := by
   have := usize_max_le
@@ -463,14 +478,15 @@ def Event.delWhereA (col : Nat) (val : Val) : AWrite Val := .delWhere Event.tabl
 
 /-! ## `PspRef` (table `psp_refs`) -/
 
-/-- Columns `payment`, `reference`. -/
+/-- Columns `payment`, `reference`, `operator`. -/
 def PspRef.row (x : PspRef) : List Val :=
-  [int x.payment.val, .Bytes x.reference]
+  [int x.payment.val, .Bytes x.reference, int x.operator.val]
 
 def PspRef.table : Nat := 3
 def PspRef.keyLen : Nat := 1
 def PspRef.col_payment : Nat := 0
 def PspRef.col_reference : Nat := 1
+def PspRef.col_operator : Nat := 2
 
 @[simp] theorem PspRef.row_col_payment (x : PspRef) :
     (PspRef.row x)[PspRef.col_payment]? = some (int x.payment.val) := by
@@ -480,7 +496,11 @@ def PspRef.col_reference : Nat := 1
     (PspRef.row x)[PspRef.col_reference]? = some (.Bytes x.reference) := by
   simp [PspRef.row, PspRef.col_reference]
 
-@[simp] theorem PspRef.row_length (x : PspRef) : (PspRef.row x).length = 2 := rfl
+@[simp] theorem PspRef.row_col_operator (x : PspRef) :
+    (PspRef.row x)[PspRef.col_operator]? = some (int x.operator.val) := by
+  simp [PspRef.row, PspRef.col_operator]
+
+@[simp] theorem PspRef.row_length (x : PspRef) : (PspRef.row x).length = 3 := rfl
 
 @[step] theorem PspRef.to_row_spec (x : PspRef) : PspRef.to_row x ⦃ v => v.val = PspRef.row x ⦄ := by
   have := usize_max_le
@@ -604,22 +624,22 @@ macro "row_tac" : tactic => `(tactic| (
 
 theorem Payment.from_row_spec (x : Payment) (v : alloc.vec.Vec Val) (h : v.val = Payment.row x) :
     Payment.from_row v ⦃ o => o = some x ⦄ := by
-  have hl : v.length = 11 := by simp [alloc.vec.Vec.length, h, Payment.row]
+  have hl : v.length = 12 := by simp [alloc.vec.Vec.length, h, Payment.row]
   unfold Payment.from_row; row_tac
 
 theorem Refund.from_row_spec (x : Refund) (v : alloc.vec.Vec Val) (h : v.val = Refund.row x) :
     Refund.from_row v ⦃ o => o = some x ⦄ := by
-  have hl : v.length = 4 := by simp [alloc.vec.Vec.length, h, Refund.row]
+  have hl : v.length = 5 := by simp [alloc.vec.Vec.length, h, Refund.row]
   unfold Refund.from_row; row_tac
 
 theorem Event.from_row_spec (x : Event) (v : alloc.vec.Vec Val) (h : v.val = Event.row x) :
     Event.from_row v ⦃ o => o = some x ⦄ := by
-  have hl : v.length = 2 := by simp [alloc.vec.Vec.length, h, Event.row]
+  have hl : v.length = 3 := by simp [alloc.vec.Vec.length, h, Event.row]
   unfold Event.from_row; row_tac
 
 theorem PspRef.from_row_spec (x : PspRef) (v : alloc.vec.Vec Val) (h : v.val = PspRef.row x) :
     PspRef.from_row v ⦃ o => o = some x ⦄ := by
-  have hl : v.length = 2 := by simp [alloc.vec.Vec.length, h, PspRef.row]
+  have hl : v.length = 3 := by simp [alloc.vec.Vec.length, h, PspRef.row]
   unfold PspRef.from_row; row_tac
 
 theorem Counter.from_row_spec (x : Counter) (v : alloc.vec.Vec Val) (h : v.val = Counter.row x) :

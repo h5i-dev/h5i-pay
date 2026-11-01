@@ -101,13 +101,19 @@ committed history is such a sequence.
    orchestrator in `payment-api` and the PSP connectors are trusted. The
    kernel's theorems hold for every command, so a decoding bug can do no more
    than a client could ask for.
-6. **Identity.** User 0 of a tenant is its operator (`payment_storage::*::principal`).
-   Since SEC-02 only a token signed with the operator key
-   (`H5I_PAY_OPERATOR_SECRET`) becomes user 0; user-key tokens for user 0 are
-   refused (`payment_api::auth`). Whoever holds the operator key can act as
-   any tenant's operator; whoever holds the user key can act as any user.
-   The kernels do not see which operator acted: that is in the API's
-   `operator request` log line only.
+6. **Identity.** The kernels' principal is `Actor::User(id)` or
+   `Actor::Operator(id)` of a tenant (`payment_storage::*::{user, operator}`).
+   Only a token signed with the operator key (`H5I_PAY_OPERATOR_SECRET`)
+   becomes an operator, under the id in the token (≥ 1, below 2^62);
+   user-key tokens for user 0 are refused (`payment_api::auth`). Whoever
+   holds the operator key can act as any tenant's operator under any
+   non-system id; whoever holds the user key can act as any user. Ids from
+   2^62 up are the system's in-process operators (orchestrator, recovery,
+   export) and are trusted to be used only by that code. Given the
+   principal, the kernels prove who may do what and that every row records
+   the acting operator's id (`transfers_record_operator`,
+   `writes_record_operator`); that the principal names the right person is
+   the token's job.
 
 ## Not proven (known limits)
 

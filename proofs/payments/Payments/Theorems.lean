@@ -112,9 +112,9 @@ theorem inv_refund (s : St) (rf rf' : Refund) (hinv : Inv s) (hr : findRefund s 
   exact fresh_upsert (key := Refund.id) hinv.fresh_refund (by rw [he]; exact hinv.fresh_refund rf m.1)
 
 /-- Recording a PSP result keeps the invariant and steps statuses. -/
-theorem record_effect (s : St) (id : Nat) (ws : List Write) (hinv : Inv s) (h : RecordWrites s id ws) :
+theorem record_effect (s : St) (op : U64) (id : Nat) (ws : List Write) (hinv : Inv s) (h : RecordWrites s op id ws) :
     Inv (applyAll s ws) ∧ Stepped s (applyAll s ws) := by
-  rcases h with rfl | ⟨p, hp, (rfl | ⟨p', rfl, hs⟩) | ⟨refund, rfl | ⟨rf, rf', p', hrf, he, rfl, hs⟩⟩⟩
+  rcases h with rfl | ⟨p, hp, (rfl | ⟨p', rfl, hs, _⟩) | ⟨refund, rfl | ⟨rf, rf', p', hrf, he, rfl, hs, _, _⟩⟩⟩
   · exact ⟨hinv, Stepped.refl _⟩
   · exact ⟨hinv, Stepped.refl _⟩
   · have hp' : findPay s p'.id.val = some p := by rw [hs.1, (findPay_mem hp).2]; exact hp
@@ -161,7 +161,7 @@ theorem effect (a : Principal) (s : Snapshot) (c : Command) ws r
     · exact fun b hb => by have := hinv.fresh_refund b hb; simp [Snapshot.toSt] at *; omega
     · exact payInv_upsert hinv.amounts (by simp [PayInv, CREATED])
     · intro m q hq
-      have := findPay_put (Snapshot.toSt s) ⟨s.counter.next_id, a.user, amt, cur, CREATED, mc, 0#u64, 0#u64, 0#u64, 0#u64, 0#u64⟩ m
+      have := findPay_put (Snapshot.toSt s) ⟨s.counter.next_id, a.user, amt, cur, CREATED, mc, 0#u64, 0#u64, 0#u64, 0#u64, 0#u64, a.opId⟩ m
       simp only [applyWrite] at this
       simp only [findPay] at hq this
       rw [this] at hq
@@ -173,16 +173,16 @@ theorem effect (a : Principal) (s : Snapshot) (c : Command) ws r
       · exact .inl ⟨q, hq, .inl rfl⟩
   | BeginAuthorize id =>
     obtain ⟨p, hp, hw⟩ := post_of_ok (begin_authorize_spec a s id) h ws r rfl
-    exact record_effect _ id.val _ hinv (Or.inr ⟨p, hp, Or.inl hw⟩)
+    exact record_effect _ _ id.val _ hinv (Or.inr ⟨p, hp, Or.inl hw⟩)
   | Cancel id =>
     obtain ⟨p, hp, hw⟩ := post_of_ok (cancel_spec a s id) h ws r rfl
-    exact record_effect _ id.val _ hinv (Or.inr ⟨p, hp, Or.inl hw⟩)
+    exact record_effect _ _ id.val _ hinv (Or.inr ⟨p, hp, Or.inl hw⟩)
   | RequestRefund id amt =>
-    obtain ⟨p, p', n, hp, hs, hn, hws⟩ := post_of_ok (request_refund_spec a s id amt) h ws r rfl
+    obtain ⟨p, p', n, hp, hs, _, hn, hws⟩ := post_of_ok (request_refund_spec a s id amt) h ws r rfl
     rw [hws]
     have m := findPay_mem hp
     have hp' : findPay (Snapshot.toSt s) p'.id.val = some p := by rw [hs.1, m.2]; exact hp
-    let rf : Refund := ⟨s.counter.next_id, p.id, amt, REFUND_PENDING⟩
+    let rf : Refund := ⟨s.counter.next_id, p.id, amt, REFUND_PENDING, a.opId⟩
     let s1 := applyWrite (Snapshot.toSt s) (.PutRefund rf)
     have hp1 : findPay s1 p'.id.val = some p := hp'
     have hs1 := stepped_put s1 p p' hp1 hs
@@ -199,14 +199,14 @@ theorem effect (a : Principal) (s : Snapshot) (c : Command) ws r
     · intro k q hq
       exact hs1 k q hq
   | Record id res =>
-    exact record_effect _ id.val _ hinv (post_of_ok (record_spec a s id res) h ws r rfl)
+    exact record_effect _ _ id.val _ hinv (post_of_ok (record_spec a s id res) h ws r rfl)
   | Event ev id res =>
     rcases post_of_ok (event_spec a s ev id res) h ws r rfl with ⟨_, hws, _⟩ | ⟨_, w0, hw0, hws⟩
     · exact nothing hws
     · rw [hws]
-      exact quiet_effect _ w0 _ (by simp [Quiet]) (record_effect _ id.val w0 hinv hw0)
+      exact quiet_effect _ w0 _ (by simp [Quiet]) (record_effect _ _ id.val w0 hinv hw0)
   | AttachRef pay ref =>
-    rcases attach_ref_writes a s pay ref ws r h with hws | ⟨x, hws⟩
+    rcases (attach_ref_writes a s pay ref ws r h).2 with hws | ⟨x, hws, _⟩
     · exact nothing hws
     · rw [hws, show [Write.PutRef x] = [] ++ [Write.PutRef x] from rfl]
       exact quiet_effect _ [] _ (by simp [Quiet]) ⟨hinv, Stepped.refl _⟩
@@ -289,5 +289,96 @@ theorem event_dedup (a : Principal) (s : Snapshot) (ev id : U64) (res : PspResul
   rcases post_of_ok (event_spec a s ev id res) h ws r rfl with ⟨_, hws, hr⟩ | ⟨hn, _⟩
   · exact ⟨hws, hr⟩
   · exact absurd hn hseen
+
+/-! ## Operators (SEC-02) -/
+
+theorem record_operator (a : Principal) (s : Snapshot) (id : U64) (res : PspResult) x
+    (h : record a s id res = ok (.Ok x)) : a.operator = true := by
+  cases ho : a.operator
+  · simp [record, ho] at h
+  · rfl
+
+theorem event_operator (a : Principal) (s : Snapshot) (ev id : U64) (res : PspResult) x
+    (h : event a s ev id res = ok (.Ok x)) : a.operator = true := by
+  cases ho : a.operator
+  · simp [event, ho] at h
+  · rfl
+
+/-- **Only operators record what the PSP said.** `Record`, `Event` and
+`AttachRef` succeed only when an operator (`Actor.Operator`) sends them;
+a user's command is refused (`Forbidden`) and writes nothing. -/
+theorem operator_only (a : Principal) (s : Snapshot) (c : Command) ws r
+    (hc : (∃ id res, c = .Record id res) ∨ (∃ ev id res, c = .Event ev id res) ∨ (∃ id ref, c = .AttachRef id ref))
+    (h : transition a s c = .ok (.Ok (ws, r))) : ∃ o, a.actor = .Operator o := by
+  apply (operator_iff a).1
+  rcases hc with ⟨id, res, rfl⟩ | ⟨ev, id, res, rfl⟩ | ⟨id, ref, rfl⟩
+  · exact record_operator a s id res _ h
+  · exact event_operator a s ev id res _ h
+  · exact (attach_ref_writes a s id ref ws r h).1
+
+/-- Writes that record operator `op` on every row they write. -/
+def Records (op : U64) (ws : List Write) : Prop := ∀ w ∈ ws, ∀ o, w.recorded = some o → o = op
+
+theorem records_nil (op : U64) : Records op [] := by simp [Records]
+
+theorem records_step {op : U64} {p : Payment} {ws : List Write} (h : StepWrites op p ws) : Records op ws := by
+  rcases h with rfl | ⟨p', rfl, _, hp⟩
+  · exact records_nil op
+  · intro w hw o ho; simp at hw; subst hw; simp [Write.recorded] at ho; rw [← ho, hp]
+
+theorem records_record {s : St} {op : U64} {id : Nat} {ws : List Write} (h : RecordWrites s op id ws) :
+    Records op ws := by
+  rcases h with rfl | ⟨p, _, hs | ⟨refund, rfl | ⟨rf, rf', p', _, _, rfl, _, h1, h2⟩⟩⟩
+  · exact records_nil op
+  · exact records_step hs
+  · exact records_nil op
+  · intro w hw o ho
+    simp at hw
+    rcases hw with rfl | rfl <;> simp [Write.recorded] at ho <;> rw [← ho] <;> assumption
+
+/-- **Every row records who wrote it.** Each row a successful command
+writes (payment, refund, event, PSP reference) carries the caller's
+operator id: the operator's own id for `Actor.Operator o`, 0 for a user.
+Operators are told apart in the stored state, and nothing a user does is
+attributed to an operator. -/
+theorem writes_record_operator (a : Principal) (s : Snapshot) (c : Command) ws r
+    (h : transition a s c = .ok (.Ok (ws, r))) : Records a.opId ws.val := by
+  cases c with
+  | Create amt cur mc =>
+    obtain ⟨n, hn, hws⟩ := post_of_ok (create_spec a s amt cur mc) h ws r rfl
+    rw [hws]; intro w hw o ho; simp at hw
+    rcases hw with rfl | rfl <;> simp [Write.recorded] at ho; rw [← ho]
+  | BeginAuthorize id =>
+    obtain ⟨p, _, hw⟩ := post_of_ok (begin_authorize_spec a s id) h ws r rfl
+    exact records_step hw
+  | Cancel id =>
+    obtain ⟨p, _, hw⟩ := post_of_ok (cancel_spec a s id) h ws r rfl
+    exact records_step hw
+  | RequestRefund id amt =>
+    obtain ⟨p, p', n, _, _, hop, _, hws⟩ := post_of_ok (request_refund_spec a s id amt) h ws r rfl
+    rw [hws]; intro w hw o ho; simp at hw
+    rcases hw with rfl | rfl | rfl <;> simp [Write.recorded] at ho <;> rw [← ho]; exact hop
+  | Record id res => exact records_record (post_of_ok (record_spec a s id res) h ws r rfl)
+  | Event ev id res =>
+    rcases post_of_ok (event_spec a s ev id res) h ws r rfl with ⟨_, hws, _⟩ | ⟨_, w0, hw0, hws⟩
+    · rw [hws]; exact records_nil _
+    · rw [hws]; intro w hw o ho
+      rcases List.mem_append.1 hw with hw | hw
+      · exact records_record hw0 w hw o ho
+      · simp at hw; subst hw; simp [Write.recorded] at ho; rw [← ho]
+  | AttachRef pay ref =>
+    rcases (attach_ref_writes a s pay ref ws r h).2 with hws | ⟨x, hws, hx⟩
+    · rw [hws]; exact records_nil _
+    · rw [hws]; intro w hw o ho; simp at hw; subst hw; simp [Write.recorded] at ho; rw [← ho, hx]
+  | Get id => rw [get_writes a s id ws r h]; exact records_nil _
+  | List =>
+    simp only [transition] at h
+    obtain ⟨v, -, hv⟩ := bind_tc_eq_ok.1 h
+    simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at hv
+    rw [← hv.1]; exact records_nil _
+  | GetRefund id => rw [get_refund_writes a s id ws r h]; exact records_nil _
+  | Refunds id => rw [refunds_of_writes a s id ws r h]; exact records_nil _
+  | GetRef id => rw [get_ref_writes a s id ws r h]; exact records_nil _
+  | View id => rw [view_writes a s id ws r h]; exact records_nil _
 
 end payment_domain.Theorems

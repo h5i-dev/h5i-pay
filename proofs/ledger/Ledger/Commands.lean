@@ -38,11 +38,12 @@ attribute [simp] u64_val_eq
 @[step] theorem may_debit_spec (actor : Principal) (a : Account) :
     may_debit actor a ⦃ b => b = true ↔ (actor.operator = true ∨ a.owner = actor.user) ⦄ := by
   unfold may_debit
+  simp only [is_operator_eq, user_of_eq, bind_tc_ok, bind_ok]
   cases h : actor.operator <;> simp
 
 theorem may_debit_spec' (actor : Principal) (a : Account) :
     may_debit actor a ⦃ b => b = (actor.operator || decide (a.owner = actor.user)) ⦄ := by
-  unfold may_debit; cases actor.operator <;> simp
+  unfold may_debit; simp only [is_operator_eq, user_of_eq, bind_tc_ok, bind_ok]; cases actor.operator <;> simp
 
 theorem same_transfer_spec' (old : Transfer) (t : TransferReq) :
     same_transfer old t ⦃ b => b = (decide (old.debit = t.debit) && decide (old.credit = t.credit) &&
@@ -64,20 +65,20 @@ theorem findAcc_eq (s : Snapshot) (id : U64) :
 theorem findTr_eq (s : Snapshot) (id : U64) :
     s.transfers.val.find? (fun t => t.id.val = id.val) = findTr (Snapshot.toSt s) id.val := rfl
 
-/-- The journal row a posting writes. -/
-def journalRow (t : TransferReq) (cur : U32) : Transfer :=
-  { id := t.id, debit := t.debit, credit := t.credit, amount := t.amount, currency := cur, code := t.code }
+/-- The journal row a posting by operator `op` (0: a user) writes. -/
+def journalRow (t : TransferReq) (cur : U32) (op : U64) : Transfer :=
+  { id := t.id, debit := t.debit, credit := t.credit, amount := t.amount, currency := cur, code := t.code, operator := op }
 
 /-- The arithmetic of a posting: same currency, the debit account's debits
 and the credit account's credits both grow by the amount, within limits. -/
-@[step] theorem post_spec (s : Snapshot) (t : TransferReq) (a b : Account) :
-    post s t a b ⦃ r => ∀ ws rep, r = .Ok (ws, rep) →
+@[step] theorem post_spec (s : Snapshot) (t : TransferReq) (a b : Account) (op : U64) :
+    post s t a b op ⦃ r => ∀ ws rep, r = .Ok (ws, rep) →
       a.currency = b.currency ∧ rep = .Posted t.id ∧
       ∃ d c : U64, d.val = a.debits.val + t.amount.val ∧ c.val = b.credits.val + t.amount.val ∧
         (a.no_overdraft = true → d.val ≤ a.credits.val) ∧
         (b.no_overcredit = true → c.val ≤ b.debits.val) ∧
         ws.val = [.PutAccount { a with debits := d }, .PutAccount { b with credits := c },
-          .PutTransfer (journalRow t a.currency)] ⦄ := by
+          .PutTransfer (journalRow t a.currency op)] ⦄ := by
   unfold post
   step*
   all_goals try (simp only [core.num.U64.MAX, U64.rMax] at *; scalar_tac)
@@ -95,6 +96,7 @@ theorem open_spec (actor : Principal) (s : Snapshot) (owner : U64) (cur code : U
         ws.val = [.PutAccount ⟨s.ledger.next_account, owner, cur, code, nod, noc, 0#u64, 0#u64⟩,
           .SetLedger ⟨n⟩] ⦄ := by
   unfold «open»
+  simp only [is_operator_eq, user_of_eq, bind_tc_ok, bind_ok]
   cases hop : actor.operator <;> cases nod <;> cases noc <;> simp only [Bool.false_eq_true, ↓reduceIte] <;>
     step* <;> simp_all [core.num.U64.MAX, U64.rMax] <;> scalar_tac
 
@@ -114,7 +116,7 @@ theorem transfer_spec (actor : Principal) (s : Snapshot) (t : TransferReq) :
             (a.no_overdraft = true → d.val ≤ a.credits.val) ∧
             (b.no_overcredit = true → c.val ≤ b.debits.val) ∧
             ws.val = [.PutAccount { a with debits := d }, .PutAccount { b with credits := c },
-              .PutTransfer (journalRow t a.currency)]) ⦄ := by
+              .PutTransfer (journalRow t a.currency actor.opId)]) ⦄ := by
   unfold transfer
   have hA := find_account_spec s.accounts t.debit
   have hB := find_account_spec s.accounts t.credit
@@ -156,7 +158,8 @@ theorem transfer_spec (actor : Principal) (s : Snapshot) (t : TransferReq) :
         | none => simp
         | some b =>
           simp only []
-          apply WP.spec_mono (post_spec s t a b)
+          simp only [operator_of_eq, bind_tc_ok, bind_ok]
+          apply WP.spec_mono (post_spec s t a b actor.opId)
           intro r hr ws rep h
           obtain ⟨hcur, hrep, d, c, hd, hc, hld, hlc, hws⟩ := hr ws rep h
           right

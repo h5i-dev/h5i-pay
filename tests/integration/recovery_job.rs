@@ -55,8 +55,8 @@ async fn scheduled_recovery_covers_every_tenant() {
     // was lost (a crash between the two): the kernel says CAPTURED, the
     // ledger has nothing.
     let d_t = fresh_tenant();
-    let m = payment_domain::Principal { org: d_t, user: 7, operator: false };
-    let opd = payment_domain::Principal { org: d_t, user: 0, operator: true };
+    let m = payment_domain::Principal { org: d_t, actor: payment_domain::Actor::User(7) };
+    let opd = payment_domain::Principal { org: d_t, actor: payment_domain::Actor::Operator(1) };
     use payment_domain::{Command as C, PspResult as R, Reply};
     assert_eq!(payments.execute(&m, &C::Create { amount: 500, currency: 392, manual_capture: false }).await.unwrap(), Ok(Reply::Created(0)));
     payments.execute(&opd, &C::BeginAuthorize { id: 0 }).await.unwrap().unwrap();

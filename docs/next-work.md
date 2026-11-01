@@ -137,3 +137,58 @@ Aeneas extracts.
 
 D, then B1–B2, then A, then B3–B4 and C, then E. Work autonomously; do not
 wait for confirmation between items.
+
+## F. Second round (after A–E)
+
+Same ground rules as above. Do these in order; tick each off here and in
+PROGRESS.md as it lands.
+
+1. [x] **Finish SEC-02: operators distinct inside the kernels.** Today every
+   operator token maps to kernel principal `(tenant, 0)` and the operator id
+   is only logged (`crates/payment-api/src/auth.rs`, `PayAuth::authenticate`).
+   Make the kernels' principal carry who acts (user vs operator, and the
+   operator id), record the operator id on what operators do (e.g. on the
+   ledger transfers and payment records they cause, or an audit field), and
+   keep authorization proven: re-state and re-prove
+   `only_owner_or_operator_debits`, the payment kernel's operator-only
+   commands, and SEC-03's `replay_needs_debit_right` for the new principal;
+   add mutants for "any user acts as operator" and "operator id dropped".
+   The in-process orchestrator and the recovery job act as a named system
+   operator. Update `docs/security-review.md` (close SEC-02 or say exactly
+   what remains) and the runbooks.
+2. [ ] **Per-payment "ledger complete" marker.** `recovery_work`'s anti-join
+   on the ledger's transfer ids costs O(captured payments) every pass (852 ms
+   at 100k payments with nothing to fix, `docs/benchmarks.md` B4). Record in
+   the payment kernel when a payment's ledger postings are all done (set by
+   the orchestrator after a successful sync, cleared by anything that needs
+   new postings, e.g. a refund), index it, and make recovery O(unfinished).
+   Prove that a payment marked complete has no postings missing under the
+   kernel's own rules (or state precisely what the marker guarantees), and
+   that recovery still finds every payment that needs work. Re-measure.
+3. [ ] **Pagination.** `List` (payments) and `Accounts` (ledger) return
+   everything; ledger batches over 64 transfers fall back to a whole-tenant
+   load. Add cursor pagination (by key, with a limit and a hard maximum) to
+   the kernel commands and the HTTP routes, with read plans and frame
+   theorems for the paged reads, and remove or bound the whole-tenant
+   fallback for large batches (e.g. split, or a plan that covers them).
+   Update clients in the orchestrator, recovery, export and tests.
+4. [ ] **Serialization retries.** 8 concurrent clients cause 88–132 retries
+   per 200 payments (B4). Find which transactions conflict (log retry
+   causes; check the per-key `lock_for` plans, shared rows like system
+   accounts and counters, and read plans that read more than they need),
+   reduce them (advisory locks on the hot keys, narrower plans, fewer
+   shared counters), and re-measure throughput and retries at 10k and 100k
+   payments with 8 and 32 clients. Correctness stays SERIALIZABLE.
+5. [ ] **Prove the hash join.** `docs/proof-assumptions.md` "Not proven":
+   the reconciliation join (single-thread open addressing, the multithread
+   radix partition, and the GPU's build/probe) is checked only by
+   differential tests. Write the join as Rust that Aeneas extracts (at least
+   the single-thread engine, and the per-partition join used by the
+   multithread and GPU paths if it can share source), and prove it equal to
+   the `BTreeMap` reference specification (same code for every row, both
+   sides). If the GPU's atomic build cannot be covered, prove the
+   sequential algorithm it implements and say so. Mutants for wrong
+   duplicate counting and wrong first-row choice. Update proof-assumptions.
+
+After F, re-run the full checks and the B4 end-to-end benchmarks, update
+`docs/benchmarks.md`, and report what was proven, measured, and left open.

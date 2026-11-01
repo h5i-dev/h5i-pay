@@ -5,7 +5,7 @@ use h5i_app_http::HmacAuth;
 use h5i_pay_tests::{keys, operator_token, user_token, USER_SECRET};
 use h5i_app_pg::EngineConfig;
 use h5i_pay_tests::{database_url, fresh_tenant};
-use payment_storage::ledger::{principal, LedgerApp};
+use payment_storage::ledger::{user as principal, LedgerApp};
 use serde_json::{json, Value};
 
 
@@ -149,4 +149,27 @@ async fn the_user_key_cannot_mint_an_operator() {
     assert_eq!(s.ledger(&operator_token(fresh_tenant()), json!({"cmd": "accounts"}), None).await, (200, json!([])));
     let (st, accts) = s.ledger(&op, json!({"cmd": "accounts"}), None).await;
     assert_eq!((st, accts.as_array().map(Vec::len)), (200, Some(2)));
+}
+
+/// SEC-02: operators are distinct inside the ledger kernel, and the journal
+/// records which operator posted each transfer (0 for a user).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_journal_names_the_operator() {
+    let Some(url) = database_url() else { return };
+    let s = start(&url).await;
+    let a = fresh_tenant();
+    let (op3, op4, user) = (h5i_pay_tests::operator_token_for(a, 3), h5i_pay_tests::operator_token_for(a, 4), user_token(a, 5));
+    assert_eq!(s.ledger(&op3, json!({"cmd": "open", "currency": 392}), None).await, (200, json!({"id": 0})));
+    assert_eq!(s.ledger(&user, json!({"cmd": "open", "currency": 392}), None).await, (200, json!({"id": 1})));
+    assert_eq!(s.ledger(&op3, json!({"cmd": "transfer", "id": 1, "debit": 0, "credit": 1, "amount": 10}), None).await.0, 200);
+    assert_eq!(s.ledger(&op4, json!({"cmd": "transfer", "id": 2, "debit": 0, "credit": 1, "amount": 10}), None).await.0, 200);
+    assert_eq!(s.ledger(&user, json!({"cmd": "transfer", "id": 3, "debit": 1, "credit": 0, "amount": 5}), None).await.0, 200);
+    // Operator 4 replaying operator 3's transfer gets the replay; the row keeps 3.
+    let replay = json!({"cmd": "transfer", "id": 1, "debit": 0, "credit": 1, "amount": 10});
+    assert_eq!(s.ledger(&op4, replay, None).await, (200, json!({"id": 1, "status": "exists"})));
+    let (st, ts) = s.ledger(&op4, json!({"cmd": "transfers"}), None).await;
+    assert_eq!(st, 200);
+    let mut by: Vec<(u64, u64)> = ts.as_array().unwrap().iter().map(|t| (t["id"].as_u64().unwrap(), t["operator"].as_u64().unwrap())).collect();
+    by.sort();
+    assert_eq!(by, vec![(1, 3), (2, 4), (3, 0)]);
 }

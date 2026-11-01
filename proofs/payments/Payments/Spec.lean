@@ -18,6 +18,42 @@ amount, and nothing is refunded or reserved unless the payment is captured.
 -/
 open Aeneas Aeneas.Std payment_domain
 
+/-! ## Who acts
+
+The kernel's principal says who acts: `Actor.User u` or `Actor.Operator o`.
+`a.operator` and `a.user` read it as the kernel's `is_operator` and
+`user_of` do (an operator's `user` is 0, only consulted after
+`a.operator`); `a.opId` is the operator id the kernel records on the rows
+it writes (`operator_of`: 0 for a user). -/
+
+def payment_domain.Principal.operator (a : Principal) : Bool :=
+  match a.actor with
+  | .User _ => false
+  | .Operator _ => true
+
+def payment_domain.Principal.user (a : Principal) : U64 :=
+  match a.actor with
+  | .User u => u
+  | .Operator _ => 0#u64
+
+def payment_domain.Principal.opId (a : Principal) : U64 :=
+  match a.actor with
+  | .User _ => 0#u64
+  | .Operator o => o
+
+@[simp] theorem is_operator_eq (a : Principal) : is_operator a = .ok a.operator := by
+  unfold is_operator Principal.operator; cases a.actor <;> rfl
+
+@[simp] theorem user_of_eq (a : Principal) : user_of a = .ok a.user := by
+  unfold user_of Principal.user; cases a.actor <;> rfl
+
+@[simp] theorem operator_of_eq (a : Principal) : operator_of a = .ok a.opId := by
+  unfold operator_of Principal.opId; cases a.actor <;> rfl
+
+theorem operator_iff (a : Principal) : a.operator = true ↔ ∃ o, a.actor = .Operator o := by
+  rcases a with ⟨org, act⟩
+  cases act <;> simp [Principal.operator]
+
 namespace payment_domain.Spec
 
 structure St where
@@ -60,6 +96,15 @@ def applyWrite (s : St) : Write → St
   | .SetCounter c => { s with next := c.next_id.val }
 
 def applyAll (s : St) (ws : List Write) : St := ws.foldl applyWrite s
+
+/-- The operator id a write records on its row (`none` for the counter,
+which records none). -/
+def _root_.payment_domain.Write.recorded : Write → Option U64
+  | .PutPayment p => some p.operator
+  | .PutRefund r => some r.operator
+  | .PutEvent e => some e.operator
+  | .PutRef r => some r.operator
+  | .SetCounter _ => none
 
 /-- Facts that hold in every reachable state. -/
 structure Inv (s : St) : Prop where

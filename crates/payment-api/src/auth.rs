@@ -8,20 +8,25 @@
 //!   user 0 is refused, so no user token can act as the tenant operator.
 //! * **Operator tokens** (support staff, reconciliation, recovery by hand),
 //!   signed with the operator key (`H5I_PAY_OPERATOR_SECRET`). The token's
-//!   user field is the operator's own id, logged on every request
-//!   (`operator request`); the kernels see the tenant's operator principal.
+//!   user field is the operator's own id (1 to [`SYSTEM_OPERATORS`] − 1),
+//!   logged on every request (`operator request`) and passed to the kernels
+//!   as `Actor::Operator(id)`: they record it on every row the operator
+//!   writes (ledger transfers, payments, refunds, events, PSP references).
 //!   They are short-lived: at most [`MAX_OPERATOR_TTL`].
 //!
 //! Holding the user key no longer mints operators, and the operator key can
 //! be kept from everything that only issues user tokens. Each key may have a
 //! previous value (`…_PREVIOUS`) that still verifies, for rotation without
 //! downtime (`docs/runbooks/secret-rotation.md`); new tokens always use the
-//! current value. The orchestrator and the scheduled recovery job act as
-//! the operator in-process and need no token.
+//! current value. The orchestrator, the scheduled recovery job and the
+//! export act in process as named system operators
+//! ([`payment_storage::ORCHESTRATOR_OPERATOR`], …, ids from
+//! [`SYSTEM_OPERATORS`] up) and need no token; no token can carry those ids.
 
 use h5i_app_core::Kernel;
 use h5i_app_http::{AuthError, Authenticator, HmacAuth};
 use payment_storage::{ledger::LedgerApp, payments::PaymentsApp};
+pub use payment_storage::SYSTEM_OPERATORS;
 
 /// Operator tokens live at most this long (12 hours).
 pub const MAX_OPERATOR_TTL: u64 = 12 * 3600;
@@ -75,7 +80,7 @@ impl Keys {
 
     fn signer(key: &[u8]) -> HmacAuth<LedgerApp> {
         // Tokens do not depend on the kernel; the principal is not used to issue.
-        HmacAuth::new(key.to_vec(), payment_storage::ledger::principal)
+        HmacAuth::new(key.to_vec(), payment_storage::ledger::user)
     }
 
     /// A user token for `user` (≥ 1) of `tenant`, with the current user key.
@@ -101,6 +106,9 @@ impl Keys {
             if op == 0 {
                 return Err(AuthError("operator ids start at 1".into()));
             }
+            if op >= SYSTEM_OPERATORS {
+                return Err(AuthError("operator id is reserved for the system".into()));
+            }
             return Ok(Caller::Operator { tenant, operator_id: op });
         }
         if let Some((tenant, user)) = first_valid(&self.user, token)? {
@@ -112,9 +120,10 @@ impl Keys {
         Err(AuthError("bad signature".into()))
     }
 
-    /// The authenticator for kernel `K`, mapping callers with `principal`.
-    pub fn authenticator<K: Kernel>(&self, principal: fn(u64, u64) -> K::Principal) -> PayAuth<K> {
-        PayAuth { keys: self.clone(), principal }
+    /// The authenticator for kernel `K`: users map with `user`, operators
+    /// with `operator` (tenant, operator id).
+    pub fn authenticator<K: Kernel>(&self, user: fn(u64, u64) -> K::Principal, operator: fn(u64, u64) -> K::Principal) -> PayAuth<K> {
+        PayAuth { keys: self.clone(), user, operator }
     }
 }
 
@@ -132,6 +141,9 @@ pub fn issue_user(user_key: &[u8], tenant: u64, user: u64, ttl_secs: u64) -> Res
 pub fn issue_operator(operator_key: &[u8], tenant: u64, operator_id: u64, ttl_secs: u64) -> Result<String, String> {
     if operator_id == 0 {
         return Err("operator ids start at 1".into());
+    }
+    if operator_id >= SYSTEM_OPERATORS {
+        return Err(format!("operator ids from {SYSTEM_OPERATORS} up are the system's own"));
     }
     if ttl_secs > MAX_OPERATOR_TTL {
         return Err(format!("operator tokens live at most {MAX_OPERATOR_TTL} s"));
@@ -174,7 +186,8 @@ pub enum Caller {
 /// An h5i-app [`Authenticator`] over [`Keys`].
 pub struct PayAuth<K: Kernel> {
     keys: Keys,
-    principal: fn(u64, u64) -> K::Principal,
+    user: fn(u64, u64) -> K::Principal,
+    operator: fn(u64, u64) -> K::Principal,
 }
 
 impl<K: Kernel> Authenticator<K> for PayAuth<K> {
@@ -183,11 +196,11 @@ impl<K: Kernel> Authenticator<K> for PayAuth<K> {
         let h = h.to_str().map_err(|_| AuthError("bad authorization header".into()))?;
         let token = h.strip_prefix("Bearer ").ok_or_else(|| AuthError("expected Bearer token".into()))?;
         match self.keys.verify(token)? {
-            Caller::User { tenant, user } => Ok((self.principal)(tenant, user)),
+            Caller::User { tenant, user } => Ok((self.user)(tenant, user)),
             Caller::Operator { tenant, operator_id } => {
                 tracing::info!(tenant, operator_id, "operator request");
-                // The kernels' operator principal: user 0 of the tenant.
-                Ok((self.principal)(tenant, 0))
+                // `Actor::Operator(operator_id)`: the kernels record the id.
+                Ok((self.operator)(tenant, operator_id))
             }
         }
     }
@@ -195,11 +208,11 @@ impl<K: Kernel> Authenticator<K> for PayAuth<K> {
 
 /// Both kernels' authenticators.
 pub fn ledger_auth(keys: &Keys) -> PayAuth<LedgerApp> {
-    keys.authenticator::<LedgerApp>(payment_storage::ledger::principal)
+    keys.authenticator::<LedgerApp>(payment_storage::ledger::user, payment_storage::ledger::operator)
 }
 
 pub fn payments_auth(keys: &Keys) -> PayAuth<PaymentsApp> {
-    keys.authenticator::<PaymentsApp>(payment_storage::payments::principal)
+    keys.authenticator::<PaymentsApp>(payment_storage::payments::user, payment_storage::payments::operator)
 }
 
 #[cfg(test)]
@@ -246,6 +259,10 @@ mod tests {
         assert!(k.verify(&zero).is_err());
         let ok = Keys::signer(op_key).issue(5, 1, MAX_OPERATOR_TTL);
         assert!(k.verify(&ok).is_ok());
+        // The system operators' ids cannot be carried by a token.
+        assert!(k.issue_operator(5, SYSTEM_OPERATORS, 60).is_err());
+        let system = Keys::signer(op_key).issue(5, payment_storage::ORCHESTRATOR_OPERATOR, 60);
+        assert_eq!(k.verify(&system).unwrap_err().0, "operator id is reserved for the system");
     }
 
     #[test]

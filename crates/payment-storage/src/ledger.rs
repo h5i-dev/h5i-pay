@@ -34,9 +34,14 @@ impl Kernel for LedgerApp {
     }
 }
 
-/// User 0 of every tenant is its operator.
-pub fn principal(org: u64, user: u64) -> k::Principal {
-    k::Principal { org, user, operator: user == 0 }
+/// User `user` of tenant `org`.
+pub fn user(org: u64, user: u64) -> k::Principal {
+    k::Principal { org, actor: k::Actor::User(user) }
+}
+
+/// Operator `id` of tenant `org`.
+pub fn operator(org: u64, id: u64) -> k::Principal {
+    k::Principal { org, actor: k::Actor::Operator(id) }
 }
 
 // The `accounts`, `transfers` and `ledger` tables, from the kernel's `schema!`.
@@ -46,9 +51,12 @@ pub struct LedgerStore;
 
 impl Store<LedgerApp> for LedgerStore {
     /// The kernel's tables, and an index for the per-owner read plan
-    /// (`Accounts` for a user).
+    /// (`Accounts` for a user). Tables made before a column existed get it
+    /// (`crate::add_column`).
     fn ddl() -> Vec<String> {
         let mut ddl = schema_ddl();
+        // SEC-02 (F1): who posted a transfer. Older rows say 0 (unknown).
+        ddl.push(crate::add_column("transfers", "operator", "BIGINT NOT NULL DEFAULT 0"));
         ddl.push("CREATE INDEX IF NOT EXISTS accounts_owner ON accounts (tenant_id, owner)".into());
         ddl
     }
@@ -153,7 +161,7 @@ impl CommandJson {
     pub fn into_command(self, actor: &k::Principal) -> k::Command {
         match self {
             CommandJson::Open { owner, currency, code, no_overdraft, no_overcredit } => {
-                k::Command::Open { owner: owner.unwrap_or(actor.user), currency, code, no_overdraft, no_overcredit }
+                k::Command::Open { owner: owner.unwrap_or(k::user_of(actor)), currency, code, no_overdraft, no_overcredit }
             }
             CommandJson::Transfer(t) => k::Command::Transfer { t: t.into() },
             CommandJson::Batch { transfers } => k::Command::Batch { transfers: transfers.into_iter().map(Into::into).collect() },
@@ -188,14 +196,14 @@ pub const SYSTEM_ACCOUNT_CODES: u32 = 1000;
 pub fn decode_for(actor: &k::Principal, body: serde_json::Value) -> Result<k::Command, String> {
     let c = serde_json::from_value::<CommandJson>(body).map_err(|e| e.to_string())?;
     let check = |t: &TransferJson| {
-        if t.id & SYSTEM_TRANSFER_BIT != 0 && !actor.operator {
+        if t.id & SYSTEM_TRANSFER_BIT != 0 && !k::is_operator(actor) {
             Err(format!("transfer id {} is reserved (top bit set)", t.id))
         } else {
             Ok(())
         }
     };
     match &c {
-        CommandJson::Open { code, .. } if *code >= SYSTEM_ACCOUNT_CODES && !actor.operator => {
+        CommandJson::Open { code, .. } if *code >= SYSTEM_ACCOUNT_CODES && !k::is_operator(actor) => {
             return Err(format!("account code {code} is reserved"));
         }
         CommandJson::Transfer(t) => check(t)?,
@@ -226,6 +234,7 @@ pub fn transfer_json(t: &k::Transfer) -> Out {
         ("amount", t.amount.into()),
         ("currency", u64::from(t.currency).into()),
         ("code", u64::from(t.code).into()),
+        ("operator", t.operator.into()),
     ])
 }
 
@@ -248,10 +257,10 @@ pub fn error_code(e: &k::Error) -> (StatusCode, &'static str) {
 }
 
 impl h5i_app_http::Api<LedgerApp> for LedgerStore {
-    /// Without the caller: `owner` defaults to the operator (0). The server
+    /// Without the caller: `owner` defaults to the tenant (0). The server
     /// routes ledger requests through [`decode_for`] instead.
     fn decode_command(body: serde_json::Value) -> Result<k::Command, String> {
-        decode_for(&principal(0, 0), body)
+        decode_for(&operator(0, crate::ORCHESTRATOR_OPERATOR), body)
     }
 
     fn encode_reply(r: &k::Reply) -> Out {
@@ -282,7 +291,9 @@ enum StoredReply {
     // Reads are stored too (a keyed read is a write of its reply).
     Account(StoredAccount),
     Accounts(Vec<StoredAccount>),
+    /// Before SEC-02's operator column; decoded with operator 0.
     Transfers(Vec<(u64, u64, u64, u64, u32, u32)>),
+    TransfersBy(Vec<(u64, u64, u64, u64, u32, u32, u64)>),
 }
 
 type StoredAccount = (u64, u64, u32, u32, bool, bool, u64, u64);
@@ -300,8 +311,11 @@ impl ReplyCodec<LedgerApp> for LedgerStore {
         format!("{cmd:?}").into_bytes()
     }
 
+    /// Idempotency keys are per user; operators share the tenant's operator
+    /// namespace (`u0`, as before SEC-02), so keys such as the
+    /// orchestrator's `system-account-…` still find their earlier replies.
     fn scope(actor: &k::Principal) -> String {
-        format!("u{}", actor.user)
+        format!("u{}", k::user_of(actor))
     }
 
     fn encode(r: &k::Reply) -> Vec<u8> {
@@ -313,7 +327,7 @@ impl ReplyCodec<LedgerApp> for LedgerStore {
             k::Reply::Account(a) => StoredReply::Account(store_account(a)),
             k::Reply::Accounts(accs) => StoredReply::Accounts(accs.iter().map(store_account).collect()),
             k::Reply::Transfers(ts) => {
-                StoredReply::Transfers(ts.iter().map(|t| (t.id, t.debit, t.credit, t.amount, t.currency, t.code)).collect())
+                StoredReply::TransfersBy(ts.iter().map(|t| (t.id, t.debit, t.credit, t.amount, t.currency, t.code, t.operator)).collect())
             }
         };
         serde_json::to_vec(&stored).expect("stored replies serialize")
@@ -329,7 +343,12 @@ impl ReplyCodec<LedgerApp> for LedgerStore {
             StoredReply::Accounts(accs) => k::Reply::Accounts(accs.into_iter().map(load_account).collect()),
             StoredReply::Transfers(ts) => k::Reply::Transfers(
                 ts.into_iter()
-                    .map(|(id, debit, credit, amount, currency, code)| k::Transfer { id, debit, credit, amount, currency, code })
+                    .map(|(id, debit, credit, amount, currency, code)| k::Transfer { id, debit, credit, amount, currency, code, operator: 0 })
+                    .collect(),
+            ),
+            StoredReply::TransfersBy(ts) => k::Reply::Transfers(
+                ts.into_iter()
+                    .map(|(id, debit, credit, amount, currency, code, operator)| k::Transfer { id, debit, credit, amount, currency, code, operator })
                     .collect(),
             ),
         })

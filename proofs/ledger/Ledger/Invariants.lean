@@ -13,8 +13,11 @@ from any callers (batches included), satisfies `Spec.Inv`. From it:
   of the same amount in the same currency, to two different accounts;
 * `replay_is_noop`: re-sending a committed transfer changes nothing;
 * `replay_needs_debit_right`: only those who may debit get `Exists` (SEC-03);
-* `only_owner_or_operator_debits`: only an account's owner or the tenant's
-  operator can increase its debits (move money out of it).
+* `only_owner_or_operator_debits`: only an account's owner (`Actor.User`
+  with its id) or one of the tenant's operators (`Actor.Operator`) can
+  increase its debits (move money out of it);
+* `transfers_record_operator`: every journal row records the operator id
+  of whoever posted it (0 for a user), SEC-02.
 -/
 open Aeneas Aeneas.Std Result payment_ledger payment_ledger.Spec payment_ledger.Commands
   payment_ledger.Theorems payment_ledger.ApplyProofs payment_ledger.Batch payment_ledger.Schema H5iAppLib
@@ -36,7 +39,7 @@ theorem reads_nothing (a : Principal) (s : Snapshot) (c : Command) ws r
     obtain ⟨v, -, hv⟩ := bind_tc_eq_ok.1 h
     simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at hv
     rw [← hv.1]; rfl
-  · simp only [transition] at h
+  · simp only [transition, is_operator_eq, bind_tc_ok, bind_ok] at h
     split at h
     · obtain ⟨v, -, hv⟩ := bind_tc_eq_ok.1 h
       simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at hv
@@ -122,7 +125,7 @@ theorem posting_balanced (a : Principal) (s : Snapshot) (t : TransferReq) ws r
         t.debit ≠ t.credit ∧ qa.currency = qb.currency ∧
         d.val = qa.debits.val + t.amount.val ∧ k.val = qb.credits.val + t.amount.val ∧
         ws.val = [.PutAccount { qa with debits := d }, .PutAccount { qb with credits := k },
-          .PutTransfer ⟨t.id, t.debit, t.credit, t.amount, qa.currency, t.code⟩] := by
+          .PutTransfer ⟨t.id, t.debit, t.credit, t.amount, qa.currency, t.code, a.opId⟩] := by
   rcases post_of_ok (transfer_spec a s t) h ws r rfl with
     ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, hne, qa, qb, ha, _, hb, hcur, _, d, k, hd, hk, _, _, hws⟩
   · exact .inl hws
@@ -177,7 +180,7 @@ theorem replay_is_noop (a a' : Principal) (s s' : Snapshot) (t : TransferReq) ws
     have hf' : findTr (Snapshot.toSt s') t.id.val = some old := by rw [hs']; exact hf
     have hacc' : findAcc (Snapshot.toSt s') t.debit.val = some acc := by rw [hs']; exact hacc
     exact replay_ok a' s' t old acc hid.1 hid.2 hne hacc' (hauth.imp id (fun h => h acc hacc)) hf' h1 h2 h3 h4
-  · have hf' : findTr (Snapshot.toSt s') t.id.val = some (Commands.journalRow t qa.currency) := by
+  · have hf' : findTr (Snapshot.toSt s') t.id.val = some (Commands.journalRow t qa.currency a.opId) := by
       rw [hs', hws]
       simp only [applyAll, List.foldl_cons, List.foldl_nil, findTr_put, findTr_putAcc, Commands.journalRow]
       simp
@@ -197,10 +200,11 @@ command that reports `Exists` was sent by the debit account's owner or an
 operator; anyone else gets the refusal an unused id gets. -/
 theorem replay_needs_debit_right (a : Principal) (s : Snapshot) (t : TransferReq) ws
     (h : transition a s (.Transfer t) = ok (.Ok (ws, .Exists t.id))) :
-    ∃ acc, findAcc (Snapshot.toSt s) t.debit.val = some acc ∧ (a.operator = true ∨ acc.owner = a.user) := by
+    ∃ acc, findAcc (Snapshot.toSt s) t.debit.val = some acc ∧
+      ((∃ o, a.actor = .Operator o) ∨ a.actor = .User acc.owner) := by
   rcases post_of_ok (transfer_spec a s t) h ws _ rfl with
     ⟨_, _, _, _, _, _, _, _, _, acc, hacc, hm⟩ | ⟨_, _, _, _, _, _, _, _, _, _, hrep, _⟩
-  · exact ⟨acc, hacc, hm⟩
+  · exact ⟨acc, hacc, (operator_or_user_iff a acc.owner).1 hm⟩
   · cases hrep
 
 /-! ## Only owners and operators move money out -/
@@ -294,10 +298,52 @@ theorem only_owner_or_operator_debits (a : Principal) (s : Snapshot) (c : Comman
     (hr : Reachable (Snapshot.toSt s)) (hfit : HasRoom s) (h : transition a s c = .ok (.Ok (ws, r)))
     {n : Nat} {q p : Account} (hq : findAcc (Snapshot.toSt s) n = some q)
     (hp : findAcc (applyAll (Snapshot.toSt s) ws.val) n = some p)
-    (hlt : q.debits.val < p.debits.val) : a.operator = true ∨ q.owner = a.user := by
+    (hlt : q.debits.val < p.debits.val) : (∃ o, a.actor = .Operator o) ∨ a.actor = .User q.owner := by
   obtain ⟨p', hp', _, _, himp⟩ := guarded a s c ws r (reachable_inv hr) hfit h n q hq
   rw [hp] at hp'
   cases hp'
-  exact himp hlt
+  exact (operator_or_user_iff a q.owner).1 (himp hlt)
+
+/-! ## Who posted it (SEC-02) -/
+
+theorem transfer_records (a : Principal) (s : Snapshot) (t : TransferReq) ws r
+    (h : transfer a s t = ok (.Ok (ws, r))) : ∀ x, Write.PutTransfer x ∈ ws.val → x.operator = a.opId := by
+  rcases post_of_ok (transfer_spec a s t) h ws r rfl with
+    ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hws⟩
+  · rw [hws]; simp
+  · rw [hws]; intro x hx
+    simp only [List.mem_cons, List.not_mem_nil, or_false, reduceCtorEq, false_or, Write.PutTransfer.injEq] at hx
+    subst hx; rfl
+
+theorem serial_records {a : Principal} {s s' : Snapshot} {l : List TransferReq} {ws : List Write}
+    (h : Serial a s l ws s') : ∀ x, Write.PutTransfer x ∈ ws → x.operator = a.opId := by
+  induction h with
+  | nil s => simp
+  | cons ht _ _ _ ih =>
+    intro x hx
+    rcases List.mem_append.1 hx with hx | hx
+    · exact transfer_records _ _ _ _ _ ht x hx
+    · exact ih x hx
+
+/-- **Every journal row names who posted it.** Each transfer a command
+writes (a batch included) records the caller's operator id: the operator's
+own id for `Actor.Operator o`, 0 for a user. Operators are told apart in
+the journal, and no transfer by a user is attributed to an operator. -/
+theorem transfers_record_operator (a : Principal) (s : Snapshot) (c : Command) ws r
+    (hfit : HasRoom s) (h : transition a s c = .ok (.Ok (ws, r))) :
+    ∀ x, Write.PutTransfer x ∈ ws.val → x.operator = a.opId := by
+  cases c with
+  | Open owner cur code nod noc =>
+    obtain ⟨_, _, n, hn, hws⟩ := post_of_ok (open_spec a s owner cur code nod noc) h ws r rfl
+    rw [hws]; simp
+  | Transfer t => exact transfer_records a s t ws r h
+  | Batch ts =>
+    have hsz : Snapshot.size s + 3 * 8192 < Usize.max := by
+      simp only [HasRoom, Snapshot.size, alloc.vec.Vec.length] at *; omega
+    obtain ⟨s', hser⟩ := batch_serial a s ts ws r hsz h
+    exact serial_records hser
+  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr ⟨id, rfl⟩))]; simp
+  | Accounts => rw [reads_nothing a s _ ws r h (.inl rfl)]; simp
+  | Transfers => rw [reads_nothing a s _ ws r h (.inr (.inl rfl))]; simp
 
 end payment_ledger.Theorems

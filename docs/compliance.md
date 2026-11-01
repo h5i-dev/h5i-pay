@@ -61,7 +61,8 @@ assume (`docs/proof-assumptions.md`), failure handling
 runbooks (`docs/runbooks/`), benchmarks (`docs/benchmarks.md`),
 infrastructure (`infra/`).
 
-Open before real funds: SEC-02's remainder (per-operator
-identity in the kernels' audit trail, scoped tokens, an identity provider), the operating-model
+Open before real funds: SEC-02's remainder (scoped tokens, an identity
+provider, per-operator revocation; operator identity in the kernels and on
+every written row is done, F1), the operating-model
 and licensing decision above, merchant onboarding, a payout flow, and an
 actual restore drill and failover drill on AWS.

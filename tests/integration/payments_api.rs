@@ -120,6 +120,8 @@ async fn automatic_capture_posts_the_ledger() {
     assert_eq!(p["status"], "captured");
     assert_eq!(p["captured"], 1200);
     assert!(p["psp_reference"].as_str().unwrap().starts_with("pi_mock_"));
+    // SEC-02: the orchestrator recorded the capture as its own operator.
+    assert_eq!(p["operator"].as_u64(), Some(payment_storage::ORCHESTRATOR_OPERATOR), "{p}");
     assert_eq!(e.merchant_balance().await, 1200);
     e.audit_ledger().await;
     // Every webhook the PSP sent for it is now stale or a replay.
@@ -271,8 +273,11 @@ async fn timeouts_are_recovered() {
     assert_eq!(rep["refunds_resolved"], 1);
     let (_, p) = e.get(&format!("/v1/payments/{id}"), &e.merchant).await;
     assert_eq!((p["status"].as_str(), p["psp_reference"].is_string()), (Some("captured"), true));
+    // SEC-02: what recovery recorded names the operator who ran it (id 1).
+    assert_eq!(p["operator"].as_u64(), Some(1), "{p}");
     let (_, p2) = e.get(&format!("/v1/payments/{id2}"), &e.merchant).await;
     assert_eq!((p2["refunded"].as_u64(), p2["refund_pending"].as_u64()), (Some(100), Some(0)));
+    assert_eq!(p2["refunds"][0]["operator"].as_u64(), Some(1), "{p2}");
     assert_eq!(e.merchant_balance().await, 900 + 400);
     // Recovery is idempotent.
     let (_, rep) = e.post("/v1/recover", &e.op, json!({})).await;
