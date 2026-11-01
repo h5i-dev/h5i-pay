@@ -60,6 +60,51 @@ CPU thread and renders every exception (110k at 100k payments, since the
 Mock PSP of the measurement does not know the seeded payments). 583 ms at
 100k payments is the reason large tenants go to the nightly batch job.
 
+### After F (`b87ef95`)
+
+The same harness and seeded databases, re-run after F1–F5 with
+`E2E_CLIENTS=8,32`; three runs per size, ranges shown (raw results labeled
+`after-F-*` and `ab-F5-*` in the JSON file). The host was busier than for
+B4: another project's Lean build kept one to two of the 4 vCPUs busy (load
+average 2.6–6.7). To separate code from load, the F4 commit's harness
+(`a153d42`, labeled `ab-F4-*`) was run interleaved with these runs.
+
+| | 1k | 10k | 100k |
+|---|---:|---:|---:|
+| `POST /v1/payments`, p50 ms | 20.7–21.6 | 16.9–21.8 | 18.6–19.6 |
+| … p95 ms | 21.9–23.6 | 18.0–26.5 | 19.7–21.7 |
+| … kernel transactions per payment | 8 | 8 | 8 |
+| `GET /v1/payments/{id}`, p50 ms (transactions) | 0.77–0.84 (1) | 0.73–0.84 (1) | 0.84–0.85 (1) |
+| `POST …/refunds`, p50 ms (transactions) | 20.6–22.5 (8) | 18.9–22.1 (8) | 20.0–22.5 (8) |
+| 8 clients (200 payments), payments/s | 151–163 | 147–153 | 141–151 |
+| … serialization retries | 21–29 | 20–25 | 18–28 |
+| 32 clients (800 payments), payments/s | 150–155 | 147–155 | 143–148 |
+| … serialization retries | 94–123 | 87–115 | 74–98 |
+| recovery pass, 5 payments to fix: ms (transactions / PSP calls) | 64–71 (39–42 / 5) | 60–68 (41–44 / 5) | 66–67 (43–45 / 5) |
+| recovery pass, nothing to fix: ms (transactions) | 6.5–7.1 (0) | 6.7–8.4 (0) | 7.0–7.8 (0) |
+| `POST /v1/reconcile`, p50 ms | 14.1–16.3 | 70.9–71.5 | 593–616 |
+
+Against B4's "after" column:
+
+- A payment is one kernel transaction more (8 instead of 7; the refund
+  too): F2's `MarkPosted` after the ledger sync. It still costs the same at
+  1k, 10k and 100k payments.
+- Serialization retries per 200 payments with 8 clients fell from 88–132
+  to 18–29 (F4). At 32 clients, the first time this was measured, there are
+  74–123 per 800 payments. The remaining retries are `MarkPosted` against
+  `Create` on the same index pages (`docs/PROGRESS.md`, F4).
+- Throughput was 141–163 payments/s, against 123–164 in B4. These runs are
+  not comparable with F4's quiet-host measurement (181–198 payments/s,
+  `docs/PROGRESS.md`): the F4 harness, run interleaved here, also gave
+  143–154 payments/s. F5 changed nothing on this path. The difference is
+  the host load.
+- The recovery pass with nothing to fix is O(unfinished) since F2: 6.5–8.4
+  ms at every size, against 10 / 78 / 852 ms. A pass that fixes 5 payments
+  takes 60–71 ms at every size, against 65 / 619 / 1,002 ms.
+- `POST /v1/reconcile` is unchanged within noise (the F4 harness gave
+  70–76 ms at 10k and 602–626 ms at 100k). It runs `cpu_single`, now the
+  proven join; it is still O(tenant), as above.
+
 ### The batch worker, with its files
 
 `h5i-pay-batch reconcile` on CSV files in the page cache (local disk, not
@@ -128,10 +173,13 @@ M3's.
 
 Engines:
 
-- **single** — one thread: `cpu_single` (open-addressing hash join) and the
-  verified `policy::check` per row.
+- **single** — one thread: `cpu_single` (open-addressing hash join; since
+  F5 the extracted, proven `join::join`) and the verified `policy::check`
+  per row.
 - **parallel** — rayon on 4 threads: radix-partition by key hash, then one
-  hash join per partition; `check` with `par_iter`.
+  hash join per partition (since F5 `join::join` on the partition's rows);
+  `check` with `par_iter`. The tables below predate F5; F5's own
+  before/after engine times are in `docs/PROGRESS.md` (F5).
 - **simd** — one thread, AVX2: reconciliation probes four rows per step
   with 64-bit gathers; policy evaluates every rule for four rows as lane
   masks and blends the first failing code.
@@ -251,7 +299,8 @@ CPU engine needs +1.1 GiB of host memory for the same input.
 
 ## Correctness of the comparison
 
-Before timing, each engine's output is compared with `cpu_single` (itself
+Before timing, each engine's output is compared with `cpu_single` (proven
+equal to the reference's per-row answer since F5, `join_eq_reference`, and
 checked against the `BTreeMap` reference in `tests/differential`) or with
 the verified `policy::check`; the benchmark aborts on any difference. The
 differential suite (`cargo test -p h5i-pay-tests --features gpu --test

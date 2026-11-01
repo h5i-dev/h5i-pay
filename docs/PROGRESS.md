@@ -178,6 +178,22 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### After F: full checks and the B4 end-to-end runs
+
+- Checks at `b87ef95`: `h5i app extract --check` and `h5i app check` on
+  all three kernels (payments 293 theorems in 8 modules, ledger 257 in 13,
+  reconciliation 64 in 2; axioms `propext`, `Classical.choice`,
+  `Quot.sound`); clippy plain, `mock-psp` and CUDA with `-D warnings`;
+  84 tests; GPU differential test (6) on the A10G; `build-device.sh
+  --check`. Mutants last run per kernel: payments 16/16 (F4), ledger 12/12
+  (F3, unchanged since), reconciliation 6/6 (F5).
+- B4 re-run (`docs/benchmarks.md`, "After F"): a payment takes 17–22 ms
+  and 8 kernel transactions at 1k, 10k and 100k payments. Recovery with
+  nothing to fix takes 6.5–8.4 ms at every size (was 10 / 78 / 852 ms).
+  Serialization retries with 8 clients are 18–29 per 200 payments (were
+  88–132). Throughput was 141–163 payments/s on a host loaded by another
+  project; the F4 harness, run interleaved, gave the same.
+
 ### F5: the single-thread hash join proven against the reference
 
 - `crates/payment-reconcile/src/join.rs`: the hash join in the Rust subset
