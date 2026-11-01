@@ -110,3 +110,15 @@ new = "        refunded,\n        refund_pending,\n        operator: op,\n      
 name = "mark_plan_misses_refunds"
 old = "            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));\n            out.push(rd_where(T_REFUNDS, p_eq(REFUND_PAYMENT, v_int(*payment))));\n        }\n    }\n    Some(out)"
 new = "            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));\n        }\n    }\n    Some(out)"
+
+# F3: a page plan that skips a sequence number.
+[[mutant]]
+name = "page_plan_skips_one"
+old = "    let mut x = from + 1;"
+new = "    let mut x = from + 2;"
+
+# F3: a merchant listing another merchant's payments.
+[[mutant]]
+name = "list_other_merchant"
+old = "    if !is_operator(actor) && merchant != user_of(actor) {\n        return Err(Error::Forbidden);\n    }\n    let end = page_end(from, limit);"
+new = "    let end = page_end(from, limit);"

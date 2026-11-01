@@ -165,7 +165,7 @@ PROGRESS.md as it lands.
    Prove that a payment marked complete has no postings missing under the
    kernel's own rules (or state precisely what the marker guarantees), and
    that recovery still finds every payment that needs work. Re-measure.
-3. [ ] **Pagination.** `List` (payments) and `Accounts` (ledger) return
+3. [x] **Pagination.** `List` (payments) and `Accounts` (ledger) return
    everything; ledger batches over 64 transfers fall back to a whole-tenant
    load. Add cursor pagination (by key, with a limit and a hard maximum) to
    the kernel commands and the HTTP routes, with read plans and frame

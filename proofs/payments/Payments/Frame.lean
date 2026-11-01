@@ -66,9 +66,16 @@ def AgreeE (s s' : Snapshot) (id : U64) : Prop :=
 def AgreeF (s s' : Snapshot) (id : U64) : Prop :=
   s'.refs.val.find? (fun r => r.payment.val = id.val) = s.refs.val.find? (fun r => r.payment.val = id.val)
 
+theorem merchant_next_eq (v : alloc.vec.Vec MerchantCounter) (m : U64) :
+    merchant_next v m = ok (merchantNext v.val m) :=
+  eq_ok_of_spec (merchant_next_spec v m)
+
 theorem create_congr (a : Principal) (s s' : Snapshot) (h : s'.counter = s.counter) (amt : U64) (cur : U32)
-    (m : Bool) : create a s' amt cur m = create a s amt cur m := by
-  unfold create; rw [h]
+    (m : Bool)
+    (hm : s'.merchants.val.find? (fun c => decide (c.merchant = a.user)) =
+      s.merchants.val.find? (fun c => decide (c.merchant = a.user))) :
+    create a s' amt cur m = create a s amt cur m := by
+  unfold create; rw [h]; simp only [user_of_eq, merchant_next_eq, merchantNext, hm, bind_ok]
 
 theorem begin_authorize_congr (a : Principal) (s s' : Snapshot) (id : U64) (h : AgreeP s s' id) :
     begin_authorize a s' id = begin_authorize a s id := by
@@ -175,65 +182,84 @@ theorem view_congr (a : Principal) (s s' : Snapshot) (id : U64) (h : AgreeP s s'
   unfold view
   simp only [find_payment_eq, find_ref_eq, h, hf, refunds_for_congr s.refunds s'.refunds id hr]
 
-def visibleP (actor : Principal) (x : Payment) : Bool := actor.operator || decide (x.merchant = actor.user)
+def rangeP (m f e : U64) (x : Payment) : Bool := decide (x.merchant = m) && decide (f ≤ x.seq) && decide (x.seq < e)
 
-def visStep (actor : Principal) (acc : List Payment) (x : Payment) : List Payment :=
-  if visibleP actor x then acc ++ [x] else acc
+def rangeStepL (m f e : U64) (acc : List Payment) (x : Payment) : List Payment :=
+  if rangeP m f e x then acc ++ [x] else acc
 
-theorem foldl_visStep (actor : Principal) (l acc : List Payment) :
-    l.foldl (visStep actor) acc = acc ++ l.filter (visibleP actor) := by
+theorem foldl_rangeStepL (m f e : U64) (l acc : List Payment) :
+    l.foldl (rangeStepL m f e) acc = acc ++ l.filter (rangeP m f e) := by
   induction l generalizing acc with
   | nil => simp
   | cons x xs ih =>
-    simp only [List.foldl_cons, ih, visStep, List.filter_cons]
+    simp only [List.foldl_cons, ih, rangeStepL, List.filter_cons]
     split <;> simp
 
-theorem visible_spec (actor : Principal) (s : Snapshot) :
-    visible actor s ⦃ v => v.val = s.payments.val.filter (visibleP actor) ⦄ := by
-  unfold visible visible_loop
-  have h := loop_fold s.payments.val (fun v : alloc.vec.Vec Payment => v.val) (visStep actor)
+theorem merchant_range_spec (s : Snapshot) (m f e : U64) :
+    merchant_range s m f e ⦃ v => v.val = s.payments.val.filter (rangeP m f e) ⦄ := by
+  unfold merchant_range merchant_range_loop
+  have h := loop_fold s.payments.val (fun v : alloc.vec.Vec Payment => v.val) (rangeStepL m f e)
     (fun v k => v.length + (s.payments.length - k) ≤ Usize.max)
-    (fun x => visible_loop.body actor s x.1 x.2) ?_ (alloc.vec.Vec.new Payment) 0#usize (by simp)
+    (fun x => merchant_range_loop.body s m f e x.1 x.2) ?_ (alloc.vec.Vec.new Payment) 0#usize (by simp)
     (by simp [alloc.vec.Vec.length])
-  · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_visStep]; simp)
+  · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_rangeStepL]; simp)
   · intro v j hj hv
-    unfold visible_loop.body
+    unfold merchant_range_loop.body
     simp only [alloc.vec.Vec.length] at hj hv
     simp only [alloc.vec.Vec.len]
     split
     · rename_i hlt
       have hlt' : j.val < s.payments.val.length := by scalar_tac
       rw [vec_index_eq s.payments j hlt']
-      simp only [bind_ok, may_manage_eq]
-      by_cases hb : visibleP actor s.payments.val[j.val]
-      · have hb' : (actor.operator || decide (s.payments.val[j.val].merchant = actor.user)) = true := hb
-        simp only [hb', if_true]
-        step*
-        simp only [FoldStep]
-        refine ⟨hlt', ?_, by scalar_tac, ?_⟩
-        · simp_all [visStep]
-        · simp only [alloc.vec.Vec.length] at *; scalar_tac
-      · have hb' : (actor.operator || decide (s.payments.val[j.val].merchant = actor.user)) = false :=
-          Bool.eq_false_iff.mpr hb
-        simp only [hb', Bool.false_eq_true, if_false, bind_ok]
-        step*
-        simp only [FoldStep]
-        refine ⟨hlt', ?_, by scalar_tac, ?_⟩
-        · show v.val = visStep actor v.val s.payments.val[j.val]
-          simp only [visStep, if_neg hb]
-        · simp only [alloc.vec.Vec.length] at *; scalar_tac
-    · rename_i hge
-      simp only [WP.spec_ok, FoldStep, and_true]
+      simp only [bind_ok]
+      have hj1 : j.val + 1 ≤ Usize.max := by scalar_tac
+      by_cases h1 : s.payments.val[j.val].merchant = m <;> by_cases h2 : f ≤ s.payments.val[j.val].seq <;>
+        by_cases h3 : s.payments.val[j.val].seq < e <;>
+        simp only [h1, h2, h3, if_true, if_false, bind_ok] <;> step* <;> simp only [FoldStep] <;>
+        refine ⟨hlt', ?_, by scalar_tac, by simp only [alloc.vec.Vec.length] at *; scalar_tac⟩ <;>
+        simp_all [rangeStepL, rangeP]
+    · simp only [WP.spec_ok, FoldStep, and_true]
       scalar_tac
 
-theorem visible_eq (actor : Principal) (s : Snapshot) :
-    visible actor s = ok (alloc.vec.Vec.from (s.payments.val.filter (visibleP actor))
-      (le_trans (List.length_filter_le _ _) s.payments.len_ineq)) := by
-  obtain ⟨v, hv⟩ := ok_of (visible_spec actor s)
-  have := post_of_ok (visible_spec actor s) hv
-  rw [hv]; congr 1; apply alloc.vec.Vec.ext; simp [this]
+theorem merchant_range_congr (s s' : Snapshot) (m f e : U64)
+    (h : s'.payments.val.filter (rangeP m f e) = s.payments.val.filter (rangeP m f e)) :
+    merchant_range s' m f e = merchant_range s m f e := by
+  obtain ⟨v, hv⟩ := ok_of (merchant_range_spec s m f e)
+  obtain ⟨v', hv'⟩ := ok_of (merchant_range_spec s' m f e)
+  have e1 := post_of_ok (merchant_range_spec s m f e) hv
+  have e2 := post_of_ok (merchant_range_spec s' m f e) hv'
+  have : v' = v := alloc.vec.Vec.ext _ _ (by rw [e1, e2, h])
+  rw [hv, hv', this]
+
+theorem list_congr (a : Principal) (s s' : Snapshot) (m f : U64) (l : U32) (e : U64)
+    (he : page_end f l = ok e)
+    (h1 : s'.payments.val.filter (rangeP m f e) = s.payments.val.filter (rangeP m f e))
+    (h2 : s'.merchants.val.find? (fun c => decide (c.merchant = m)) = s.merchants.val.find? (fun c => decide (c.merchant = m))) :
+    list a s' m f l = list a s m f l := by
+  unfold list
+  simp only [he, merchant_next_eq, merchantNext, h2, merchant_range_congr s s' m f e h1, bind_ok]
 
 /-! ## What a plan loads -/
+
+theorem find_filter_kept {α : Type} (l : List α) (keep P : α → Bool) (h : ∀ x, P x = true → keep x = true) :
+    (l.filter keep).find? P = l.find? P :=
+  find?_slice l P keep (fun x _ hp => h x hp)
+
+theorem foldl_rangeStep_holds (c : Nat) (tabs : H5iAppLib.Sql.Tables Val) (row : List Val) (l : List Nat) (p : Pred Val) :
+    (l.foldl (rangeStep c) p).holds tabs row = (p.holds tabs row || l.any (fun z => decide (row[c]? = some (int z)))) := by
+  induction l generalizing p with
+  | nil => simp
+  | cons z zs ih => simp [List.foldl_cons, ih, rangeStep, Pred.holds, Bool.or_assoc]
+
+theorem rangeA_holds_of (c f e y : Nat) (hfy : f ≤ y) (hye : y < e) {tabs : H5iAppLib.Sql.Tables Val} {row : List Val}
+    (hrow : row[c]? = some (int y)) : (rangeA c f e).holds tabs row = true := by
+  unfold rangeA
+  rw [foldl_rangeStep_holds]
+  rcases Nat.eq_or_lt_of_le hfy with rfl | hlt
+  · simp [Pred.holds, hrow]
+  · simp only [Bool.or_eq_true, List.any_eq_true]
+    right
+    exact ⟨y, List.mem_range'_1.2 ⟨by omega, by omega⟩, by simp [hrow]⟩
 
 /-- A read of table `t` by `q` (no window) keeps every row a lookup by `P` can return. -/
 theorem pick_find {α : Type} (plan : List (Read Val)) (tabs : H5iAppLib.Sql.Tables Val) (t : Nat)
@@ -308,7 +334,9 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
   cases c with
   | Create amt cur m =>
     simp only [readsA, Option.some.injEq] at hp; subst hp
-    exact create_congr a s _ (counter_load s _ (by simp)) amt cur m
+    apply create_congr a s _ (counter_load s _ (by simp)) amt cur m
+    simp only [Snapshot.load_merchants, pickRows, List.find?, decide_true, decide_false, Window.apply_default]
+    apply find_filter_kept; intro x hx; simp_all [eqU, Pred.holds, MerchantCounter.row]
   | BeginAuthorize id =>
     simp only [readsA, Option.some.injEq] at hp; subst hp
     exact begin_authorize_congr a s _ id (agreeP_load _ s id (by simp))
@@ -339,21 +367,48 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
   | Get id =>
     simp only [readsA, Option.some.injEq] at hp; subst hp
     exact get_congr a s _ id (agreeP_load _ s id (by simp))
-  | List =>
-    simp only [transition, visible_eq]
-    cases ho : a.operator
-    · simp only [readsA, ho, Bool.false_eq_true, if_false, Option.some.injEq] at hp; subst hp
-      have : (Snapshot.load [⟨0, eqU 1 a.user, {}⟩] s).payments.val.filter (visibleP a) =
-          s.payments.val.filter (visibleP a) := by
-        rw [Snapshot.load_payments, pickRows_filter _ _ _ _ _ ⟨0, eqU 1 a.user, {}⟩ (by simp) rfl]
-        apply filter_slice
-        intro x _ hx
-        simp_all [visibleP, eqU, Pred.holds, Payment.row]
-      simp only [this]
-    · simp only [readsA, ho, if_true, Option.some.injEq] at hp; subst hp
-      have : (Snapshot.load [⟨0, .all, {}⟩] s).payments.val = s.payments.val := by
-        simp [Snapshot.load_payments, pickRows, Pred.holds]
-      simp only [this]
+  | List m f l =>
+    simp only [transition]
+    simp only [readsA] at hp
+    split at hp
+    · rename_i hc
+      simp only [Option.some.injEq] at hp; subst hp
+      obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+      apply list_congr a s _ m f l e he
+      · unfold pageA
+        rw [← hev]
+        by_cases hfe : f.val < e.val
+        · simp only [hfe, if_true]
+          rw [Snapshot.load_payments, pickRows_filter _ _ _ _ _ ⟨0, .and (eqU 1 m) (rangeA 13 f.val e.val), {}⟩ (by simp) rfl]
+          apply filter_slice
+          intro x _ hx
+          simp only [rangeP, Bool.and_eq_true, decide_eq_true_eq] at hx
+          obtain ⟨⟨h1, h2⟩, h3⟩ := hx
+          simp only [Pred.holds, Bool.and_eq_true]
+          refine ⟨by simp [eqU, Pred.holds, Payment.row, h1], ?_⟩
+          apply rangeA_holds_of 13 f.val e.val x.seq.val (by scalar_tac) (by scalar_tac)
+          simp [Payment.row]
+        · simp only [hfe, if_false]
+          have : s.payments.val.filter (rangeP m f e) = [] := by
+            rw [List.filter_eq_nil_iff]; intro x _; simp only [rangeP]; intro h
+            simp only [Bool.and_eq_true, decide_eq_true_eq] at h; scalar_tac
+          rw [this]
+          simp [Snapshot.load_payments, pickRows]
+      · unfold pageA
+        split <;>
+        · simp only [Snapshot.load_merchants, pickRows, List.find?, decide_true, decide_false, Window.apply_default]
+          apply find_filter_kept; intro x hx; simp_all [eqU, Pred.holds, MerchantCounter.row]
+    · rename_i hc
+      unfold list
+      by_cases h0 : l = 0#u32
+      · simp [h0]
+      have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+      by_cases hm : l > MAX_PAGE
+      · simp [h0, hm]
+      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hna : ¬ (a.operator = true ∨ m = a.user) := fun h => hc ⟨h0', hm', h⟩
+      simp only [not_or] at hna
+      simp [h0, hm, hna.1, hna.2, is_operator_eq, user_of_eq]
   | GetRefund id =>
     simp only [readsA, Option.some.injEq] at hp; subst hp
     simp only [transition]

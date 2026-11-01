@@ -50,8 +50,21 @@ def resultA : PspResult → List (Read Val)
   | .RefundFailed r => [⟨1, eqU 0 r, {}⟩]
   | _ => []
 
+/-- `page_end` in numbers: `f + l`, or `U64.max` if that overflows. -/
+def pageEndN (f l : Nat) : Nat := if f > U64.max - l then U64.max else f + l
+
+def rangeStep (c : Nat) (p : Pred Val) (y : Nat) : Pred Val := .or p (.eq c (int y))
+
+/-- Column `c` holds one of `f`, …, `x - 1` (`seq_range`). -/
+def rangeA (c f x : Nat) : Pred Val := (List.range' (f + 1) (x - (f + 1))).foldl (rangeStep c) (.eq c (int f))
+
+/-- A `List` page that is not refused: `merchant`'s payments numbered
+`from` to `end - 1`, and the merchant's counter. -/
+def pageA (m : U64) (f e : Nat) : List (Read Val) :=
+  if f < e then [⟨0, .and (eqU 1 m) (rangeA 13 f e), {}⟩, ⟨5, eqU 0 m, {}⟩] else [⟨5, eqU 0 m, {}⟩]
+
 def readsA (a : Principal) : Command → Option (List (Read Val))
-  | .Create .. => some [⟨4, .all, {}⟩]
+  | .Create .. => some [⟨4, .all, {}⟩, ⟨5, eqU 0 a.user, {}⟩]
   | .BeginAuthorize id => some [⟨0, eqU 0 id, {}⟩]
   | .Cancel id => some [⟨0, eqU 0 id, {}⟩]
   | .RequestRefund p _ => some [⟨0, eqU 0 p, {}⟩, ⟨4, .all, {}⟩]
@@ -59,7 +72,9 @@ def readsA (a : Principal) : Command → Option (List (Read Val))
   | .Event e p r => some (⟨2, eqU 0 e, {}⟩ :: ⟨0, eqU 0 p, {}⟩ :: resultA r)
   | .AttachRef p _ => some [⟨0, eqU 0 p, {}⟩, ⟨3, eqU 0 p, {}⟩]
   | .Get id => some [⟨0, eqU 0 id, {}⟩]
-  | .List => if a.operator then some [⟨0, .all, {}⟩] else some [⟨0, eqU 1 a.user, {}⟩]
+  | .List m f l =>
+    if l.val ≠ 0 ∧ l.val ≤ 64 ∧ (a.operator = true ∨ m = a.user) then some (pageA m f.val (pageEndN f.val l.val))
+    else some []
   | .GetRefund id => some [⟨1, eqU 0 id, {}⟩, ⟨0, .isIn 0 1 (eqU 0 id) 1 {}, {}⟩]
   | .Refunds p => some [⟨0, eqU 0 p, {}⟩, ⟨1, eqU 1 p, {}⟩]
   | .GetRef p => some [⟨0, eqU 0 p, {}⟩, ⟨3, eqU 0 p, {}⟩]
@@ -83,6 +98,52 @@ theorem result_reads_some (r : PspResult) (out : alloc.vec.Vec h5i_app_sql.Read)
   obtain ⟨v, hv, hva⟩ := result_reads_abs r out h
   exact ⟨some v, by rw [hv]; simp, by simp [planOf, hva]⟩
 
+theorem ok_of' {α} {m : Result α} {P : α → Prop} (h : m ⦃ P ⦄) : ∃ r, m = ok r ∧ P r := by
+  obtain ⟨r, hr⟩ := ok_of h; exact ⟨r, hr, post_of_ok h hr⟩
+
+theorem page_end_spec (f : U64) (l : U32) : page_end f l ⦃ e => e.val = pageEndN f.val l.val ⦄ := by
+  unfold page_end pageEndN
+  step*
+  all_goals simp_all [core.num.U64.MAX, U64.rMax] <;> scalar_tac
+
+theorem rangeA_succ (c f x : Nat) (h : f < x) : rangeA c f (x + 1) = rangeStep c (rangeA c f x) x := by
+  unfold rangeA
+  have : x + 1 - (f + 1) = (x - (f + 1)) + 1 := by omega
+  rw [this, List.range'_concat, List.foldl_append]
+  have : f + 1 + (x - (f + 1)) = x := by omega
+  simp [this]
+
+theorem seq_range_loop_spec (col : U32) (e : U64) (f : Nat) (p : h5i_app_sql.Pred) (x : U64)
+    (hfx : f < x.val) (hxe : x.val ≤ e.val) (hp : Pred.abs p = rangeA col.val f x.val) :
+    seq_range_loop col e p x ⦃ r => Pred.abs r = rangeA col.val f e.val ⦄ := by
+  unfold seq_range_loop
+  apply loop.spec_decr_nat (measure := fun (y : h5i_app_sql.Pred × U64) => e.val - y.2.val)
+    (inv := fun y => f < y.2.val ∧ y.2.val ≤ e.val ∧ Pred.abs y.1 = rangeA col.val f y.2.val)
+  · rintro ⟨q, y⟩ ⟨h1, h2, h3⟩
+    unfold seq_range_loop.body
+    simp only at h1 h2 h3 ⊢
+    split
+    · rename_i hlt
+      simp only [v_int_eq, p_eq, p_or, bind_ok]
+      have : y.val + 1 ≤ U64.max := by scalar_tac
+      step*
+      refine ⟨by scalar_tac, by scalar_tac, ?_, by scalar_tac⟩
+      rw [x1_post, rangeA_succ _ _ _ h1, ← h3]; rfl
+    · rename_i hge
+      simp only [WP.spec_ok]
+      have : y.val = e.val := by scalar_tac
+      rw [h3, this]
+  · exact ⟨hfx, hxe, hp⟩
+
+theorem seq_range_spec (col : U32) (f e : U64) (h : f.val < e.val) :
+    seq_range col f e ⦃ r => Pred.abs r = rangeA col.val f.val e.val ⦄ := by
+  unfold seq_range
+  simp only [v_int_eq, p_eq, bind_ok]
+  have : f.val + 1 ≤ U64.max := by scalar_tac
+  step*
+  apply seq_range_loop_spec col e f.val _ _ (by scalar_tac) (by scalar_tac)
+  rw [x_post]; simp [rangeA, Pred.abs]
+
 /-- The extracted `reads` computes `readsA`. -/
 theorem reads_abs (a : Principal) (c : Command) : ∃ o, reads a c = ok o ∧ planOf o = readsA a c := by
   cases c
@@ -102,13 +163,51 @@ theorem reads_abs (a : Principal) (c : Command) : ∃ o, reads a c = ok o ∧ pl
     refine Exists.elim (result_reads_some r _ ?_) (fun o h => ⟨o, h.1, h.2.trans ?_⟩)
     · simp [alloc.vec.Vec.length]
     · simp [readsA, Read.abs, Pred.abs, Window.abs, eqU, T_PAYMENTS, PAYMENT_ID, T_EVENTS, EVENT_ID]
-  case List =>
-    cases ha : a.operator <;>
-      simp [reads, readsA, ha, rd_where, p_eq, h5i_app_sql.whole, planOf, Read.abs, Pred.abs, Window.abs, eqU,
-        alloc.vec.Vec.push, alloc.vec.Vec.new, T_PAYMENTS, PAYMENT_MERCHANT, U32.max, U32.numBits,
-        alloc.vec.Vec.from_val]
+  case List m f l =>
+    obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+    have page : ∃ o, (do
+        let out ← if f < e then do
+            let range ← seq_range PAYMENT_SEQ f e
+            let v ← v_int m
+            let p ← p_eq PAYMENT_MERCHANT v
+            let r ← rd_where T_PAYMENTS (h5i_app_sql.Pred.And p range)
+            alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+          else ok (alloc.vec.Vec.new h5i_app_sql.Read)
+        let v ← v_int m
+        let p ← p_eq MERCHANT_KEY v
+        let r ← rd_where T_MERCHANTS p
+        let out1 ← alloc.vec.Vec.push out r
+        ok (some out1)) = ok o ∧ planOf o = some (pageA m f.val (pageEndN f.val l.val)) := by
+      rw [← hev]
+      by_cases hfe : f < e
+      · obtain ⟨r, hr, hra⟩ := ok_of' (seq_range_spec PAYMENT_SEQ f e (by scalar_tac))
+        simp only [hfe, if_true, hr, bind_ok, v_int_eq, p_eq, rd_where, h5i_app_sql.whole]
+        simp [alloc.vec.Vec.push, alloc.vec.Vec.new, U32.max, U32.numBits, alloc.vec.Vec.from_val, planOf, pageA,
+          Read.abs, Pred.abs, Window.abs, eqU, hra, T_PAYMENTS, T_MERCHANTS, PAYMENT_MERCHANT, PAYMENT_SEQ, MERCHANT_KEY,
+          show f.val < e.val by scalar_tac]
+      · simp only [hfe, if_false, bind_ok, v_int_eq, p_eq, rd_where, h5i_app_sql.whole]
+        simp [alloc.vec.Vec.push, alloc.vec.Vec.new, U32.max, U32.numBits, alloc.vec.Vec.from_val, planOf, pageA,
+          Read.abs, Pred.abs, Window.abs, eqU, T_MERCHANTS, MERCHANT_KEY, show ¬ f.val < e.val by scalar_tac]
+    simp only [reads, readsA, he, bind_ok]
+    by_cases h0 : l = 0#u32
+    · subst h0; simp [planOf]
+    have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+    by_cases hm : l ≤ MAX_PAGE
+    · have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      cases ha : a.operator
+      · by_cases hu : m = a.user
+        · simp only [h0, hm, hu, ha, h0', hm', bne_iff_ne, ne_eq, not_false_eq_true, if_true,
+            is_operator_eq, user_of_eq, bind_ok, Bool.false_eq_true, if_false, true_and, or_true, and_self]
+          rw [← hu]; exact page
+        · simp [h0, hm, hu, ha, h0', hm', planOf]
+      · simp only [h0, hm, ha, h0', hm', bne_iff_ne, ne_eq, not_false_eq_true, if_true, is_operator_eq, bind_ok,
+          true_and, true_or, and_self]
+        exact page
+    · have hm' : ¬ l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      simp [h0, hm, hm', planOf]
   all_goals simp [reads, readsA, rd_where, p_eq, h5i_app_sql.whole, planOf, Read.abs, Pred.abs,
     Window.abs, eqU, alloc.vec.Vec.push, alloc.vec.Vec.new, T_PAYMENTS, T_REFUNDS, T_REFS, T_COUNTER,
+    T_MERCHANTS, MERCHANT_KEY, user_of_eq,
     PAYMENT_ID, REFUND_ID, REFUND_PAYMENT, REF_PAYMENT, U32.max, U32.numBits, alloc.vec.Vec.from_val]
 
 end payment_domain.Plan

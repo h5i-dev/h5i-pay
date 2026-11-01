@@ -62,9 +62,12 @@ structure St where
   refunds : List Refund
   events : List Event
   refs : List PspRef
+  /-- Per-merchant payment counters; they only number payments for paging
+  (`List`), and no theorem here is about them. -/
+  merchants : List MerchantCounter
 
 def Snapshot.toSt (s : Snapshot) : St :=
-  ⟨s.counter.next_id.val, s.payments.val, s.refunds.val, s.events.val, s.refs.val⟩
+  ⟨s.counter.next_id.val, s.payments.val, s.refunds.val, s.events.val, s.refs.val, s.merchants.val⟩
 
 def findPay (s : St) (id : Nat) : Option Payment := s.payments.find? (fun p => p.id.val = id)
 def findRefund (s : St) (id : Nat) : Option Refund := s.refunds.find? (fun r => r.id.val = id)
@@ -105,6 +108,7 @@ def applyWrite (s : St) : Write → St
   | .PutEvent e => { s with events := H5iAppLib.upsert (·.id) e s.events }
   | .PutRef r => { s with refs := H5iAppLib.upsert (·.payment) r s.refs }
   | .SetCounter c => { s with next := c.next_id.val }
+  | .PutMerchant c => { s with merchants := H5iAppLib.upsert (·.merchant) c s.merchants }
 
 def applyAll (s : St) (ws : List Write) : St := ws.foldl applyWrite s
 
@@ -116,6 +120,7 @@ def _root_.payment_domain.Write.recorded : Write → Option U64
   | .PutEvent e => some e.operator
   | .PutRef r => some r.operator
   | .SetCounter _ => none
+  | .PutMerchant _ => none
 
 /-- Facts that hold in every reachable state. -/
 structure Inv (s : St) : Prop where
@@ -123,7 +128,7 @@ structure Inv (s : St) : Prop where
   fresh_refund : ∀ r ∈ s.refunds, r.id.val < s.next
   amounts : ∀ p ∈ s.payments, PayInv p
 
-def init : St := ⟨0, [], [], [], []⟩
+def init : St := ⟨0, [], [], [], [], []⟩
 
 /-- The states reachable from no payments by successful commands of any
 callers (merchants, the orchestrator, webhooks), in any order. -/

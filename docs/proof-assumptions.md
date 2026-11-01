@@ -178,11 +178,20 @@ committed history is such a sequence.
 - **Account counters are u64.** A transfer that would overflow an account's
   posted debits or credits is refused (`Overflow`), not wrapped; the proofs
   rely on the refusal, not on a bound.
-- **Whole-tenant loads remain** for ledger batches of more than 64
-  transfers (`MAX_PLANNED_BATCH`; their plan would be a chain of thousands
-  of `OR`s) and for the read snapshots `reconcile_inputs`, `audit` and
-  `find_work` take on purpose. Every other command reads only its keys
-  (frame theorems above).
+- **No kernel command loads the whole tenant** (F3). Ledger batches are at
+  most 64 transfers (`MAX_BATCH`; longer ones are refused before reading,
+  since an `OR` chain of a few hundred terms already costs PostgreSQL
+  tens of milliseconds of planning), and `List`/`Accounts` read one page
+  of at most 64 sequence numbers of one merchant or owner. Whole-tenant
+  snapshots remain only where taken on purpose: `reconcile_inputs`,
+  `audit`, `find_work` and the export.
+- **Pages are numbered by per-merchant and per-owner counters** (`seq`,
+  `merchant_counters`, `owner_counters`). The frame theorems say a page's
+  plan gives the whole-tenant reply; they do not say the numbers are
+  dense. They are by construction (each `Create`/`Open` takes the
+  counter's value and increments it; existing rows were numbered by id at
+  migration), so a page may be short only at the end; `next` comes from
+  the counter, not from counting rows.
 - **The frame theorems are about one command's read.** They say the
   partial load gives the whole-tenant result; that the server then commits
   that result rests, as before, on SERIALIZABLE: a concurrent write to a row

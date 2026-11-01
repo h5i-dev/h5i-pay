@@ -86,8 +86,11 @@ async fn ledger_over_http() {
 
     let (st, accounts) = s.ledger(&alice, json!({"cmd": "accounts"}), None).await;
     assert_eq!(st, 200);
-    assert_eq!(accounts, json!([{"id": 1, "owner": 1, "currency": 392, "code": 0, "no_overdraft": true,
-        "no_overcredit": false, "debits": 300, "credits": 1000}]));
+    assert_eq!(accounts, json!({"accounts": [{"id": 1, "owner": 1, "currency": 392, "code": 0, "no_overdraft": true,
+        "no_overcredit": false, "debits": 300, "credits": 1000, "seq": 0}], "next": null}));
+    // Another owner's accounts are not listed for a user.
+    assert_eq!(s.ledger(&alice, json!({"cmd": "accounts", "owner": 2}), None).await.0, 403);
+    assert_eq!(s.ledger(&alice, json!({"cmd": "accounts", "limit": 65}), None).await.0, 400);
     // Bob sees his account only, and cannot read Alice's.
     assert_eq!(s.ledger(&bob, json!({"cmd": "account", "id": 1}), None).await.0, 404);
     assert_eq!(s.ledger(&bob, json!({"cmd": "transfers"}), None).await.0, 403);
@@ -113,7 +116,7 @@ async fn tenants_are_isolated() {
     // Tenant B's operator names the same account ids: they are B's ids, which do not exist.
     let (st, _) = s.ledger(&op_b, json!({"cmd": "transfer", "id": 2, "debit": 1, "credit": 0, "amount": 50}), None).await;
     assert_eq!(st, 404);
-    assert_eq!(s.ledger(&op_b, json!({"cmd": "accounts"}), None).await, (200, json!([])));
+    assert_eq!(s.ledger(&op_b, json!({"cmd": "accounts"}), None).await, (200, json!({"accounts": [], "next": null})));
     assert_eq!(s.ledger(&op_b, json!({"cmd": "transfers"}), None).await, (200, json!([])));
     // A forged token for tenant A signed with another secret is refused.
     let forged = HmacAuth::<LedgerApp>::new("other-secret", principal).issue(a, 0, 600);
@@ -146,9 +149,12 @@ async fn the_user_key_cannot_mint_an_operator() {
     let audit = s.http.get(format!("{}/v1/ledger/audit", s.base)).bearer_auth(&user).send().await.unwrap();
     assert_eq!(audit.status().as_u16(), 403);
     // The operator token works for its own tenant only.
-    assert_eq!(s.ledger(&operator_token(fresh_tenant()), json!({"cmd": "accounts"}), None).await, (200, json!([])));
-    let (st, accts) = s.ledger(&op, json!({"cmd": "accounts"}), None).await;
-    assert_eq!((st, accts.as_array().map(Vec::len)), (200, Some(2)));
+    assert_eq!(s.ledger(&operator_token(fresh_tenant()), json!({"cmd": "accounts"}), None).await, (200, json!({"accounts": [], "next": null})));
+    // One account each for owner 0 (the operator's) and user 5.
+    let (st, accts) = s.ledger(&op, json!({"cmd": "accounts", "owner": 5}), None).await;
+    assert_eq!((st, accts["accounts"].as_array().map(Vec::len)), (200, Some(1)));
+    let (st, accts) = s.ledger(&op, json!({"cmd": "accounts", "owner": 0}), None).await;
+    assert_eq!((st, accts["accounts"].as_array().map(Vec::len)), (200, Some(1)));
 }
 
 /// SEC-02: operators are distinct inside the ledger kernel, and the journal

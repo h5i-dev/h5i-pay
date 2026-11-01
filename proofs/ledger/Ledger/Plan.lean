@@ -12,8 +12,9 @@ says `None`. Here the extracted reads are read as `H5iAppLib.Query` reads
 (`generated/LedgerSchema.lean`). `Ledger/Frame.lean` shows `transition`
 gives the same result on `Snapshot.load plan s` as on `s`.
 
-Tables and columns are numbered as in `schema!`: accounts 0 (id, owner, ...),
-transfers 1 (id, ...), the ledger counter 2.
+Tables and columns are numbered as in `schema!`: accounts 0 (id, owner,
+..., seq at 8), transfers 1 (id, ...), the ledger counter 2, the owner
+counters 3 (owner, next).
 
 Trusted: PostgreSQL returns, for each read, `Read.rows` of the tenant's
 tables listed in key order, which h5i's differential tests of
@@ -54,15 +55,30 @@ def idsStep (p : Pred Val) (t : TransferReq) : Pred Val := .or p (eqU 0 t.id)
 def batchA (t0 : TransferReq) (rest : List TransferReq) : List (Read Val) :=
   [⟨0, rest.foldl accsStep (accsA t0), {}⟩, ⟨1, rest.foldl idsStep (eqU 0 t0.id), {}⟩]
 
+/-- `page_end` in numbers: `f + l`, or `U64.max` if that overflows. -/
+def pageEndN (f l : Nat) : Nat := if f > U64.max - l then U64.max else f + l
+
+def rangeStep (c : Nat) (p : Pred Val) (y : Nat) : Pred Val := .or p (.eq c (int y))
+
+/-- Column `c` holds one of `f`, …, `x - 1` (`seq_range`). -/
+def rangeA (c f x : Nat) : Pred Val := (List.range' (f + 1) (x - (f + 1))).foldl (rangeStep c) (.eq c (int f))
+
+/-- An `Accounts` page that is not refused: `owner`'s accounts numbered
+`from` to `end - 1`, and the owner's counter. -/
+def pageA (owner : U64) (f e : Nat) : List (Read Val) :=
+  if f < e then [⟨0, .and (eqU 1 owner) (rangeA 8 f e), {}⟩, ⟨3, eqU 0 owner, {}⟩] else [⟨3, eqU 0 owner, {}⟩]
+
 def readsA (a : Principal) : Command → Option (List (Read Val))
-  | .Open .. => some [⟨2, .all, {}⟩]
+  | .Open owner .. => some [⟨2, .all, {}⟩, ⟨3, eqU 0 owner, {}⟩]
   | .Transfer t => some [⟨0, accsA t, {}⟩, ⟨1, eqU 0 t.id, {}⟩]
   | .Batch ts =>
     match ts.val with
     | [] => some []
-    | t0 :: rest => if ts.val.length > 64 then none else some (batchA t0 rest)
+    | t0 :: rest => if ts.val.length > 64 then some [] else some (batchA t0 rest)
   | .Account id => some [⟨0, eqU 0 id, {}⟩]
-  | .Accounts => if a.operator then some [⟨0, .all, {}⟩] else some [⟨0, eqU 1 a.user, {}⟩]
+  | .Accounts owner f l =>
+    if l.val ≠ 0 ∧ l.val ≤ 64 ∧ (a.operator = true ∨ owner = a.user) then some (pageA owner f.val (pageEndN f.val l.val))
+    else some []
   | .Transfers => if a.operator then some [⟨1, .all, {}⟩] else some []
 
 /-! ## The extracted plans compute `readsA` -/
@@ -139,6 +155,52 @@ theorem batch_reads_abs (ts : alloc.vec.Vec TransferReq) (t0 : TransferReq) (res
   simp [rd_where, h5i_app_sql.whole, alloc.vec.Vec.push, alloc.vec.Vec.new, U32.max, U32.numBits,
     alloc.vec.Vec.from_val, batchA, Read.abs, e1, e2, Window.abs, T_ACCOUNTS, T_TRANSFERS, accsA, accsP, Pred.abs, eqU]
 
+theorem ok_of' {α} {m : Result α} {P : α → Prop} (h : m ⦃ P ⦄) : ∃ r, m = ok r ∧ P r := by
+  obtain ⟨r, hr⟩ := ok_of h; exact ⟨r, hr, post_of_ok h hr⟩
+
+theorem page_end_spec (f : U64) (l : U32) : page_end f l ⦃ e => e.val = pageEndN f.val l.val ⦄ := by
+  unfold page_end pageEndN
+  step*
+  all_goals simp_all [core.num.U64.MAX, U64.rMax] <;> scalar_tac
+
+theorem rangeA_succ (c f x : Nat) (h : f < x) : rangeA c f (x + 1) = rangeStep c (rangeA c f x) x := by
+  unfold rangeA
+  have : x + 1 - (f + 1) = (x - (f + 1)) + 1 := by omega
+  rw [this, List.range'_concat, List.foldl_append]
+  have : f + 1 + (x - (f + 1)) = x := by omega
+  simp [this]
+
+theorem seq_range_loop_spec (col : U32) (e : U64) (f : Nat) (p : h5i_app_sql.Pred) (x : U64)
+    (hfx : f < x.val) (hxe : x.val ≤ e.val) (hp : Pred.abs p = rangeA col.val f x.val) :
+    seq_range_loop col e p x ⦃ r => Pred.abs r = rangeA col.val f e.val ⦄ := by
+  unfold seq_range_loop
+  apply loop.spec_decr_nat (measure := fun (y : h5i_app_sql.Pred × U64) => e.val - y.2.val)
+    (inv := fun y => f < y.2.val ∧ y.2.val ≤ e.val ∧ Pred.abs y.1 = rangeA col.val f y.2.val)
+  · rintro ⟨q, y⟩ ⟨h1, h2, h3⟩
+    unfold seq_range_loop.body
+    simp only at h1 h2 h3 ⊢
+    split
+    · rename_i hlt
+      simp only [v_int_eq, p_eq, p_or, bind_ok]
+      have : y.val + 1 ≤ U64.max := by scalar_tac
+      step*
+      refine ⟨by scalar_tac, by scalar_tac, ?_, by scalar_tac⟩
+      rw [x1_post, rangeA_succ _ _ _ h1, ← h3]; rfl
+    · rename_i hge
+      simp only [WP.spec_ok]
+      have : y.val = e.val := by scalar_tac
+      rw [h3, this]
+  · exact ⟨hfx, hxe, hp⟩
+
+theorem seq_range_spec (col : U32) (f e : U64) (h : f.val < e.val) :
+    seq_range col f e ⦃ r => Pred.abs r = rangeA col.val f.val e.val ⦄ := by
+  unfold seq_range
+  simp only [v_int_eq, p_eq, bind_ok]
+  have : f.val + 1 ≤ U64.max := by scalar_tac
+  step*
+  apply seq_range_loop_spec col e f.val _ _ (by scalar_tac) (by scalar_tac)
+  rw [x_post]; simp [rangeA, Pred.abs]
+
 /-- The extracted `reads` computes `readsA`. -/
 theorem reads_abs (a : Principal) (c : Command) : ∃ o, reads a c = ok o ∧ planOf o = readsA a c := by
   cases c
@@ -152,26 +214,64 @@ theorem reads_abs (a : Principal) (c : Command) : ∃ o, reads a c = ok o ∧ pl
     | cons t0 rest =>
       have hne : ¬ (alloc.vec.Vec.len ts = 0#usize) := by
         intro h0; have := congrArg UScalar.val h0; rw [hlenv, hv] at this; simp at this
-      by_cases hgt : alloc.vec.Vec.len ts > MAX_PLANNED_BATCH
+      by_cases hgt : alloc.vec.Vec.len ts > MAX_BATCH
       · have : (t0 :: rest).length > 64 := by
-          rw [← hv, ← hlenv]; simp only [MAX_PLANNED_BATCH] at hgt; scalar_tac
-        have h64 : 64 ≤ rest.length := by simp at this; omega
-        simp [reads, readsA, hv, hne, hgt, h64, planOf, MAX_PLANNED_BATCH]
+          rw [← hv, ← hlenv]; simp only [MAX_BATCH] at hgt; scalar_tac
+        simp only [reads, readsA, hv, hne, hgt, this, if_true, if_false, Bool.false_or, decide_true, Bool.or_true]
+        exact ⟨_, rfl, by simp [planOf]⟩
       · have : ¬ (t0 :: rest).length > 64 := by
-          rw [← hv, ← hlenv]; simp only [MAX_PLANNED_BATCH] at hgt; scalar_tac
+          rw [← hv, ← hlenv]; simp only [MAX_BATCH] at hgt; scalar_tac
         obtain ⟨v, hb, hvb⟩ := batch_reads_abs ts t0 rest hv
         simp only [reads, readsA, hv, hne, hgt, this, if_false, hb, bind_ok]
         exact ⟨_, rfl, by simp [planOf, hvb]⟩
-  case Accounts =>
-    cases ha : a.operator <;>
-      simp [reads, readsA, ha, rd_where, p_eq, h5i_app_sql.whole, planOf, Read.abs, Pred.abs, Window.abs, eqU,
-        alloc.vec.Vec.push, alloc.vec.Vec.new, T_ACCOUNTS, ACCOUNT_OWNER, U32.max, U32.numBits, alloc.vec.Vec.from_val]
+  case Accounts owner f l =>
+    obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+    have page : ∃ o, (do
+        let out ← if f < e then do
+            let range ← seq_range ACCOUNT_SEQ f e
+            let v ← v_int owner
+            let p ← p_eq ACCOUNT_OWNER v
+            let r ← rd_where T_ACCOUNTS (h5i_app_sql.Pred.And p range)
+            alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+          else ok (alloc.vec.Vec.new h5i_app_sql.Read)
+        let v ← v_int owner
+        let p ← p_eq OWNER_KEY v
+        let r ← rd_where T_OWNERS p
+        let out1 ← alloc.vec.Vec.push out r
+        ok (some out1)) = ok o ∧ planOf o = some (pageA owner f.val (pageEndN f.val l.val)) := by
+      rw [← hev]
+      by_cases hfe : f < e
+      · obtain ⟨r, hr, hra⟩ := ok_of' (seq_range_spec ACCOUNT_SEQ f e (by scalar_tac))
+        simp only [hfe, if_true, hr, bind_ok, v_int_eq, p_eq, rd_where, h5i_app_sql.whole]
+        simp [alloc.vec.Vec.push, alloc.vec.Vec.new, U32.max, U32.numBits, alloc.vec.Vec.from_val, planOf, pageA,
+          Read.abs, Pred.abs, Window.abs, eqU, hra, T_ACCOUNTS, T_OWNERS, ACCOUNT_OWNER, ACCOUNT_SEQ, OWNER_KEY,
+          show f.val < e.val by scalar_tac]
+      · simp only [hfe, if_false, bind_ok, v_int_eq, p_eq, rd_where, h5i_app_sql.whole]
+        simp [alloc.vec.Vec.push, alloc.vec.Vec.new, U32.max, U32.numBits, alloc.vec.Vec.from_val, planOf, pageA,
+          Read.abs, Pred.abs, Window.abs, eqU, T_OWNERS, OWNER_KEY, show ¬ f.val < e.val by scalar_tac]
+    simp only [reads, readsA, he, bind_ok]
+    by_cases h0 : l = 0#u32
+    · subst h0; simp [planOf]
+    have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+    by_cases hm : l ≤ MAX_PAGE
+    · have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      cases ha : a.operator
+      · by_cases hu : owner = a.user
+        · simp only [h0, hm, hu, ha, h0', hm', bne_iff_ne, ne_eq, not_false_eq_true, if_true, decide_true,
+            is_operator_eq, user_of_eq, bind_ok, Bool.false_eq_true, if_false, true_and, or_true, and_self]
+          rw [← hu]; exact page
+        · simp [h0, hm, hu, ha, h0', hm', planOf]
+      · simp only [h0, hm, ha, h0', hm', bne_iff_ne, ne_eq, not_false_eq_true, if_true, is_operator_eq, bind_ok,
+          true_and, true_or, and_self]
+        exact page
+    · have hm' : ¬ l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      simp [h0, hm, hm', planOf]
   case Transfers =>
     cases ha : a.operator <;>
       simp [reads, readsA, ha, rd_where, h5i_app_sql.whole, planOf, Read.abs, Pred.abs, Window.abs,
         alloc.vec.Vec.push, alloc.vec.Vec.new, T_TRANSFERS, U32.max, U32.numBits, alloc.vec.Vec.from_val]
   all_goals simp [reads, readsA, rd_where, p_eq, accounts_of_eq, h5i_app_sql.whole, planOf, Read.abs, Pred.abs,
     Window.abs, eqU, accsA, accsP, alloc.vec.Vec.push, alloc.vec.Vec.new, T_ACCOUNTS, T_TRANSFERS, T_LEDGER,
-    ACCOUNT_ID, TRANSFER_ID, U32.max, U32.numBits, alloc.vec.Vec.from_val]
+    T_OWNERS, OWNER_KEY, ACCOUNT_ID, TRANSFER_ID, U32.max, U32.numBits, alloc.vec.Vec.from_val]
 
 end payment_ledger.Plan

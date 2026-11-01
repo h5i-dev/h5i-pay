@@ -28,7 +28,7 @@ theorem apply_spec (s : Snapshot) (ws : alloc.vec.Vec Write) (h : Snapshot.size 
   apply_spec' Snapshot.toSt applyWrite apply_write_spec write_clone s ws h
 
 /-- Rows in the state's keyed tables. -/
-def rows (s : St) : Nat := s.accounts.length + s.transfers.length
+def rows (s : St) : Nat := s.accounts.length + s.transfers.length + s.owners.length
 
 theorem rows_toSt (s : Snapshot) : rows (Snapshot.toSt s) = Snapshot.size s := by
   simp [rows, Snapshot.toSt, Snapshot.size, alloc.vec.Vec.length]

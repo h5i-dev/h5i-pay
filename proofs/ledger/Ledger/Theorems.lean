@@ -40,6 +40,7 @@ theorem findAcc_putTr (s : St) (t : Transfer) (n : Nat) : findAcc (applyWrite s 
 theorem findTr_putAcc (s : St) (a : Account) (n : Nat) : findTr (applyWrite s (.PutAccount a)) n = findTr s n := rfl
 theorem findAcc_set (s : St) (l : Ledger) (n : Nat) : findAcc (applyWrite s (.SetLedger l)) n = findAcc s n := rfl
 theorem findTr_set (s : St) (l : Ledger) (n : Nat) : findTr (applyWrite s (.SetLedger l)) n = findTr s n := rfl
+theorem findAcc_owner (s : St) (c : OwnerCounter) (n : Nat) : findAcc (applyWrite s (.PutOwner c)) n = findAcc s n := rfl
 
 theorem findAcc_mem {s : St} {n : Nat} {q : Account} (h : findAcc s n = some q) :
     q ∈ s.accounts ∧ q.id.val = n :=

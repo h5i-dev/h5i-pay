@@ -60,9 +60,12 @@ structure St where
   next : Nat
   accounts : List Account
   transfers : List Transfer
+  /-- Per-owner account counters; they only number accounts for paging
+  (`Accounts`), and no theorem here is about them. -/
+  owners : List OwnerCounter
 
 def Snapshot.toSt (s : Snapshot) : St :=
-  ⟨s.ledger.next_account.val, s.accounts.val, s.transfers.val⟩
+  ⟨s.ledger.next_account.val, s.accounts.val, s.transfers.val, s.owners.val⟩
 
 def findAcc (s : St) (id : Nat) : Option Account :=
   s.accounts.find? (fun a => a.id.val = id)
@@ -88,6 +91,7 @@ def applyWrite (s : St) : Write → St
   | .PutAccount a => { s with accounts := H5iAppLib.upsert (·.id) a s.accounts }
   | .PutTransfer t => { s with transfers := H5iAppLib.upsert (·.id) t s.transfers }
   | .SetLedger l => { s with next := l.next_account.val }
+  | .PutOwner c => { s with owners := H5iAppLib.upsert (·.owner) c s.owners }
 
 def applyAll (s : St) (ws : List Write) : St := ws.foldl applyWrite s
 
@@ -102,12 +106,13 @@ structure Inv (s : St) : Prop where
   balanced : ∀ c, debits c s = journal c s ∧ credits c s = journal c s
   limits : ∀ a ∈ s.accounts, Limited a
 
-def init : St := ⟨0, [], []⟩
+def init : St := ⟨0, [], [], []⟩
 
 /-- Rows in a loaded snapshot leave room for one maximal batch (3 · 8192
 writes) below `usize::MAX`. An assumption about memory, not about the
 ledger: on a 64-bit machine no snapshot comes near 2^64 rows. -/
-def HasRoom (s : Snapshot) : Prop := s.accounts.length + s.transfers.length + 3 * 8192 < Usize.max
+def HasRoom (s : Snapshot) : Prop :=
+  s.accounts.length + s.transfers.length + s.owners.length + 3 * 8192 < Usize.max
 
 /-- The states reachable from an empty ledger by successful commands of any
 callers, in any order. -/

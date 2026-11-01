@@ -93,6 +93,7 @@ h5i_app_schema::schema! {
         refunds: Vec<Refund>,
         events: Vec<Event>,
         refs: Vec<PspRef>,
+        merchants: Vec<MerchantCounter>,
     }
 
     /// A payment. Amounts are minor units of `currency` (ISO 4217 numeric).
@@ -116,6 +117,9 @@ h5i_app_schema::schema! {
         /// current state: set only by `MarkPosted`, cleared by every other
         /// command that writes the payment.
         ledger_done: bool,
+        /// The payment's number among its merchant's payments (0, 1, …):
+        /// the key `List` pages by.
+        seq: u64,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -148,7 +152,17 @@ h5i_app_schema::schema! {
         key {}
         next_id: u64,
     }
+
+    /// How many payments a merchant has: the next payment's `seq`.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct MerchantCounter in "merchant_counters" {
+        key { merchant: u64 }
+        next: u64,
+    }
 }
+
+/// The most payments one `List` page covers (sequence numbers per page).
+pub const MAX_PAGE: u32 = 64;
 
 /// What a PSP reported about a payment.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -180,8 +194,10 @@ pub enum Command {
     /// the same reference again is a no-op; a different one is refused.
     AttachRef { payment: u64, reference: Vec<u8> },
     Get { id: u64 },
-    /// The caller's payments (every payment, for an operator).
-    List,
+    /// One page of `merchant`'s payments: those numbered `from` to
+    /// `from + limit - 1` among the merchant's payments (`Payment::seq`),
+    /// `limit` at most `MAX_PAGE`. A merchant may list only its own.
+    List { merchant: u64, from: u64, limit: u32 },
     /// One refund.
     GetRefund { id: u64 },
     /// A payment's refunds.
@@ -205,6 +221,7 @@ pub enum Write {
     PutEvent(Event),
     PutRef(PspRef),
     SetCounter(Counter),
+    PutMerchant(MerchantCounter),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -219,7 +236,9 @@ pub enum Reply {
     /// The event no longer applies to the payment's status; recorded only.
     Stale,
     Payment(Payment),
-    Payments(Vec<Payment>),
+    /// A page of payments, and where the next page starts (`None`: this
+    /// was the last).
+    Payments(Vec<Payment>, Option<u64>),
     Refund(Refund),
     Refunds(Vec<Refund>),
     Ref(Vec<u8>),
@@ -242,6 +261,8 @@ pub enum Error {
     Corrupt,
     /// The payment already has a different PSP reference.
     RefConflict,
+    /// A page limit of 0 or above `MAX_PAGE`.
+    BadPage,
 }
 
 type Outcome = Result<(Vec<Write>, Reply), Error>;
@@ -265,6 +286,29 @@ fn three(a: Write, b: Write, c: Write) -> Vec<Write> {
     ws.push(b);
     ws.push(c);
     ws
+}
+
+/// How many payments `merchant` has (its counter, 0 if it has none).
+pub fn merchant_next(cs: &Vec<MerchantCounter>, merchant: u64) -> u64 {
+    let mut i = 0;
+    while i < cs.len() {
+        if cs[i].merchant == merchant {
+            return cs[i].next;
+        }
+        i += 1;
+    }
+    0
+}
+
+/// The first number past a page: `from + limit`, or `u64::MAX` if that
+/// overflows.
+pub fn page_end(from: u64, limit: u32) -> u64 {
+    let n = limit as u64;
+    if from > u64::MAX - n {
+        u64::MAX
+    } else {
+        from + n
+    }
 }
 
 pub fn find_payment(ps: &Vec<Payment>, id: u64) -> Option<Payment> {
@@ -322,6 +366,7 @@ fn with_status(p: Payment, status: u32, authorized: u64, captured: u64, op: u64)
         refund_pending: p.refund_pending,
         operator: op,
         ledger_done: false,
+        seq: p.seq,
     }
 }
 
@@ -341,6 +386,7 @@ fn with_refunds(p: Payment, refunded: u64, refund_pending: u64, op: u64) -> Paym
         refund_pending,
         operator: op,
         ledger_done: false,
+        seq: p.seq,
     }
 }
 
@@ -352,9 +398,14 @@ fn create(actor: &Principal, s: &Snapshot, amount: u64, currency: u32, manual_ca
     if c.next_id == u64::MAX {
         return Err(Error::Overflow);
     }
+    let merchant = user_of(actor);
+    let n = merchant_next(&s.merchants, merchant);
+    if n == u64::MAX {
+        return Err(Error::Overflow);
+    }
     let p = Payment {
         id: c.next_id,
-        merchant: user_of(actor),
+        merchant,
         amount,
         currency,
         status: CREATED,
@@ -366,9 +417,11 @@ fn create(actor: &Principal, s: &Snapshot, amount: u64, currency: u32, manual_ca
         refund_pending: 0,
         operator: operator_of(actor),
         ledger_done: false,
+        seq: n,
     };
     let c2 = Counter { next_id: c.next_id + 1 };
-    Ok((two(Write::PutPayment(p), Write::SetCounter(c2)), Reply::Created(p.id)))
+    let m2 = MerchantCounter { merchant, next: n + 1 };
+    Ok((three(Write::PutPayment(p), Write::SetCounter(c2), Write::PutMerchant(m2)), Reply::Created(p.id)))
 }
 
 fn begin_authorize(actor: &Principal, s: &Snapshot, id: u64) -> Outcome {
@@ -396,6 +449,7 @@ fn begin_authorize(actor: &Principal, s: &Snapshot, id: u64) -> Outcome {
                     refund_pending: p.refund_pending,
                     operator: operator_of(actor),
                     ledger_done: false,
+                    seq: p.seq,
                 };
                 Ok((one(Write::PutPayment(p2)), Reply::Payment(p2)))
             }
@@ -768,6 +822,7 @@ fn with_ledger_done(p: Payment, op: u64) -> Payment {
         refund_pending: p.refund_pending,
         operator: op,
         ledger_done: true,
+        seq: p.seq,
     }
 }
 
@@ -794,16 +849,31 @@ fn mark_posted(actor: &Principal, s: &Snapshot, id: u64, captured: u64, seen: &V
     }
 }
 
-fn visible(actor: &Principal, s: &Snapshot) -> Vec<Payment> {
+/// `merchant`'s payments numbered `from` up to (not including) `end`, in
+/// table order.
+fn merchant_range(s: &Snapshot, merchant: u64, from: u64, end: u64) -> Vec<Payment> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < s.payments.len() {
-        if may_manage(actor, &s.payments[i]) {
-            out.push(s.payments[i]);
+        let p = s.payments[i];
+        if p.merchant == merchant && from <= p.seq && p.seq < end {
+            out.push(p);
         }
         i += 1;
     }
     out
+}
+
+fn list(actor: &Principal, s: &Snapshot, merchant: u64, from: u64, limit: u32) -> Outcome {
+    if limit == 0 || limit > MAX_PAGE {
+        return Err(Error::BadPage);
+    }
+    if !is_operator(actor) && merchant != user_of(actor) {
+        return Err(Error::Forbidden);
+    }
+    let end = page_end(from, limit);
+    let next = if end < merchant_next(&s.merchants, merchant) { Some(end) } else { None };
+    Ok((Vec::new(), Reply::Payments(merchant_range(s, merchant, from, end), next)))
 }
 
 /// The payment logic: a command's writes and reply, or a refusal that
@@ -818,7 +888,7 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
         Command::Event { event: ev, payment, result } => event(actor, s, *ev, *payment, result),
         Command::AttachRef { payment, reference } => attach_ref(actor, s, *payment, reference),
         Command::Get { id } => get(actor, s, *id),
-        Command::List => Ok((Vec::new(), Reply::Payments(visible(actor, s)))),
+        Command::List { merchant, from, limit } => list(actor, s, *merchant, *from, *limit),
         Command::GetRefund { id } => get_refund(actor, s, *id),
         Command::Refunds { payment } => refunds_of(actor, s, *payment),
         Command::GetRef { payment } => get_ref(actor, s, *payment),
@@ -835,9 +905,12 @@ pub const T_REFUNDS: u32 = 1;
 pub const T_EVENTS: u32 = 2;
 pub const T_REFS: u32 = 3;
 pub const T_COUNTER: u32 = 4;
+pub const T_MERCHANTS: u32 = 5;
 /// Column numbers: key columns first, then fields in declaration order.
 pub const PAYMENT_ID: u32 = 0;
 pub const PAYMENT_MERCHANT: u32 = 1;
+pub const PAYMENT_SEQ: u32 = 13;
+pub const MERCHANT_KEY: u32 = 0;
 pub const REFUND_ID: u32 = 0;
 pub const REFUND_PAYMENT: u32 = 1;
 pub const EVENT_ID: u32 = 0;
@@ -849,6 +922,21 @@ fn v_int(x: u64) -> h5i_app_sql::Val {
 
 fn p_eq(col: u32, v: h5i_app_sql::Val) -> h5i_app_sql::Pred {
     h5i_app_sql::Pred::Eq { col, val: v }
+}
+
+fn p_or(a: h5i_app_sql::Pred, b: h5i_app_sql::Pred) -> h5i_app_sql::Pred {
+    h5i_app_sql::Pred::Or(Box::new(a), Box::new(b))
+}
+
+/// `col` holds one of `from`, …, `end - 1` (`from < end`).
+fn seq_range(col: u32, from: u64, end: u64) -> h5i_app_sql::Pred {
+    let mut p = p_eq(col, v_int(from));
+    let mut x = from + 1;
+    while x < end {
+        p = p_or(p, p_eq(col, v_int(x)));
+        x += 1;
+    }
+    p
 }
 
 fn rd_where(table: u32, pred: h5i_app_sql::Pred) -> h5i_app_sql::Read {
@@ -871,7 +959,10 @@ fn result_reads(result: &PspResult, out: &mut Vec<h5i_app_sql::Read>) {
 pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>> {
     let mut out = Vec::new();
     match cmd {
-        Command::Create { .. } => out.push(rd_where(T_COUNTER, h5i_app_sql::Pred::All)),
+        Command::Create { .. } => {
+            out.push(rd_where(T_COUNTER, h5i_app_sql::Pred::All));
+            out.push(rd_where(T_MERCHANTS, p_eq(MERCHANT_KEY, v_int(user_of(actor)))));
+        }
         Command::BeginAuthorize { id } => out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*id)))),
         Command::Cancel { id } => out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*id)))),
         Command::RequestRefund { payment, .. } => {
@@ -892,11 +983,16 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
             out.push(rd_where(T_REFS, p_eq(REF_PAYMENT, v_int(*payment))));
         }
         Command::Get { id } => out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*id)))),
-        Command::List => {
-            if is_operator(actor) {
-                out.push(rd_where(T_PAYMENTS, h5i_app_sql::Pred::All));
-            } else {
-                out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_MERCHANT, v_int(user_of(actor)))));
+        Command::List { merchant, from, limit } => {
+            // Refused pages read nothing.
+            if *limit != 0 && *limit <= MAX_PAGE && (is_operator(actor) || *merchant == user_of(actor)) {
+                let end = page_end(*from, *limit);
+                if *from < end {
+                    let range = seq_range(PAYMENT_SEQ, *from, end);
+                    let pred = h5i_app_sql::Pred::And(Box::new(p_eq(PAYMENT_MERCHANT, v_int(*merchant))), Box::new(range));
+                    out.push(rd_where(T_PAYMENTS, pred));
+                }
+                out.push(rd_where(T_MERCHANTS, p_eq(MERCHANT_KEY, v_int(*merchant))));
             }
         }
         Command::GetRefund { id } => {
@@ -940,6 +1036,7 @@ fn apply_write(s: &mut Snapshot, w: Write) {
         Write::PutEvent(e) => Event::put(&mut s.events, e),
         Write::PutRef(r) => PspRef::put(&mut s.refs, r),
         Write::SetCounter(c) => s.counter = c,
+        Write::PutMerchant(c) => MerchantCounter::put(&mut s.merchants, c),
     }
 }
 
@@ -951,6 +1048,7 @@ fn sql_write(w: &Write, out: &mut Vec<h5i_app_sql::Write>) {
         Write::PutEvent(e) => out.push(e.sql_put()),
         Write::PutRef(r) => out.push(r.sql_put()),
         Write::SetCounter(c) => out.push(c.sql_put()),
+        Write::PutMerchant(c) => out.push(c.sql_put()),
     }
 }
 
@@ -1099,6 +1197,28 @@ mod tests {
         assert_eq!(run(&s, OP, mark(100, vec![pending])).1, Ok(Reply::Stale));
         let done = find_refund(&s.refunds, rid).unwrap();
         assert_eq!(run(&s, OP, mark(100, vec![done])).1, Ok(Reply::Status(CAPTURED)));
+    }
+
+    #[test]
+    fn pages_of_a_merchants_payments() {
+        let mut s = Snapshot::default();
+        for i in 0..5 {
+            let who = if i == 2 { OTHER } else { M };
+            s = run(&s, who, Command::Create { amount: 10, currency: 392, manual_capture: false }).0;
+        }
+        let page = |s: &Snapshot, a, merchant, from, limit| match run(s, a, Command::List { merchant, from, limit }).1 {
+            Ok(Reply::Payments(ps, next)) => Ok((ps.iter().map(|p| (p.id, p.seq)).collect::<Vec<_>>(), next)),
+            Ok(r) => panic!("{r:?}"),
+            Err(e) => Err(e),
+        };
+        // M has ids 0, 1, 3, 4, numbered 0..4; OTHER has id 2, numbered 0.
+        assert_eq!(page(&s, M, 7, 0, 3), Ok((vec![(0, 0), (1, 1), (3, 2)], Some(3))));
+        assert_eq!(page(&s, M, 7, 3, 3), Ok((vec![(4, 3)], None)));
+        assert_eq!(page(&s, OP, 8, 0, MAX_PAGE), Ok((vec![(2, 0)], None)));
+        assert_eq!(page(&s, M, 8, 0, 1), Err(Error::Forbidden));
+        assert_eq!(page(&s, M, 7, 0, 0), Err(Error::BadPage));
+        assert_eq!(page(&s, M, 7, 0, MAX_PAGE + 1), Err(Error::BadPage));
+        assert_eq!(page(&s, M, 7, u64::MAX, 2), Ok((vec![], None)));
     }
 
     #[test]

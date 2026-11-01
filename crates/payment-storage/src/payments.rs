@@ -57,10 +57,13 @@ impl Store<PaymentsApp> for PaymentsStore {
         for t in ["payments", "refunds", "psp_events", "psp_refs"] {
             ddl.push(crate::add_column(t, "operator", "BIGINT NOT NULL DEFAULT 0"));
         }
+        // F3: payments numbered per merchant, and the merchants' counters.
+        ddl.extend(crate::numbering("payments", "merchant", "merchant_counters"));
         // F2: the ledger-complete marker. Older rows start unmarked; the
         // first recovery pass syncs and marks them.
         ddl.push(crate::add_column("payments", "ledger_done", "BOOLEAN NOT NULL DEFAULT false"));
-        ddl.push("CREATE INDEX IF NOT EXISTS payments_merchant ON payments (tenant_id, merchant)".into());
+        ddl.push("DROP INDEX IF EXISTS payments_merchant".into());
+        ddl.push("CREATE INDEX IF NOT EXISTS payments_merchant_seq ON payments (tenant_id, merchant, seq)".into());
         ddl.push("CREATE INDEX IF NOT EXISTS refunds_payment ON refunds (tenant_id, payment)".into());
         ddl.push(format!(
             "CREATE INDEX IF NOT EXISTS payments_unfinished ON payments (tenant_id, id) \
@@ -100,9 +103,9 @@ impl Store<PaymentsApp> for PaymentsStore {
         }
     }
 
-    /// Writes queue on the payment they change (and the id counter when
-    /// they allocate an id). Only a hint for fewer retries; SERIALIZABLE
-    /// makes any interleaving serial.
+    /// Writes queue on the payment they change. Only a hint for fewer
+    /// retries; SERIALIZABLE makes any interleaving serial.
+    ///
     fn lock_for(_actor: &k::Principal, cmd: &k::Command) -> Lock {
         let pay = |id: &u64| Lock::key("payment", &id.to_be_bytes());
         let counter = || Lock::key("counter", &[]);
@@ -115,7 +118,7 @@ impl Store<PaymentsApp> for PaymentsStore {
             | k::Command::AttachRef { payment, .. }
             | k::Command::MarkPosted { payment, .. } => Lock::Keys(vec![pay(payment)]),
             k::Command::Get { .. }
-            | k::Command::List
+            | k::Command::List { .. }
             | k::Command::GetRefund { .. }
             | k::Command::Refunds { .. }
             | k::Command::GetRef { .. }
@@ -160,6 +163,7 @@ pub fn payment_json(p: &k::Payment) -> Out {
         ("refund_pending", p.refund_pending.into()),
         ("operator", p.operator.into()),
         ("ledger_done", p.ledger_done.into()),
+        ("seq", p.seq.into()),
     ])
 }
 
@@ -184,6 +188,7 @@ pub fn error_code(e: &k::Error) -> (StatusCode, &'static str) {
         k::Error::Overflow => (StatusCode::UNPROCESSABLE_ENTITY, "overflow"),
         k::Error::Corrupt => (StatusCode::INTERNAL_SERVER_ERROR, "corrupt"),
         k::Error::RefConflict => (StatusCode::CONFLICT, "psp_reference_conflict"),
+        k::Error::BadPage => (StatusCode::BAD_REQUEST, "bad_page"),
     }
 }
 
@@ -193,21 +198,40 @@ pub fn error_code(e: &k::Error) -> (StatusCode, &'static str) {
 #[serde(tag = "cmd", rename_all = "snake_case", deny_unknown_fields)]
 enum CommandJson {
     Get { id: u64 },
-    List,
+    /// A page of a merchant's payments (default: the caller's), from
+    /// sequence number `from` (default 0), at most `limit` (default and
+    /// maximum `k::MAX_PAGE`).
+    List {
+        #[serde(default)]
+        merchant: Option<u64>,
+        #[serde(default)]
+        from: u64,
+        #[serde(default)]
+        limit: Option<u32>,
+    },
     GetRefund { id: u64 },
     Refunds { payment: u64 },
     View { id: u64 },
 }
 
+/// Decode a client's payment command, with defaults from the caller.
+pub fn decode_for(actor: &k::Principal, body: serde_json::Value) -> Result<k::Command, String> {
+    Ok(match serde_json::from_value::<CommandJson>(body).map_err(|e| e.to_string())? {
+        CommandJson::Get { id } => k::Command::Get { id },
+        CommandJson::List { merchant, from, limit } => {
+            k::Command::List { merchant: merchant.unwrap_or(k::user_of(actor)), from, limit: limit.unwrap_or(k::MAX_PAGE) }
+        }
+        CommandJson::GetRefund { id } => k::Command::GetRefund { id },
+        CommandJson::Refunds { payment } => k::Command::Refunds { payment },
+        CommandJson::View { id } => k::Command::View { id },
+    })
+}
+
 impl h5i_app_http::Api<PaymentsApp> for PaymentsStore {
+    /// Without the caller (`List` defaults to merchant 0); the server
+    /// routes requests through [`decode_for`] instead.
     fn decode_command(body: serde_json::Value) -> Result<k::Command, String> {
-        Ok(match serde_json::from_value::<CommandJson>(body).map_err(|e| e.to_string())? {
-            CommandJson::Get { id } => k::Command::Get { id },
-            CommandJson::List => k::Command::List,
-            CommandJson::GetRefund { id } => k::Command::GetRefund { id },
-            CommandJson::Refunds { payment } => k::Command::Refunds { payment },
-            CommandJson::View { id } => k::Command::View { id },
-        })
+        decode_for(&operator(0, crate::ORCHESTRATOR_OPERATOR), body)
     }
 
     fn encode_reply(r: &k::Reply) -> Out {
@@ -218,7 +242,10 @@ impl h5i_app_http::Api<PaymentsApp> for PaymentsStore {
             k::Reply::Duplicate => Out::obj([("status", "duplicate".into())]),
             k::Reply::Stale => Out::obj([("status", "stale".into())]),
             k::Reply::Payment(p) => payment_json(p),
-            k::Reply::Payments(ps) => Out::Arr(ps.iter().map(payment_json).collect()),
+            k::Reply::Payments(ps, next) => Out::obj([
+                ("payments", Out::Arr(ps.iter().map(payment_json).collect())),
+                ("next", next.map_or(Out::Null, Out::from)),
+            ]),
             k::Reply::Refund(r) => refund_json(r),
             k::Reply::Refunds(rs) => Out::Arr(rs.iter().map(refund_json).collect()),
             k::Reply::Ref(b) => Out::obj([("psp_reference", Out::str(b))]),
@@ -255,6 +282,8 @@ struct StoredPayment {
     operator: u64,
     #[serde(default)]
     ledger_done: bool,
+    #[serde(default)]
+    seq: u64,
 }
 
 fn store_payment(p: &k::Payment) -> StoredPayment {
@@ -272,6 +301,7 @@ fn store_payment(p: &k::Payment) -> StoredPayment {
         refund_pending: p.refund_pending,
         operator: p.operator,
         ledger_done: p.ledger_done,
+        seq: p.seq,
     }
 }
 
@@ -290,6 +320,7 @@ fn load_payment(p: StoredPayment) -> k::Payment {
         refund_pending: p.refund_pending,
         operator: p.operator,
         ledger_done: p.ledger_done,
+        seq: p.seq,
     }
 }
 
@@ -320,7 +351,9 @@ enum StoredReply {
     Duplicate,
     Stale,
     Payment(StoredPayment),
+    /// Before F3 (unpaged); decoded as the last page.
     Payments(Vec<StoredPayment>),
+    PaymentPage(Vec<StoredPayment>, Option<u64>),
     Refund(StoredRefund),
     Refunds(Vec<StoredRefund>),
     Ref(Vec<u8>),
@@ -346,7 +379,7 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
             k::Reply::Duplicate => StoredReply::Duplicate,
             k::Reply::Stale => StoredReply::Stale,
             k::Reply::Payment(p) => StoredReply::Payment(store_payment(p)),
-            k::Reply::Payments(ps) => StoredReply::Payments(ps.iter().map(store_payment).collect()),
+            k::Reply::Payments(ps, next) => StoredReply::PaymentPage(ps.iter().map(store_payment).collect(), *next),
             k::Reply::Refund(r) => StoredReply::Refund(store_refund(r)),
             k::Reply::Refunds(rs) => StoredReply::Refunds(rs.iter().map(store_refund).collect()),
             k::Reply::Ref(b) => StoredReply::Ref(b.clone()),
@@ -365,7 +398,8 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
             StoredReply::Duplicate => k::Reply::Duplicate,
             StoredReply::Stale => k::Reply::Stale,
             StoredReply::Payment(p) => k::Reply::Payment(load_payment(p)),
-            StoredReply::Payments(ps) => k::Reply::Payments(ps.into_iter().map(load_payment).collect()),
+            StoredReply::Payments(ps) => k::Reply::Payments(ps.into_iter().map(load_payment).collect(), None),
+            StoredReply::PaymentPage(ps, next) => k::Reply::Payments(ps.into_iter().map(load_payment).collect(), next),
             StoredReply::Refund(r) => k::Reply::Refund(load_refund(r)),
             StoredReply::Refunds(rs) => k::Reply::Refunds(rs.into_iter().map(load_refund).collect()),
             StoredReply::Ref(b) => k::Reply::Ref(b),

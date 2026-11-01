@@ -13,9 +13,6 @@ attribute [simp] u64_val_eq
 
 /-! ## Helpers -/
 
-@[step] theorem two_spec (a b : Write) : two a b ⦃ v => v.val = [a, b] ⦄ := by
-  unfold two; step*
-
 @[step] theorem three_spec (a b c : Write) : three a b c ⦃ v => v.val = [a, b, c] ⦄ := by
   unfold three; step*
 
@@ -34,6 +31,29 @@ attribute [simp] u64_val_eq
     (fun _ t => some t) none _ ?_ 0#usize (by simp))
   · intro r hr; rw [search_find _ _ _ hr]; simp
   · intro j hj; unfold find_transfer_loop.body; h5i_step
+
+theorem searchFrom_getD {α β : Type} (l : List α) (P : α → Bool) (f : α → β) (d : β) (k : Nat) :
+    searchFrom l P (fun _ x => f x) d k = (((l.drop k).find? P).map f).getD d := by
+  induction h : l.length - k generalizing k with
+  | zero => rw [searchFrom_end (by omega), List.drop_eq_nil_of_le (by omega)]; rfl
+  | succ n ih =>
+    have hk : k < l.length := by omega
+    rw [List.drop_eq_getElem_cons hk, List.find?_cons]
+    by_cases hp : P l[k]
+    · rw [searchFrom_found hk hp]; simp [hp]
+    · rw [searchFrom_skip hk hp, ih (k + 1) (by omega)]; simp [hp]
+
+/-- The owner's account count (0 if it has no counter). -/
+def ownerNext (l : List OwnerCounter) (o : U64) : U64 :=
+  ((l.find? (fun c => decide (c.owner = o))).map (·.next)).getD 0#u64
+
+@[step] theorem owner_next_spec (v : alloc.vec.Vec OwnerCounter) (o : U64) :
+    owner_next v o ⦃ n => n = ownerNext v.val o ⦄ := by
+  unfold owner_next owner_next_loop
+  apply WP.spec_mono (loop_search v.val (fun c => decide (c.owner = o)) (fun n : U64 => n)
+    (fun _ c => c.next) 0#u64 _ ?_ 0#usize (by simp))
+  · intro r hr; rw [hr, searchFrom_getD]; simp [ownerNext]
+  · intro j hj; unfold owner_next_loop.body; h5i_step
 
 @[step] theorem may_debit_spec (actor : Principal) (a : Account) :
     may_debit actor a ⦃ b => b = true ↔ (actor.operator = true ∨ a.owner = actor.user) ⦄ := by
@@ -92,9 +112,10 @@ the next id and nothing posted. -/
 theorem open_spec (actor : Principal) (s : Snapshot) (owner : U64) (cur code : U32) (nod noc : Bool) :
     «open» actor s owner cur code nod noc ⦃ r => ∀ ws rep, r = .Ok (ws, rep) →
       (actor.operator = true ∨ owner = actor.user) ∧ ¬(nod = true ∧ noc = true) ∧
-      ∃ n : U64, n.val = s.ledger.next_account.val + 1 ∧
-        ws.val = [.PutAccount ⟨s.ledger.next_account, owner, cur, code, nod, noc, 0#u64, 0#u64⟩,
-          .SetLedger ⟨n⟩] ⦄ := by
+      ∃ n : U64, n.val = s.ledger.next_account.val + 1 ∧ ∃ q m : U64, q = ownerNext s.owners.val owner ∧
+        m.val = q.val + 1 ∧
+        ws.val = [.PutAccount ⟨s.ledger.next_account, owner, cur, code, nod, noc, 0#u64, 0#u64, q⟩,
+          .SetLedger ⟨n⟩, .PutOwner ⟨owner, m⟩] ⦄ := by
   unfold «open»
   simp only [is_operator_eq, user_of_eq, bind_tc_ok, bind_ok]
   cases hop : actor.operator <;> cases nod <;> cases noc <;> simp only [Bool.false_eq_true, ↓reduceIte] <;>

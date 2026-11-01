@@ -351,8 +351,8 @@ impl Env {
 
     /// Credits − debits of the merchant's payable account (code 1002).
     async fn merchant_balance(&self, api: &Api) -> i64 {
-        let (_, accts) = self.call(api, reqwest::Method::POST, "/v1/ledger", &self.operator(), Some(json!({"cmd": "accounts"})), None).await;
-        accts
+        let (_, accts) = self.call(api, reqwest::Method::POST, "/v1/ledger", &self.operator(), Some(json!({"cmd": "accounts", "owner": 7})), None).await;
+        accts["accounts"]
             .as_array()
             .unwrap()
             .iter()

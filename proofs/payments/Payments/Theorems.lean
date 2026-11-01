@@ -150,7 +150,7 @@ theorem effect (a : Principal) (s : Snapshot) (c : Command) ws r
     rw [e]; exact ⟨hinv, Stepped.refl _⟩
   cases c with
   | Create amt cur mc =>
-    obtain ⟨n, hn, hws⟩ := post_of_ok (create_spec a s amt cur mc) h ws r rfl
+    obtain ⟨n, hn, q0, m0, _, _, hws⟩ := post_of_ok (create_spec a s amt cur mc) h ws r rfl
     rw [hws]
     simp only [applyAll, List.foldl_cons, List.foldl_nil, applyWrite]
     have hfresh : findPay (Snapshot.toSt s) s.counter.next_id.val = none :=
@@ -161,7 +161,7 @@ theorem effect (a : Principal) (s : Snapshot) (c : Command) ws r
     · exact fun b hb => by have := hinv.fresh_refund b hb; simp [Snapshot.toSt] at *; omega
     · exact payInv_upsert hinv.amounts (by simp [PayInv, CREATED])
     · intro m q hq
-      have := findPay_put (Snapshot.toSt s) ⟨s.counter.next_id, a.user, amt, cur, CREATED, mc, 0#u64, 0#u64, 0#u64, 0#u64, 0#u64, a.opId, false⟩ m
+      have := findPay_put (Snapshot.toSt s) ⟨s.counter.next_id, a.user, amt, cur, CREATED, mc, 0#u64, 0#u64, 0#u64, 0#u64, 0#u64, a.opId, false, q0⟩ m
       simp only [applyWrite] at this
       simp only [findPay] at hq this
       rw [this] at hq
@@ -211,11 +211,7 @@ theorem effect (a : Principal) (s : Snapshot) (c : Command) ws r
     · rw [hws, show [Write.PutRef x] = [] ++ [Write.PutRef x] from rfl]
       exact quiet_effect _ [] _ (by simp [Quiet]) ⟨hinv, Stepped.refl _⟩
   | Get id => exact nothing (get_writes a s id ws r h)
-  | List =>
-    simp only [transition] at h
-    obtain ⟨v, -, hv⟩ := bind_tc_eq_ok.1 h
-    simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at hv
-    exact nothing (by rw [← hv.1]; rfl)
+  | List m f l => exact nothing (list_writes a s m f l ws r h)
   | GetRefund id => exact nothing (get_refund_writes a s id ws r h)
   | Refunds id => exact nothing (refunds_of_writes a s id ws r h)
   | GetRef id => exact nothing (get_ref_writes a s id ws r h)
@@ -356,9 +352,9 @@ theorem writes_record_operator (a : Principal) (s : Snapshot) (c : Command) ws r
     (h : transition a s c = .ok (.Ok (ws, r))) : Records a.opId ws.val := by
   cases c with
   | Create amt cur mc =>
-    obtain ⟨n, hn, hws⟩ := post_of_ok (create_spec a s amt cur mc) h ws r rfl
+    obtain ⟨n, hn, _, _, _, _, hws⟩ := post_of_ok (create_spec a s amt cur mc) h ws r rfl
     rw [hws]; intro w hw o ho; simp at hw
-    rcases hw with rfl | rfl <;> simp [Write.recorded] at ho; rw [← ho]
+    rcases hw with rfl | rfl | rfl <;> simp [Write.recorded] at ho <;> rw [← ho]
   | BeginAuthorize id =>
     obtain ⟨p, _, hw⟩ := post_of_ok (begin_authorize_spec a s id) h ws r rfl
     exact records_step hw
@@ -382,11 +378,7 @@ theorem writes_record_operator (a : Principal) (s : Snapshot) (c : Command) ws r
     · rw [hws]; exact records_nil _
     · rw [hws]; intro w hw o ho; simp at hw; subst hw; simp [Write.recorded] at ho; rw [← ho, hx]
   | Get id => rw [get_writes a s id ws r h]; exact records_nil _
-  | List =>
-    simp only [transition] at h
-    obtain ⟨v, -, hv⟩ := bind_tc_eq_ok.1 h
-    simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at hv
-    rw [← hv.1]; exact records_nil _
+  | List m f l => rw [list_writes a s m f l ws r h]; exact records_nil _
   | GetRefund id => rw [get_refund_writes a s id ws r h]; exact records_nil _
   | Refunds id => rw [refunds_of_writes a s id ws r h]; exact records_nil _
   | GetRef id => rw [get_ref_writes a s id ws r h]; exact records_nil _
@@ -466,7 +458,7 @@ theorem changes_clear_ledger_done (a : Principal) (s : Snapshot) (c : Command) w
     ClearsMark ws.val := by
   cases c with
   | Create amt cur mc =>
-    obtain ⟨n, hn, hws⟩ := post_of_ok (create_spec a s amt cur mc) h ws r rfl
+    obtain ⟨n, hn, _, _, _, _, hws⟩ := post_of_ok (create_spec a s amt cur mc) h ws r rfl
     rw [hws]; exact ⟨fun p hp => by simp at hp; subst hp; rfl, fun rf hrf => by simp at hrf⟩
   | BeginAuthorize id =>
     obtain ⟨p, _, hw⟩ := post_of_ok (begin_authorize_spec a s id) h ws r rfl
@@ -490,11 +482,7 @@ theorem changes_clear_ledger_done (a : Principal) (s : Snapshot) (c : Command) w
     · rw [hws]; exact clears_nil
     · rw [hws]; exact ⟨fun p hp => by simp at hp, fun rf hrf => by simp at hrf⟩
   | Get id => rw [get_writes a s id ws r h]; exact clears_nil
-  | List =>
-    simp only [transition] at h
-    obtain ⟨v, -, hv⟩ := bind_tc_eq_ok.1 h
-    simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at hv
-    rw [← hv.1]; exact clears_nil
+  | List m f l => rw [list_writes a s m f l ws r h]; exact clears_nil
   | GetRefund id => rw [get_refund_writes a s id ws r h]; exact clears_nil
   | Refunds id => rw [refunds_of_writes a s id ws r h]; exact clears_nil
   | GetRef id => rw [get_ref_writes a s id ws r h]; exact clears_nil

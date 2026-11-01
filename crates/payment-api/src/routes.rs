@@ -141,7 +141,7 @@ async fn payments_rpc(State(st): State<AppState>, actor: Actor<PaymentsApp>, hea
     if st.orchestrator.is_none() {
         return unavailable();
     }
-    match <PaymentsStore as h5i_app_http::Api<PaymentsApp>>::decode_command(body) {
+    match payments::decode_for(actor.principal(), body) {
         Ok(cmd) => st.payments.respond(&actor, cmd, &headers).await,
         Err(m) => reply(StatusCode::BAD_REQUEST, error_body(&m)),
     }

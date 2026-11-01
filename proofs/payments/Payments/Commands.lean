@@ -181,7 +181,7 @@ def RecordWrites (s : St) (op : U64) (id : Nat) (ws : List Write) : Prop :=
 
 theorem write_clone (w : Write) : Write.Insts.CoreCloneClone.clone w = ok w := by
   cases w <;> simp [Write.Insts.CoreCloneClone.clone, Payment.clone_eq, Refund.clone_eq, Event.clone_eq,
-    PspRef.clone_eq, Counter.clone_eq]
+    PspRef.clone_eq, Counter.clone_eq, MerchantCounter.clone_eq]
 
 @[step] theorem append_spec (ws more : alloc.vec.Vec Write) (h : ws.length + more.length ≤ Usize.max) :
     append ws more ⦃ v => v.val = ws.val ++ more.val ⦄ := by
@@ -237,15 +237,39 @@ theorem event_spec (a : Principal) (s : Snapshot) (ev id : U64) (res : PspResult
 
 /-! ## Merchant commands -/
 
+theorem searchFrom_getD {α β : Type} (l : List α) (P : α → Bool) (f : α → β) (d : β) (k : Nat) :
+    searchFrom l P (fun _ x => f x) d k = (((l.drop k).find? P).map f).getD d := by
+  induction h : l.length - k generalizing k with
+  | zero => rw [searchFrom_end (by omega), List.drop_eq_nil_of_le (by omega)]; rfl
+  | succ n ih =>
+    have hk : k < l.length := by omega
+    rw [List.drop_eq_getElem_cons hk, List.find?_cons]
+    by_cases hp : P l[k]
+    · rw [searchFrom_found hk hp]; simp [hp]
+    · rw [searchFrom_skip hk hp, ih (k + 1) (by omega)]; simp [hp]
+
+/-- The merchant's payment count (0 if it has no counter). -/
+def merchantNext (l : List MerchantCounter) (m : U64) : U64 :=
+  ((l.find? (fun c => decide (c.merchant = m))).map (·.next)).getD 0#u64
+
+@[step] theorem merchant_next_spec (v : alloc.vec.Vec MerchantCounter) (m : U64) :
+    merchant_next v m ⦃ n => n = merchantNext v.val m ⦄ := by
+  unfold merchant_next merchant_next_loop
+  apply WP.spec_mono (loop_search v.val (fun c => decide (c.merchant = m)) (fun n : U64 => n)
+    (fun _ c => c.next) 0#u64 _ ?_ 0#usize (by simp))
+  · intro r hr; rw [hr, searchFrom_getD]; simp [merchantNext]
+  · intro j hj; unfold merchant_next_loop.body; h5i_step
+
 theorem create_spec (a : Principal) (s : Snapshot) (amt : U64) (cur : U32) (mc : Bool) :
     create a s amt cur mc ⦃ r => ∀ ws rep, r = .Ok (ws, rep) → ∃ n : U64, n.val = s.counter.next_id.val + 1 ∧
-      ws.val = [.PutPayment ⟨s.counter.next_id, a.user, amt, cur, CREATED, mc, 0#u64, 0#u64, 0#u64, 0#u64, 0#u64, a.opId, false⟩,
-        .SetCounter ⟨n⟩] ⦄ := by
+      ∃ q m : U64, q = merchantNext s.merchants.val a.user ∧ m.val = q.val + 1 ∧
+      ws.val = [.PutPayment ⟨s.counter.next_id, a.user, amt, cur, CREATED, mc, 0#u64, 0#u64, 0#u64, 0#u64, 0#u64, a.opId,
+        false, q⟩, .SetCounter ⟨n⟩, .PutMerchant ⟨a.user, m⟩] ⦄ := by
   unfold create
   simp only [user_of_eq, operator_of_eq, bind_tc_ok, bind_ok]
   step*
   all_goals try (simp only [core.num.U64.MAX, U64.rMax] at *; scalar_tac)
-  all_goals (intro ws rep h; obtain ⟨rfl, rfl⟩ := ok_inj h; exact ⟨i, i_post, v_post⟩)
+  all_goals (intro ws rep h; obtain ⟨rfl, rfl⟩ := ok_inj h; exact ⟨_, by assumption, _, _, by assumption, by assumption, v_post⟩)
 
 theorem begin_authorize_spec (a : Principal) (s : Snapshot) (id : U64) :
     begin_authorize a s id ⦃ r => ∀ ws rep, r = .Ok (ws, rep) →
@@ -519,5 +543,32 @@ theorem mark_posted_spec (a : Principal) (s : Snapshot) (id cap : U64) (seen : a
       | (refine Or.inr ⟨p, findPay_of (Or.inr o_post) ‹_›, by simp_all, by simp_all, ?_, ?_, by simp_all⟩
          · rw [← covers_iff, ← refundsOf_eq]; simp_all
          · rw [← covers_iff, ← refundsOf_eq]; simp_all)
+
+theorem list_writes (a : Principal) (s : Snapshot) (m f : U64) (l : U32) ws r
+    (h : list a s m f l = ok (.Ok (ws, r))) : ws.val = [] := by
+  unfold list at h
+  simp only [is_operator_eq, user_of_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  have fin : ∀ (k : Result (alloc.vec.Vec Payment)) (g : alloc.vec.Vec Payment → Reply),
+      (do let v ← k; ok (core.result.Result.Ok (E := Error) (alloc.vec.Vec.new Write, g v))) = ok (.Ok (ws, r)) →
+        ws.val = [] := by
+    intro k g hk
+    obtain ⟨v, -, hv⟩ := bind_tc_eq_ok.1 hk
+    simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at hv
+    rw [← hv.1]; rfl
+  split at h
+  · obtain ⟨e, -, h⟩ := bind_tc_eq_ok.1 h
+    obtain ⟨i, -, h⟩ := bind_tc_eq_ok.1 h
+    obtain ⟨nx, -, h⟩ := bind_tc_eq_ok.1 h
+    exact fin _ _ h
+  · split at h
+    · simp at h
+    · obtain ⟨e, -, h⟩ := bind_tc_eq_ok.1 h
+      obtain ⟨i, -, h⟩ := bind_tc_eq_ok.1 h
+      obtain ⟨nx, -, h⟩ := bind_tc_eq_ok.1 h
+      exact fin _ _ h
 
 end payment_domain.Commands

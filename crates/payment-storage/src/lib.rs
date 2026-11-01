@@ -37,8 +37,43 @@ pub const EXPORT_OPERATOR: u64 = SYSTEM_OPERATORS + 3;
 /// `ALTER TABLE … ADD COLUMN IF NOT EXISTS`: a column added to a kernel
 /// table after deployments created it (`CREATE TABLE IF NOT EXISTS` leaves
 /// existing tables alone).
+/// Only when the column is missing: `ALTER TABLE` takes an exclusive lock
+/// even when it changes nothing, and engines installing their schema at
+/// once would deadlock on it.
 pub(crate) fn add_column(table: &str, column: &str, ty: &str) -> String {
-    format!("ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ty}")
+    format!(
+        "DO $$ BEGIN \
+           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() \
+                          AND table_name = '{table}' AND column_name = '{column}') THEN \
+             ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ty}; \
+           END IF; \
+         END $$"
+    )
+}
+
+/// F3: `table.seq` numbers each row among the rows with the same `scope`
+/// column (0, 1, … by id), and `counters (scope, next)` holds the next
+/// number. A table created before the column existed gets it, numbered by
+/// id, and its counters, once: while `seq` is still nullable (it is `NOT
+/// NULL` in tables `CREATE TABLE` made).
+pub(crate) fn numbering(table: &str, scope: &str, counters: &str) -> Vec<String> {
+    vec![
+        add_column(table, "seq", "BIGINT"),
+        format!(
+            "DO $$ BEGIN \
+               IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() \
+                          AND table_name = '{table}' AND column_name = 'seq' AND is_nullable = 'YES') THEN \
+                 UPDATE {table} t SET seq = n.rn FROM \
+                   (SELECT tenant_id, id, row_number() OVER (PARTITION BY tenant_id, {scope} ORDER BY id) - 1 AS rn FROM {table}) n \
+                   WHERE t.tenant_id = n.tenant_id AND t.id = n.id; \
+                 ALTER TABLE {table} ALTER COLUMN seq SET NOT NULL; \
+                 INSERT INTO {counters} (tenant_id, {scope}, next) \
+                   SELECT tenant_id, {scope}, max(seq) + 1 FROM {table} GROUP BY tenant_id, {scope} \
+                   ON CONFLICT DO NOTHING; \
+               END IF; \
+             END $$"
+        ),
+    ]
 }
 pub const PAYMENTS_SCHEMA: &str = "payments";
 

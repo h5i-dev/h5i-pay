@@ -200,15 +200,17 @@ async fn postgres_agrees_with_the_reference_engine() {
                     .map(|_| k::TransferReq { id: 1 + rng.below(60), debit: acct(&mut rng), credit: acct(&mut rng), amount: amount(&mut rng), code: 1 })
                     .collect(),
             },
-            6 => k::Command::Accounts,
+            // The caller's first page (no extra random draws: the sequence
+            // of the other commands stays what it was).
+            6 => k::Command::Accounts { owner: u, from: 0, limit: k::MAX_PAGE },
             _ => k::Command::Account { id: acct(&mut rng) },
         };
         let got = pg.execute(&actor, &cmd).await.unwrap();
         let want = mem.execute(&actor, &cmd);
         let norm = |r: Result<k::Reply, k::Error>| match r {
-            Ok(k::Reply::Accounts(mut v)) => {
+            Ok(k::Reply::Accounts(mut v, next)) => {
                 v.sort_by_key(|a| a.id);
-                Ok(k::Reply::Accounts(v))
+                Ok(k::Reply::Accounts(v, next))
             }
             other => other,
         };
@@ -219,6 +221,7 @@ async fn postgres_agrees_with_the_reference_engine() {
     for s in [&mut a, &mut b] {
         s.accounts.sort_by_key(|x| x.id);
         s.transfers.sort_by_key(|x| x.id);
+        s.owners.sort_by_key(|x| x.owner);
     }
     assert_eq!(a, b);
     audit(&a).unwrap();
@@ -245,9 +248,10 @@ async fn load_for_matches_the_whole_tenant() {
         let cmd = match rng.below(9) {
             0 | 1 => open(if u == 0 { rng.below(4) } else { u }, if rng.below(3) == 0 { 840 } else { JPY }, rng.below(2) == 0),
             2..=4 => k::Command::Transfer { t: req(&mut rng) },
-            // Up to 70 legs: past `MAX_PLANNED_BATCH` the whole tenant loads.
+            // Up to 70 legs: past `MAX_BATCH` (64) refused, reading nothing.
             5 => k::Command::Batch { transfers: (0..rng.below(71)).map(|_| req(&mut rng)).collect() },
-            6 => k::Command::Accounts,
+            // Pages, some refused (limit 0, another owner's for a user).
+            6 => k::Command::Accounts { owner: rng.below(4), from: rng.below(4), limit: rng.below(4) as u32 },
             7 => k::Command::Transfers,
             _ => k::Command::Account { id: acct(&mut rng) },
         };
@@ -301,7 +305,9 @@ async fn payments_load_for_matches_the_whole_tenant() {
             7 => d::Command::Event { event: rng.below(20), payment: id(&mut rng), result: result(&mut rng) },
             8 => d::Command::AttachRef { payment: id(&mut rng), reference: vec![b'p', rng.below(3) as u8] },
             9 => d::Command::Get { id: id(&mut rng) },
-            10 => d::Command::List,
+            // Pages derived from the step (no extra random draws, so the other
+            // commands' sequence stays what it was): own and others', some refused.
+            10 => d::Command::List { merchant: i % 4, from: i % 5, limit: (i % 7) as u32 },
             11 => d::Command::GetRefund { id: id(&mut rng) },
             _ => {
                 match rng.below(4) {

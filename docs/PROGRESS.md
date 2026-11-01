@@ -178,6 +178,54 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### F3: cursor pagination; no whole-tenant loads for batches
+
+- Payments `List { merchant, from, limit }` and ledger
+  `Accounts { owner, from, limit }`: a page of one merchant's payments (one
+  owner's accounts) numbered `from` to `from + limit − 1`, `limit` 1 to
+  `MAX_PAGE` = 64 (else `BadPage`, HTTP 400); users list only their own
+  (`Forbidden`); the reply carries `next` (the next page's `from`, `null`
+  on the last page). The cursor is the key `(merchant, seq)` /
+  `(owner, seq)`: new fields `Payment.seq` and `Account.seq` number rows per
+  merchant/owner from new counter tables (`merchant_counters`,
+  `owner_counters`) that `Create`/`Open` read and bump.
+- Why sequence numbers: h5i-app 0.5.2's read predicates are `=`, `IN`
+  (subquery), `AND`, `OR` and windows (offset/limit) — no `>` — so a
+  keyset page by id is not expressible as a plan with a frame theorem, and
+  an offset window cannot give the same reply on the page as on the whole
+  tenant. A page's plan is `merchant = m AND (seq = from OR … OR seq =
+  from+limit−1)` plus the merchant's counter. PostgreSQL's planning time for
+  such `OR` chains grows quickly (measured on 10k payments: 7 ms at 64
+  terms, 89 ms at 256, 650 ms at 1000), hence the maximum of 64. A `>`
+  predicate in h5i-app would allow larger pages; not done (it is a change to
+  h5i-app's query language and its Lean semantics).
+- Batches: `MAX_BATCH` is now 64 (was 8192), equal to the planned size, so
+  every accepted batch reads only its accounts and transfer ids and locks
+  only their keys; longer batches are refused (`batch_too_large`, 413)
+  without reading. `Lock::Tenant` is gone. The orchestrator already split
+  its postings at 64.
+- Migration: at startup, a table without `seq` gets it, numbered by id per
+  merchant/owner, and the counters are filled, once (guarded by the
+  column's nullability); measured 360 ms on a copy of the 10k-payment
+  database, 125 ms for later startups. Column additions now run only when
+  the column is missing (`ALTER TABLE` takes an exclusive lock even as a
+  no-op; concurrent installers deadlocked on it in the tests).
+- Proofs: ledger 257 theorems / 13 modules, payments 293 / 8. `reads_abs`
+  covers the paged plans (`seq_range` proven to build the `OR` chain of
+  exactly the range, `rangeA`), and `frame`/`load_for_sound` the pages and
+  the counter reads of `Create`/`Open`; the refused pages and batches read
+  nothing. Every theorem about `Open`/`Create` was re-proven with the
+  counter write; the owner/merchant counters are part of the specs' state.
+- Mutants: ledger 12/12 caught, payments 16/16 (new `page_plan_skips_one`
+  in both kernels, `page_lists_other_owner`, `list_other_merchant`).
+- Clients: the orchestrator, recovery and export never listed; tests and
+  the HTTP routes (`POST /v1/ledger {"cmd":"accounts", owner?, from?, limit?}`,
+  `POST /v1/payments/rpc {"cmd":"list", merchant?, from?, limit?}`) use the
+  pages. Stored idempotent replies from before still decode. The journal
+  read `Transfers` (operators) is still unpaged.
+- Tests: 84 pass; the PG differential tests send pages (own, others',
+  refused) and batches over 64.
+
 ### F2: per-payment "ledger complete" marker; recovery O(unfinished)
 
 - Payment field `ledger_done` (column `BOOLEAN NOT NULL DEFAULT false`,
@@ -706,5 +754,5 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 - u32 columns broke the Lean that `h5i-app-schema` 0.1.4 rendered, so M1–M5
   used `u64` everywhere. Fixed upstream (#769); see "u32 columns" above.
-- Every command but ledger batches over 64 transfers now reads only its
-  plan's rows (B1). Listings (`List`, `Accounts`) are not paginated.
+- Every kernel command reads only its plan's rows (B1, F3); listings are
+  paged by per-merchant/per-owner sequence numbers, at most 64 per page.

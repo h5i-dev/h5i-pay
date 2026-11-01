@@ -57,7 +57,10 @@ impl Store<LedgerApp> for LedgerStore {
         let mut ddl = schema_ddl();
         // SEC-02 (F1): who posted a transfer. Older rows say 0 (unknown).
         ddl.push(crate::add_column("transfers", "operator", "BIGINT NOT NULL DEFAULT 0"));
-        ddl.push("CREATE INDEX IF NOT EXISTS accounts_owner ON accounts (tenant_id, owner)".into());
+        // F3: accounts numbered per owner, and the owners' counters.
+        ddl.extend(crate::numbering("accounts", "owner", "owner_counters"));
+        ddl.push("DROP INDEX IF EXISTS accounts_owner".into());
+        ddl.push("CREATE INDEX IF NOT EXISTS accounts_owner_seq ON accounts (tenant_id, owner, seq)".into());
         ddl
     }
 
@@ -73,9 +76,8 @@ impl Store<LedgerApp> for LedgerStore {
         schema_store(tx, t, ws).await
     }
 
-    /// The rows `k::reads` names, one declarative read per table, or the
-    /// whole tenant for the commands it leaves out (batches over
-    /// `k::MAX_PLANNED_BATCH`). `proofs/ledger/Ledger/Frame.lean`
+    /// The rows `k::reads` names, one declarative read per table (every
+    /// command has a plan since F3). `proofs/ledger/Ledger/Frame.lean`
     /// (`Frame.load_for_sound`): `transition` gives the same result on them
     /// as on `load`.
     async fn load_for(tx: &Tx<'_>, t: TenantId, actor: &k::Principal, cmd: &k::Command) -> Result<k::Snapshot, DbError> {
@@ -101,16 +103,15 @@ impl Store<LedgerApp> for LedgerStore {
                 transfer_keys(t, &mut keys);
                 Lock::Keys(keys)
             }
-            k::Command::Batch { transfers } if transfers.len() <= k::MAX_PLANNED_BATCH => {
+            k::Command::Batch { transfers } => {
                 let mut keys = Vec::new();
-                transfers.iter().for_each(|t| transfer_keys(t, &mut keys));
+                transfers.iter().take(k::MAX_BATCH).for_each(|t| transfer_keys(t, &mut keys));
                 keys.sort_unstable();
                 keys.dedup();
                 Lock::Keys(keys)
             }
-            k::Command::Batch { .. } => Lock::Tenant,
             // Reads write nothing; they need no queue.
-            k::Command::Account { .. } | k::Command::Accounts | k::Command::Transfers => Lock::None,
+            k::Command::Account { .. } | k::Command::Accounts { .. } | k::Command::Transfers => Lock::None,
         }
     }
 }
@@ -135,7 +136,17 @@ pub enum CommandJson {
     Transfer(TransferJson),
     Batch { transfers: Vec<TransferJson> },
     Account { id: u64 },
-    Accounts,
+    /// A page of an owner's accounts (default: the caller's), from
+    /// sequence number `from` (default 0), at most `limit` (default and
+    /// maximum `k::MAX_PAGE`).
+    Accounts {
+        #[serde(default)]
+        owner: Option<u64>,
+        #[serde(default)]
+        from: u64,
+        #[serde(default)]
+        limit: Option<u32>,
+    },
     Transfers,
 }
 
@@ -166,7 +177,9 @@ impl CommandJson {
             CommandJson::Transfer(t) => k::Command::Transfer { t: t.into() },
             CommandJson::Batch { transfers } => k::Command::Batch { transfers: transfers.into_iter().map(Into::into).collect() },
             CommandJson::Account { id } => k::Command::Account { id },
-            CommandJson::Accounts => k::Command::Accounts,
+            CommandJson::Accounts { owner, from, limit } => {
+                k::Command::Accounts { owner: owner.unwrap_or(k::user_of(actor)), from, limit: limit.unwrap_or(k::MAX_PAGE) }
+            }
             CommandJson::Transfers => k::Command::Transfers,
         }
     }
@@ -223,6 +236,7 @@ pub fn account_json(a: &k::Account) -> Out {
         ("no_overcredit", a.no_overcredit.into()),
         ("debits", a.debits.into()),
         ("credits", a.credits.into()),
+        ("seq", a.seq.into()),
     ])
 }
 
@@ -253,6 +267,7 @@ pub fn error_code(e: &k::Error) -> (StatusCode, &'static str) {
         k::Error::InvalidFlags => (StatusCode::UNPROCESSABLE_ENTITY, "invalid_flags"),
         k::Error::EmptyBatch => (StatusCode::UNPROCESSABLE_ENTITY, "empty_batch"),
         k::Error::BatchTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "batch_too_large"),
+        k::Error::BadPage => (StatusCode::BAD_REQUEST, "bad_page"),
     }
 }
 
@@ -270,7 +285,10 @@ impl h5i_app_http::Api<LedgerApp> for LedgerStore {
             k::Reply::Exists(id) => Out::obj([("id", (*id).into()), ("status", "exists".into())]),
             k::Reply::Batch(n) => Out::obj([("posted", (*n).into())]),
             k::Reply::Account(a) => account_json(a),
-            k::Reply::Accounts(accs) => Out::Arr(accs.iter().map(account_json).collect()),
+            k::Reply::Accounts(accs, next) => Out::obj([
+                ("accounts", Out::Arr(accs.iter().map(account_json).collect())),
+                ("next", next.map_or(Out::Null, Out::from)),
+            ]),
             k::Reply::Transfers(ts) => Out::Arr(ts.iter().map(transfer_json).collect()),
         }
     }
@@ -290,20 +308,56 @@ enum StoredReply {
     Batch(u64),
     // Reads are stored too (a keyed read is a write of its reply).
     Account(StoredAccount),
+    /// Before F3 (unpaged); decoded as the last page.
     Accounts(Vec<StoredAccount>),
+    AccountPage(Vec<StoredAccount>, Option<u64>),
     /// Before SEC-02's operator column; decoded with operator 0.
     Transfers(Vec<(u64, u64, u64, u64, u32, u32)>),
     TransfersBy(Vec<(u64, u64, u64, u64, u32, u32, u64)>),
 }
 
-type StoredAccount = (u64, u64, u32, u32, bool, bool, u64, u64);
-
-fn store_account(a: &k::Account) -> StoredAccount {
-    (a.id, a.owner, a.currency, a.code, a.no_overdraft, a.no_overcredit, a.debits, a.credits)
+/// An account in a stored reply. Replies stored before F3 are arrays
+/// without `seq`; serde reads them positionally, `seq` 0.
+#[derive(Serialize, Deserialize)]
+struct StoredAccount {
+    id: u64,
+    owner: u64,
+    currency: u32,
+    code: u32,
+    no_overdraft: bool,
+    no_overcredit: bool,
+    debits: u64,
+    credits: u64,
+    #[serde(default)]
+    seq: u64,
 }
 
-fn load_account((id, owner, currency, code, no_overdraft, no_overcredit, debits, credits): StoredAccount) -> k::Account {
-    k::Account { id, owner, currency, code, no_overdraft, no_overcredit, debits, credits }
+fn store_account(a: &k::Account) -> StoredAccount {
+    StoredAccount {
+        id: a.id,
+        owner: a.owner,
+        currency: a.currency,
+        code: a.code,
+        no_overdraft: a.no_overdraft,
+        no_overcredit: a.no_overcredit,
+        debits: a.debits,
+        credits: a.credits,
+        seq: a.seq,
+    }
+}
+
+fn load_account(a: StoredAccount) -> k::Account {
+    k::Account {
+        id: a.id,
+        owner: a.owner,
+        currency: a.currency,
+        code: a.code,
+        no_overdraft: a.no_overdraft,
+        no_overcredit: a.no_overcredit,
+        debits: a.debits,
+        credits: a.credits,
+        seq: a.seq,
+    }
 }
 
 impl ReplyCodec<LedgerApp> for LedgerStore {
@@ -325,7 +379,7 @@ impl ReplyCodec<LedgerApp> for LedgerStore {
             k::Reply::Exists(id) => StoredReply::Exists(*id),
             k::Reply::Batch(n) => StoredReply::Batch(*n),
             k::Reply::Account(a) => StoredReply::Account(store_account(a)),
-            k::Reply::Accounts(accs) => StoredReply::Accounts(accs.iter().map(store_account).collect()),
+            k::Reply::Accounts(accs, next) => StoredReply::AccountPage(accs.iter().map(store_account).collect(), *next),
             k::Reply::Transfers(ts) => {
                 StoredReply::TransfersBy(ts.iter().map(|t| (t.id, t.debit, t.credit, t.amount, t.currency, t.code, t.operator)).collect())
             }
@@ -340,7 +394,8 @@ impl ReplyCodec<LedgerApp> for LedgerStore {
             StoredReply::Exists(id) => k::Reply::Exists(id),
             StoredReply::Batch(n) => k::Reply::Batch(n),
             StoredReply::Account(a) => k::Reply::Account(load_account(a)),
-            StoredReply::Accounts(accs) => k::Reply::Accounts(accs.into_iter().map(load_account).collect()),
+            StoredReply::Accounts(accs) => k::Reply::Accounts(accs.into_iter().map(load_account).collect(), None),
+            StoredReply::AccountPage(accs, next) => k::Reply::Accounts(accs.into_iter().map(load_account).collect(), next),
             StoredReply::Transfers(ts) => k::Reply::Transfers(
                 ts.into_iter()
                     .map(|(id, debit, credit, amount, currency, code)| k::Transfer { id, debit, credit, amount, currency, code, operator: 0 })

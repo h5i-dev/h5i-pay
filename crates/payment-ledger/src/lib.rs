@@ -65,8 +65,13 @@ pub fn operator_of(actor: &Principal) -> u64 {
     }
 }
 
-/// The most transfers in one linked batch.
-pub const MAX_BATCH: usize = 8192;
+/// The most transfers in one linked batch. Every accepted batch reads only
+/// its accounts and transfer ids (`reads`): a longer `OR` chain makes
+/// PostgreSQL's planning time grow faster than linearly (F3).
+pub const MAX_BATCH: usize = 64;
+
+/// The most accounts one `Accounts` page covers (sequence numbers per page).
+pub const MAX_PAGE: u32 = 64;
 
 h5i_app_schema::schema! {
     mapping ledger_tables for payment_ledger, writes Write, lean "../../proofs/ledger/generated/LedgerSchema.lean";
@@ -77,6 +82,7 @@ h5i_app_schema::schema! {
         ledger: Ledger,
         accounts: Vec<Account>,
         transfers: Vec<Transfer>,
+        owners: Vec<OwnerCounter>,
     }
 
     /// An account: posted debits and credits in one currency (ISO 4217
@@ -91,6 +97,9 @@ h5i_app_schema::schema! {
         no_overcredit: bool,
         debits: u64,
         credits: u64,
+        /// The account's number among its owner's accounts (0, 1, …): the
+        /// key `Accounts` pages by.
+        seq: u64,
     }
 
     /// A committed transfer: the journal. Never updated or deleted.
@@ -111,6 +120,13 @@ h5i_app_schema::schema! {
     pub struct Ledger in "ledger" {
         key {}
         next_account: u64,
+    }
+
+    /// How many accounts an owner has: the next account's `seq`.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct OwnerCounter in "owner_counters" {
+        key { owner: u64 }
+        next: u64,
     }
 }
 
@@ -135,8 +151,10 @@ pub enum Command {
     Batch { transfers: Vec<TransferReq> },
     /// One account; its owner or an operator may read it.
     Account { id: u64 },
-    /// The caller's accounts (every account, for an operator).
-    Accounts,
+    /// One page of `owner`'s accounts: those numbered `from` to
+    /// `from + limit - 1` among the owner's accounts (`Account::seq`),
+    /// `limit` at most `MAX_PAGE`. A user may list only its own.
+    Accounts { owner: u64, from: u64, limit: u32 },
     /// The journal; operators only.
     Transfers,
 }
@@ -146,6 +164,7 @@ pub enum Write {
     PutAccount(Account),
     PutTransfer(Transfer),
     SetLedger(Ledger),
+    PutOwner(OwnerCounter),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -159,7 +178,9 @@ pub enum Reply {
     /// The number of transfers in a committed batch.
     Batch(u64),
     Account(Account),
-    Accounts(Vec<Account>),
+    /// A page of accounts, and where the next page starts (`None`: this
+    /// was the last).
+    Accounts(Vec<Account>, Option<u64>),
     Transfers(Vec<Transfer>),
 }
 
@@ -183,6 +204,8 @@ pub enum Error {
     InvalidFlags,
     EmptyBatch,
     BatchTooLarge,
+    /// A page limit of 0 or above `MAX_PAGE`.
+    BadPage,
 }
 
 type Outcome = Result<(Vec<Write>, Reply), Error>;
@@ -192,13 +215,6 @@ fn three(a: Write, b: Write, c: Write) -> Vec<Write> {
     ws.push(a);
     ws.push(b);
     ws.push(c);
-    ws
-}
-
-fn two(a: Write, b: Write) -> Vec<Write> {
-    let mut ws = Vec::new();
-    ws.push(a);
-    ws.push(b);
     ws
 }
 
@@ -224,6 +240,29 @@ pub fn find_transfer(transfers: &Vec<Transfer>, id: u64) -> Option<Transfer> {
     None
 }
 
+/// How many accounts `owner` has (its counter, 0 if it has none).
+pub fn owner_next(cs: &Vec<OwnerCounter>, owner: u64) -> u64 {
+    let mut i = 0;
+    while i < cs.len() {
+        if cs[i].owner == owner {
+            return cs[i].next;
+        }
+        i += 1;
+    }
+    0
+}
+
+/// The first number past a page: `from + limit`, or `u64::MAX` if that
+/// overflows.
+pub fn page_end(from: u64, limit: u32) -> u64 {
+    let n = limit as u64;
+    if from > u64::MAX - n {
+        u64::MAX
+    } else {
+        from + n
+    }
+}
+
 /// The stored transfer is the one requested: a replay.
 pub fn same_transfer(old: &Transfer, t: &TransferReq) -> bool {
     old.debit == t.debit && old.credit == t.credit && old.amount == t.amount && old.code == t.code
@@ -245,6 +284,10 @@ fn open(actor: &Principal, s: &Snapshot, owner: u64, currency: u32, code: u32, n
     if l.next_account == u64::MAX {
         return Err(Error::Overflow);
     }
+    let n = owner_next(&s.owners, owner);
+    if n == u64::MAX {
+        return Err(Error::Overflow);
+    }
     let a = Account {
         id: l.next_account,
         owner,
@@ -254,9 +297,11 @@ fn open(actor: &Principal, s: &Snapshot, owner: u64, currency: u32, code: u32, n
         no_overcredit,
         debits: 0,
         credits: 0,
+        seq: n,
     };
     let l2 = Ledger { next_account: l.next_account + 1 };
-    Ok((two(Write::PutAccount(a), Write::SetLedger(l2)), Reply::Created(a.id)))
+    let c2 = OwnerCounter { owner, next: n + 1 };
+    Ok((three(Write::PutAccount(a), Write::SetLedger(l2), Write::PutOwner(c2)), Reply::Created(a.id)))
 }
 
 /// Post one transfer, or recognise its replay. The caller must be allowed
@@ -324,6 +369,7 @@ fn post(s: &Snapshot, t: &TransferReq, a: Account, b: Account, op: u64) -> Outco
                 no_overcredit: a.no_overcredit,
                 debits,
                 credits: a.credits,
+                seq: a.seq,
             };
             let b2 = Account {
                 id: b.id,
@@ -334,6 +380,7 @@ fn post(s: &Snapshot, t: &TransferReq, a: Account, b: Account, op: u64) -> Outco
                 no_overcredit: b.no_overcredit,
                 debits: b.debits,
                 credits,
+                seq: b.seq,
             };
             let tr = Transfer {
                 id: t.id,
@@ -398,16 +445,31 @@ fn read_account(actor: &Principal, s: &Snapshot, id: u64) -> Outcome {
     }
 }
 
-fn visible_accounts(actor: &Principal, s: &Snapshot) -> Vec<Account> {
+/// `owner`'s accounts numbered `from` up to (not including) `end`, in
+/// table order.
+fn owner_range(s: &Snapshot, owner: u64, from: u64, end: u64) -> Vec<Account> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < s.accounts.len() {
-        if may_debit(actor, &s.accounts[i]) {
-            out.push(s.accounts[i]);
+        let a = s.accounts[i];
+        if a.owner == owner && from <= a.seq && a.seq < end {
+            out.push(a);
         }
         i += 1;
     }
     out
+}
+
+fn accounts_page(actor: &Principal, s: &Snapshot, owner: u64, from: u64, limit: u32) -> Outcome {
+    if limit == 0 || limit > MAX_PAGE {
+        return Err(Error::BadPage);
+    }
+    if !is_operator(actor) && owner != user_of(actor) {
+        return Err(Error::Forbidden);
+    }
+    let end = page_end(from, limit);
+    let next = if end < owner_next(&s.owners, owner) { Some(end) } else { None };
+    Ok((Vec::new(), Reply::Accounts(owner_range(s, owner, from, end), next)))
 }
 
 /// The ledger's logic: a command's writes and reply, or a refusal that
@@ -420,7 +482,7 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
         Command::Transfer { t } => transfer(actor, s, t),
         Command::Batch { transfers } => batch(actor, s, transfers),
         Command::Account { id } => read_account(actor, s, *id),
-        Command::Accounts => Ok((Vec::new(), Reply::Accounts(visible_accounts(actor, s)))),
+        Command::Accounts { owner, from, limit } => accounts_page(actor, s, *owner, *from, *limit),
         Command::Transfers => {
             if is_operator(actor) {
                 Ok((Vec::new(), Reply::Transfers(s.transfers.clone())))
@@ -437,15 +499,16 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
 pub const T_ACCOUNTS: u32 = 0;
 pub const T_TRANSFERS: u32 = 1;
 pub const T_LEDGER: u32 = 2;
+pub const T_OWNERS: u32 = 3;
 /// Column numbers: key columns first, then fields in declaration order.
 pub const ACCOUNT_ID: u32 = 0;
 pub const ACCOUNT_OWNER: u32 = 1;
+pub const ACCOUNT_SEQ: u32 = 8;
 pub const TRANSFER_ID: u32 = 0;
+pub const OWNER_KEY: u32 = 0;
 
-/// Batches up to this many transfers load only their accounts and transfer
-/// ids; longer ones load the whole tenant (their predicate would be a chain
-/// of thousands of `OR`s).
-pub const MAX_PLANNED_BATCH: usize = 64;
+/// Every batch the kernel accepts has a plan (F3: no whole-tenant loads).
+pub const MAX_PLANNED_BATCH: usize = MAX_BATCH;
 
 fn v_int(x: u64) -> h5i_app_sql::Val {
     h5i_app_sql::Column::to_val(&x)
@@ -466,6 +529,17 @@ fn rd_where(table: u32, pred: h5i_app_sql::Pred) -> h5i_app_sql::Read {
 /// The two accounts of a transfer.
 fn accounts_of(t: &TransferReq) -> h5i_app_sql::Pred {
     p_or(p_eq(ACCOUNT_ID, v_int(t.debit)), p_eq(ACCOUNT_ID, v_int(t.credit)))
+}
+
+/// `col` holds one of `from`, …, `end - 1` (`from < end`).
+fn seq_range(col: u32, from: u64, end: u64) -> h5i_app_sql::Pred {
+    let mut p = p_eq(col, v_int(from));
+    let mut x = from + 1;
+    while x < end {
+        p = p_or(p, p_eq(col, v_int(x)));
+        x += 1;
+    }
+    p
 }
 
 /// The plan of a non-empty batch: every account and transfer id it names.
@@ -491,9 +565,10 @@ fn batch_reads(ts: &Vec<TransferReq>) -> Vec<h5i_app_sql::Read> {
 /// whole tenant.
 pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>> {
     match cmd {
-        Command::Open { .. } => {
+        Command::Open { owner, .. } => {
             let mut out = Vec::new();
             out.push(rd_where(T_LEDGER, h5i_app_sql::Pred::All));
+            out.push(rd_where(T_OWNERS, p_eq(OWNER_KEY, v_int(*owner))));
             Some(out)
         }
         Command::Transfer { t } => {
@@ -503,10 +578,9 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
             Some(out)
         }
         Command::Batch { transfers } => {
-            if transfers.len() == 0 {
+            // Empty or too long: refused whatever the state, so nothing is read.
+            if transfers.len() == 0 || transfers.len() > MAX_BATCH {
                 Some(Vec::new())
-            } else if transfers.len() > MAX_PLANNED_BATCH {
-                None
             } else {
                 Some(batch_reads(transfers))
             }
@@ -516,12 +590,17 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
             out.push(rd_where(T_ACCOUNTS, p_eq(ACCOUNT_ID, v_int(*id))));
             Some(out)
         }
-        Command::Accounts => {
+        Command::Accounts { owner, from, limit } => {
             let mut out = Vec::new();
-            if is_operator(actor) {
-                out.push(rd_where(T_ACCOUNTS, h5i_app_sql::Pred::All));
-            } else {
-                out.push(rd_where(T_ACCOUNTS, p_eq(ACCOUNT_OWNER, v_int(user_of(actor)))));
+            // Refused pages read nothing.
+            if *limit != 0 && *limit <= MAX_PAGE && (is_operator(actor) || *owner == user_of(actor)) {
+                let end = page_end(*from, *limit);
+                if *from < end {
+                    let range = seq_range(ACCOUNT_SEQ, *from, end);
+                    let pred = h5i_app_sql::Pred::And(Box::new(p_eq(ACCOUNT_OWNER, v_int(*owner))), Box::new(range));
+                    out.push(rd_where(T_ACCOUNTS, pred));
+                }
+                out.push(rd_where(T_OWNERS, p_eq(OWNER_KEY, v_int(*owner))));
             }
             Some(out)
         }
@@ -541,6 +620,7 @@ fn apply_write(s: &mut Snapshot, w: Write) {
         Write::PutAccount(a) => Account::put(&mut s.accounts, a),
         Write::PutTransfer(t) => Transfer::put(&mut s.transfers, t),
         Write::SetLedger(l) => s.ledger = l,
+        Write::PutOwner(c) => OwnerCounter::put(&mut s.owners, c),
     }
 }
 
@@ -550,6 +630,7 @@ fn sql_write(w: &Write, out: &mut Vec<h5i_app_sql::Write>) {
         Write::PutAccount(a) => out.push(a.sql_put()),
         Write::PutTransfer(t) => out.push(t.sql_put()),
         Write::SetLedger(l) => out.push(l.sql_put()),
+        Write::PutOwner(c) => out.push(c.sql_put()),
     }
 }
 
@@ -670,6 +751,8 @@ mod tests {
         assert_eq!(r, Err(Error::Insufficient));
         assert_eq!(s3, s2);
         assert_eq!(run(&s2, op(), Command::Batch { transfers: vec![] }).1, Err(Error::EmptyBatch));
+        let long: Vec<TransferReq> = (0..=MAX_BATCH as u64).map(|i| tr(100 + i, 0, 1, 1)).collect();
+        assert_eq!(run(&s2, op(), Command::Batch { transfers: long }).1, Err(Error::BatchTooLarge));
         // A duplicate inside a batch is a replay of the earlier one.
         let (_, r) = run(&s2, op(), Command::Batch { transfers: vec![tr(6, 0, 1, 1), tr(6, 0, 1, 1)] });
         assert_eq!(r, Ok(Reply::Batch(2)));
@@ -680,10 +763,20 @@ mod tests {
         let s = setup();
         assert_eq!(run(&s, user(2), Command::Account { id: 1 }).1, Err(Error::NotFound));
         assert!(matches!(run(&s, user(1), Command::Account { id: 1 }).1, Ok(Reply::Account(_))));
-        match run(&s, user(2), Command::Accounts).1 {
-            Ok(Reply::Accounts(v)) => assert_eq!(v.iter().map(|a| a.id).collect::<Vec<_>>(), vec![2, 3]),
+        match run(&s, user(2), Command::Accounts { owner: 2, from: 0, limit: MAX_PAGE }).1 {
+            Ok(Reply::Accounts(v, None)) => assert_eq!(v.iter().map(|a| (a.id, a.seq)).collect::<Vec<_>>(), vec![(2, 0), (3, 1)]),
             r => panic!("{r:?}"),
         }
+        assert_eq!(run(&s, user(2), Command::Accounts { owner: 1, from: 0, limit: 1 }).1, Err(Error::Forbidden));
+        assert_eq!(run(&s, user(2), Command::Accounts { owner: 2, from: 0, limit: 0 }).1, Err(Error::BadPage));
+        assert_eq!(run(&s, op(), Command::Accounts { owner: 2, from: 0, limit: MAX_PAGE + 1 }).1, Err(Error::BadPage));
+        // Pages of one: the cursor is the next sequence number.
+        assert_eq!(run(&s, op(), Command::Accounts { owner: 2, from: 0, limit: 1 }).1.map(|r| match r {
+            Reply::Accounts(v, n) => (v.len(), n),
+            _ => panic!(),
+        }), Ok((1, Some(1))));
+        assert!(matches!(run(&s, op(), Command::Accounts { owner: 2, from: 1, limit: 1 }).1, Ok(Reply::Accounts(ref v, None)) if v[0].id == 3));
+        assert!(matches!(run(&s, op(), Command::Accounts { owner: 2, from: u64::MAX, limit: 5 }).1, Ok(Reply::Accounts(ref v, None)) if v.is_empty()));
         assert_eq!(run(&s, user(2), Command::Transfers).1, Err(Error::Forbidden));
         assert_eq!(
             run(&s, user(2), Command::Open { owner: 2, currency: 1, code: 2, no_overdraft: true, no_overcredit: true }).1,

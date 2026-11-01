@@ -94,9 +94,9 @@ impl Env {
     /// The ledger's merchant payable balance (credits − debits) for merchant 7.
     async fn merchant_balance(&self) -> i64 {
         let tok = h5i_pay_tests::operator_token(self.org);
-        let resp = self.http.post(format!("{}/v1/ledger", self.base)).bearer_auth(tok).json(&json!({"cmd": "accounts"})).send().await.unwrap();
+        let resp = self.http.post(format!("{}/v1/ledger", self.base)).bearer_auth(tok).json(&json!({"cmd": "accounts", "owner": 7})).send().await.unwrap();
         let accts: Value = resp.json().await.unwrap();
-        accts
+        accts["accounts"]
             .as_array()
             .unwrap()
             .iter()
@@ -303,8 +303,8 @@ async fn refund_needs_merchant_funds_in_the_ledger() {
     let id = p["id"].as_u64().unwrap();
     // The operator pays the merchant out of the ledger (to an external account).
     let lt = h5i_pay_tests::operator_token(e.org);
-    let accts: Value = e.http.post(format!("{}/v1/ledger", e.base)).bearer_auth(&lt).json(&json!({"cmd": "accounts"})).send().await.unwrap().json().await.unwrap();
-    let payable = accts.as_array().unwrap().iter().find(|a| a["code"] == json!(1002)).unwrap()["id"].as_u64().unwrap();
+    let accts: Value = e.http.post(format!("{}/v1/ledger", e.base)).bearer_auth(&lt).json(&json!({"cmd": "accounts", "owner": 7})).send().await.unwrap().json().await.unwrap();
+    let payable = accts["accounts"].as_array().unwrap().iter().find(|a| a["code"] == json!(1002)).unwrap()["id"].as_u64().unwrap();
     let r = e.http.post(format!("{}/v1/ledger", e.base)).bearer_auth(&lt).json(&json!({"cmd": "open", "currency": 392, "code": 5})).send().await.unwrap();
     let bank = r.json::<Value>().await.unwrap()["id"].as_u64().unwrap();
     let r = e.http.post(format!("{}/v1/ledger", e.base)).bearer_auth(&lt).json(&json!({"cmd": "transfer", "id": 1, "debit": payable, "credit": bank, "amount": 650})).send().await.unwrap();
@@ -363,5 +363,5 @@ async fn idempotency_key_creates_one_payment() {
     assert_eq!(p1["id"], p2["id"]);
     assert_eq!(e.merchant_balance().await, 1500, "charged once");
     let (_, list) = e.post("/v1/payments/rpc", &e.merchant, json!({"cmd": "list"})).await;
-    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!((list["payments"].as_array().unwrap().len(), &list["next"]), (1, &Value::Null), "{list}");
 }

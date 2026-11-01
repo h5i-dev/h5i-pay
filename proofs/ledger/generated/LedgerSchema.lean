@@ -112,9 +112,9 @@ def sqlW : h5i_app_sql.Write → AWrite Val
 
 /-! ## `Account` (table `accounts`) -/
 
-/-- Columns `id`, `owner`, `currency`, `code`, `no_overdraft`, `no_overcredit`, `debits`, `credits`. -/
+/-- Columns `id`, `owner`, `currency`, `code`, `no_overdraft`, `no_overcredit`, `debits`, `credits`, `seq`. -/
 def Account.row (x : Account) : List Val :=
-  [int x.id.val, int x.owner.val, int x.currency.val, int x.code.val, .Bool x.no_overdraft, .Bool x.no_overcredit, int x.debits.val, int x.credits.val]
+  [int x.id.val, int x.owner.val, int x.currency.val, int x.code.val, .Bool x.no_overdraft, .Bool x.no_overcredit, int x.debits.val, int x.credits.val, int x.seq.val]
 
 def Account.table : Nat := 0
 def Account.keyLen : Nat := 1
@@ -126,6 +126,7 @@ def Account.col_no_overdraft : Nat := 4
 def Account.col_no_overcredit : Nat := 5
 def Account.col_debits : Nat := 6
 def Account.col_credits : Nat := 7
+def Account.col_seq : Nat := 8
 
 @[simp] theorem Account.row_col_id (x : Account) :
     (Account.row x)[Account.col_id]? = some (int x.id.val) := by
@@ -159,7 +160,11 @@ def Account.col_credits : Nat := 7
     (Account.row x)[Account.col_credits]? = some (int x.credits.val) := by
   simp [Account.row, Account.col_credits]
 
-@[simp] theorem Account.row_length (x : Account) : (Account.row x).length = 8 := rfl
+@[simp] theorem Account.row_col_seq (x : Account) :
+    (Account.row x)[Account.col_seq]? = some (int x.seq.val) := by
+  simp [Account.row, Account.col_seq]
+
+@[simp] theorem Account.row_length (x : Account) : (Account.row x).length = 9 := rfl
 
 @[step] theorem Account.to_row_spec (x : Account) : Account.to_row x ⦃ v => v.val = Account.row x ⦄ := by
   have := usize_max_le
@@ -392,18 +397,113 @@ def Ledger.putA (x : Ledger) : AWrite Val := .put Ledger.table Ledger.keyLen (Le
 /-- A fresh tenant's `Ledger`: all zeros. -/
 def Ledger.zero : Ledger := { next_account := 0#u64 }
 
+/-! ## `OwnerCounter` (table `owner_counters`) -/
+
+/-- Columns `owner`, `next`. -/
+def OwnerCounter.row (x : OwnerCounter) : List Val :=
+  [int x.owner.val, int x.next.val]
+
+def OwnerCounter.table : Nat := 3
+def OwnerCounter.keyLen : Nat := 1
+def OwnerCounter.col_owner : Nat := 0
+def OwnerCounter.col_next : Nat := 1
+
+@[simp] theorem OwnerCounter.row_col_owner (x : OwnerCounter) :
+    (OwnerCounter.row x)[OwnerCounter.col_owner]? = some (int x.owner.val) := by
+  simp [OwnerCounter.row, OwnerCounter.col_owner]
+
+@[simp] theorem OwnerCounter.row_col_next (x : OwnerCounter) :
+    (OwnerCounter.row x)[OwnerCounter.col_next]? = some (int x.next.val) := by
+  simp [OwnerCounter.row, OwnerCounter.col_next]
+
+@[simp] theorem OwnerCounter.row_length (x : OwnerCounter) : (OwnerCounter.row x).length = 2 := rfl
+
+@[step] theorem OwnerCounter.to_row_spec (x : OwnerCounter) : OwnerCounter.to_row x ⦃ v => v.val = OwnerCounter.row x ⦄ := by
+  have := usize_max_le
+  unfold OwnerCounter.to_row; step* <;> simp_all [OwnerCounter.row] <;> scalar_tac
+
+theorem OwnerCounter.row_inj : Function.Injective OwnerCounter.row := by
+  intro a b h; cases a; cases b; simp_all [OwnerCounter.row]
+
+theorem OwnerCounter.clone_eq (x : OwnerCounter) : OwnerCounter.Insts.CoreCloneClone.clone x = ok x := by
+  simp [OwnerCounter.Insts.CoreCloneClone.clone, lift]
+
+@[step] theorem OwnerCounter.clone_spec (x : OwnerCounter) : OwnerCounter.Insts.CoreCloneClone.clone x ⦃ y => y = x ⦄ := by
+  rw [OwnerCounter.clone_eq]; simp
+
+def OwnerCounter.putA (x : OwnerCounter) : AWrite Val := .put OwnerCounter.table OwnerCounter.keyLen (OwnerCounter.row x)
+
+@[step] theorem OwnerCounter.sql_put_spec (x : OwnerCounter) : OwnerCounter.sql_put x ⦃ w => sqlW w = OwnerCounter.putA x ⦄ := by
+  unfold OwnerCounter.sql_put; step*; simp_all [sqlW, OwnerCounter.putA, OwnerCounter.table, OwnerCounter.keyLen, OwnerCounter.TABLE, OwnerCounter.KEY_LEN]
+
+/-- Insert, or replace the row with the same key. -/
+@[step] theorem OwnerCounter.put_spec (v : alloc.vec.Vec OwnerCounter) (x : OwnerCounter) (h : v.length < Usize.max) :
+    OwnerCounter.put v x ⦃ v' => v'.val = upsert (fun y => y.owner) x v.val ⦄ := by
+  unfold OwnerCounter.put OwnerCounter.put_loop
+  apply WP.spec_mono (loop_search v.val (fun q => decide (q.owner = x.owner))
+    (fun y : alloc.vec.Vec OwnerCounter => y.val) (fun j _ => v.val.set j x) (v.val ++ [x]) _ ?_ 0#usize (by simp))
+  · intro r hr; rw [hr, show ((0#usize : Usize) : Nat) = 0 from rfl]
+    exact upsert_loop_result (fun y => y.owner) x _ 0 (Nat.zero_le _) (by simp)
+  · intro j hj; unfold OwnerCounter.put_loop.body; h5i_step
+
+/-- The rows without this key. -/
+@[step] theorem OwnerCounter.del_spec (v : alloc.vec.Vec OwnerCounter) (owner : U64) :
+    OwnerCounter.del v owner ⦃ v' => v'.val = v.val.filter (fun y => ¬(y.owner = owner)) ⦄ := by
+  unfold OwnerCounter.del OwnerCounter.del_loop
+  apply WP.spec_mono (loop_fold v.val (fun w : alloc.vec.Vec OwnerCounter => w.val)
+    (fun acc y => if decide ¬(y.owner = owner) then acc ++ [y] else acc)
+    (fun w j => w.length ≤ j) (fun x => OwnerCounter.del_loop.body v owner x.1 x.2) ?_ _ 0#usize (by simp) (by simp))
+  · intro r hr; rw [hr, foldl_filter]; simp
+  · intro o j hj ho; have := v.len_ineq; unfold OwnerCounter.del_loop.body; h5i_step
+
+/-- The rows whose column `col` does not hold `val`. -/
+@[step] theorem OwnerCounter.del_where_spec (v : alloc.vec.Vec OwnerCounter) (col : U32) (val : Val) :
+    OwnerCounter.del_where v col val ⦃ v' => v'.val = v.val.filter (fun y => ¬((OwnerCounter.row y)[col.val]? = some val)) ⦄ := by
+  unfold OwnerCounter.del_where OwnerCounter.del_where_loop
+  apply WP.spec_mono (loop_fold v.val (fun w : alloc.vec.Vec OwnerCounter => w.val)
+    (fun acc y => if decide ¬((OwnerCounter.row y)[col.val]? = some val) then acc ++ [y] else acc)
+    (fun w j => w.length ≤ j) (fun x => OwnerCounter.del_where_loop.body v col val x.1 x.2) ?_ _ 0#usize (by simp) (by simp))
+  · intro r hr; rw [hr, foldl_filter]; simp
+  · intro o j hj ho; have := v.len_ineq; unfold OwnerCounter.del_where_loop.body; h5i_step
+
+def OwnerCounter.delA (owner : U64) : AWrite Val := .del OwnerCounter.table [int owner.val]
+def OwnerCounter.delWhereA (col : Nat) (val : Val) : AWrite Val := .delWhere OwnerCounter.table col val
+
+@[step] theorem OwnerCounter.sql_del_spec (owner : U64) : OwnerCounter.sql_del owner ⦃ w => sqlW w = OwnerCounter.delA owner ⦄ := by
+  unfold OwnerCounter.sql_del; step* <;> simp_all [sqlW, OwnerCounter.delA, OwnerCounter.table, OwnerCounter.TABLE] <;> scalar_tac
+
+@[step] theorem OwnerCounter.sql_del_where_spec (col : U32) (val : Val) :
+    OwnerCounter.sql_del_where col val ⦃ w => sqlW w = OwnerCounter.delWhereA col.val val ⦄ := by
+  unfold OwnerCounter.sql_del_where; simp [sqlW, OwnerCounter.delWhereA, OwnerCounter.table, OwnerCounter.TABLE]
+
+/-! Row writes on the encoding match the list operations. -/
+
+@[simp] theorem OwnerCounter.map_put (x : OwnerCounter) (l : List OwnerCounter) :
+    upsert (·.take 1) (OwnerCounter.row x) (l.map OwnerCounter.row) = (upsert (fun y => y.owner) x l).map OwnerCounter.row :=
+  map_upsert _ _ _ _ _ (fun y => by simp [OwnerCounter.row])
+
+@[simp] theorem OwnerCounter.map_del (owner : U64) (l : List OwnerCounter) :
+    (l.map OwnerCounter.row).filter (fun r => !decide (r.take 1 = [int owner.val])) =
+      (l.filter (fun y => !decide (y.owner = owner))).map OwnerCounter.row :=
+  map_filter_of _ _ _ _ (fun y => by simp [OwnerCounter.row])
+
+@[simp] theorem OwnerCounter.map_del_where (col : Nat) (val : Val) (l : List OwnerCounter) :
+    (l.map OwnerCounter.row).filter (fun r => !decide (r[col]? = some val)) =
+      (l.filter (fun y => !decide ((OwnerCounter.row y)[col]? = some val))).map OwnerCounter.row := by
+  rw [List.filter_map]; rfl
+
 /-! ## Decoding -/
 
 /-- Steps through a generated `from_row`. -/
 macro "row_tac" : tactic => `(tactic| (
   repeat (first
     | (step*; done)
-    | (simp_all only [Account.row, Transfer.row, Ledger.row, List.getElem_cons_zero, List.getElem_cons_succ, Nat.zero_add, Nat.reduceAdd, bind_tc_ok, u64_from_val, u32_from_val, bool_from_val]; step*))
+    | (simp_all only [Account.row, Transfer.row, Ledger.row, OwnerCounter.row, List.getElem_cons_zero, List.getElem_cons_succ, Nat.zero_add, Nat.reduceAdd, bind_tc_ok, u64_from_val, u32_from_val, bool_from_val]; step*))
   all_goals simp_all))
 
 theorem Account.from_row_spec (x : Account) (v : alloc.vec.Vec Val) (h : v.val = Account.row x) :
     Account.from_row v ⦃ o => o = some x ⦄ := by
-  have hl : v.length = 8 := by simp [alloc.vec.Vec.length, h, Account.row]
+  have hl : v.length = 9 := by simp [alloc.vec.Vec.length, h, Account.row]
   unfold Account.from_row; row_tac
 
 theorem Transfer.from_row_spec (x : Transfer) (v : alloc.vec.Vec Val) (h : v.val = Transfer.row x) :
@@ -415,6 +515,11 @@ theorem Ledger.from_row_spec (x : Ledger) (v : alloc.vec.Vec Val) (h : v.val = L
     Ledger.from_row v ⦃ o => o = some x ⦄ := by
   have hl : v.length = 1 := by simp [alloc.vec.Vec.length, h, Ledger.row]
   unfold Ledger.from_row; row_tac
+
+theorem OwnerCounter.from_row_spec (x : OwnerCounter) (v : alloc.vec.Vec Val) (h : v.val = OwnerCounter.row x) :
+    OwnerCounter.from_row v ⦃ o => o = some x ⦄ := by
+  have hl : v.length = 2 := by simp [alloc.vec.Vec.length, h, OwnerCounter.row]
+  unfold OwnerCounter.from_row; row_tac
 
 theorem Account.from_rows_spec (rows : alloc.vec.Vec (alloc.vec.Vec Val)) (l : List Account)
     (h : rows.val.map (·.val) = l.map Account.row) :
@@ -470,6 +575,22 @@ theorem Ledger.from_one_spec (rows : alloc.vec.Vec (alloc.vec.Vec Val)) (l : Lis
     step with Ledger.from_row_spec x w this
     simp_all
 
+theorem OwnerCounter.from_rows_spec (rows : alloc.vec.Vec (alloc.vec.Vec Val)) (l : List OwnerCounter)
+    (h : rows.val.map (·.val) = l.map OwnerCounter.row) :
+    OwnerCounter.from_rows rows ⦃ o => ∃ v, o = some v ∧ v.val = l ⦄ := by
+  have e : OwnerCounter.from_rows_loop rows (alloc.vec.Vec.new OwnerCounter) true 0#usize =
+      loop (fun x => rowsBody OwnerCounter.from_row rows x.1 x.2.1 x.2.2) (alloc.vec.Vec.new OwnerCounter, true, 0#usize) := by
+    unfold OwnerCounter.from_rows_loop; congr 1; funext ⟨a, b, c⟩
+    simp only []; unfold OwnerCounter.from_rows_loop.body rowsBody
+    dsimp only
+    split <;> (try rfl)
+    congr 1; funext v; congr 1; funext o; cases o <;> rfl
+  have hl : OwnerCounter.from_rows_loop rows (alloc.vec.Vec.new OwnerCounter) true 0#usize ⦃ r => r.2 = true ∧ r.1.val = l ⦄ := by
+    rw [e]; exact rows_loop OwnerCounter.from_row OwnerCounter.row (fun x v hv => OwnerCounter.from_row_spec x v hv) rows l h
+  unfold OwnerCounter.from_rows
+  step with hl
+  simp [ok1_post, l_post]
+
 /-! ## Tables -/
 
 /-- Key length per table. -/
@@ -477,35 +598,38 @@ def kl : Nat → Nat
   | 0 => 1
   | 1 => 1
   | 2 => 0
+  | 3 => 1
   | _ => 0
 
 @[simp] theorem kl_0 : kl 0 = 1 := rfl
 @[simp] theorem kl_1 : kl 1 = 1 := rfl
 @[simp] theorem kl_2 : kl 2 = 0 := rfl
+@[simp] theorem kl_3 : kl 3 = 1 := rfl
 
 /-- `row` encodes a value of table `t`'s row type. -/
 def IsRow : Nat → List Val → Prop
   | 0 => fun r => ∃ x : Account, r = Account.row x
   | 1 => fun r => ∃ x : Transfer, r = Transfer.row x
   | 2 => fun r => ∃ x : Ledger, r = Ledger.row x
+  | 3 => fun r => ∃ x : OwnerCounter, r = OwnerCounter.row x
   | _ => fun _ => False
 
 /-- Split a goal about table `t` into one goal per table. -/
-macro "cases_table " t:ident : tactic => `(tactic| rcases $t:ident with _ | _ | _ | $t:ident)
+macro "cases_table " t:ident : tactic => `(tactic| rcases $t:ident with _ | _ | _ | _ | $t:ident)
 
 /-- A write's table writes map a state's encoding to the next: `schema_step [enc, sqlA, applyWrite]`. -/
 macro "schema_step" " [" ls:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic| (
   intro s w; funext t
   cases w <;> cases_table t <;>
-    simp [applyAllW, applyW, upsert, Account.putA, Account.table, Account.keyLen, Account.delA, Account.delWhereA, Transfer.putA, Transfer.table, Transfer.keyLen, Transfer.delA, Transfer.delWhereA, Ledger.putA, Ledger.table, Ledger.keyLen, Ledger.row, $ls,*] <;>
+    simp [applyAllW, applyW, upsert, Account.putA, Account.table, Account.keyLen, Account.delA, Account.delWhereA, Transfer.putA, Transfer.table, Transfer.keyLen, Transfer.delA, Transfer.delWhereA, Ledger.putA, Ledger.table, Ledger.keyLen, Ledger.row, OwnerCounter.putA, OwnerCounter.table, OwnerCounter.keyLen, OwnerCounter.delA, OwnerCounter.delWhereA, $ls,*] <;>
     first
-      | exact map_filter_of _ _ _ _ (fun y => by simp [Account.row, Transfer.row, Ledger.row])
-      | (congr 1; exact List.filter_congr (fun y _ => by simp [Account.row, Transfer.row, Ledger.row]))))
+      | exact map_filter_of _ _ _ _ (fun y => by simp [Account.row, Transfer.row, Ledger.row, OwnerCounter.row])
+      | (congr 1; exact List.filter_congr (fun y _ => by simp [Account.row, Transfer.row, Ledger.row, OwnerCounter.row]))))
 
 /-- Every table write is well formed: `schema_ok [sqlA]`. -/
 macro "schema_ok" " [" ls:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic| (
   intro w; cases w <;>
-    simp [WriteOk, RowOk, IsRow, Account.putA, Account.table, Account.keyLen, Account.delA, Account.delWhereA, Transfer.putA, Transfer.table, Transfer.keyLen, Transfer.delA, Transfer.delWhereA, Ledger.putA, Ledger.table, Ledger.keyLen, $ls,*]))
+    simp [WriteOk, RowOk, IsRow, Account.putA, Account.table, Account.keyLen, Account.delA, Account.delWhereA, Transfer.putA, Transfer.table, Transfer.keyLen, Transfer.delA, Transfer.delWhereA, Ledger.putA, Ledger.table, Ledger.keyLen, OwnerCounter.putA, OwnerCounter.table, OwnerCounter.keyLen, OwnerCounter.delA, OwnerCounter.delWhereA, $ls,*]))
 
 /-- A fresh tenant's tables: `schema_init [enc, init]`. -/
 macro "schema_init" " [" ls:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic| (
@@ -522,30 +646,33 @@ def Snapshot.enc (s : Snapshot) : Tables Val
   | 0 => s.accounts.val.map Account.row
   | 1 => s.transfers.val.map Transfer.row
   | 2 => [Ledger.row s.ledger]
+  | 3 => s.owners.val.map OwnerCounter.row
   | _ => []
 
 /-- A fresh tenant's snapshot. -/
 def Snapshot.empty : Snapshot :=
-  { ledger := Ledger.zero, accounts := alloc.vec.Vec.new Account, transfers := alloc.vec.Vec.new Transfer }
+  { ledger := Ledger.zero, accounts := alloc.vec.Vec.new Account, transfers := alloc.vec.Vec.new Transfer, owners := alloc.vec.Vec.new OwnerCounter }
 
 /-- Stored rows, table by table. -/
 def Rows.tabs (r : Rows) : Tables Val
   | 0 => r.accounts.val.map (·.val)
   | 1 => r.transfers.val.map (·.val)
   | 2 => r.ledger.val.map (·.val)
+  | 3 => r.owners.val.map (·.val)
   | _ => []
 
 theorem Snapshot.clone_eq (s : Snapshot) : Snapshot.Insts.CoreCloneClone.clone s = ok s := by
   simp [Snapshot.Insts.CoreCloneClone.clone,
     Ledger.clone_eq,
     vec_clone_eq Account.Insts.CoreCloneClone s.accounts Account.clone_eq,
-    vec_clone_eq Transfer.Insts.CoreCloneClone s.transfers Transfer.clone_eq]
+    vec_clone_eq Transfer.Insts.CoreCloneClone s.transfers Transfer.clone_eq,
+    vec_clone_eq OwnerCounter.Insts.CoreCloneClone s.owners OwnerCounter.clone_eq]
 
 /-- `decode` reads back tables `E` up to row order (an empty singleton table reads as its fresh row). -/
 theorem decode_spec (r : Rows) (E : Tables Val)
     (hrow : ∀ t, ∀ row ∈ E t, IsRow t row)
     (hone2 : (E 2).length = 1)
-    (hnil : ∀ t, 3 ≤ t → E t = [])
+    (hnil : ∀ t, 4 ≤ t → E t = [])
     (hR : ∀ t, (Rows.tabs r t).Perm (E t) ∨ (Rows.tabs r t = [] ∧ E t = Snapshot.enc Snapshot.empty t)) :
     decode r ⦃ o => ∃ s, o = some s ∧ ∀ t, (Snapshot.enc s t).Perm (E t) ⦄ := by
   obtain ⟨l2, n2, e2, f2⟩ := one_row Ledger.row Ledger.zero (Rows.tabs r 2) (E 2) hone2 (hrow 2) (hR 2)
@@ -553,6 +680,8 @@ theorem decode_spec (r : Rows) (E : Tables Val)
   obtain ⟨l0, e0⟩ := exists_map Account.row (Rows.tabs r 0) (fun row h => hrow 0 row (h0.subset h))
   have h1 : (Rows.tabs r 1).Perm (E 1) := keyed_perm (hR 1)
   obtain ⟨l1, e1⟩ := exists_map Transfer.row (Rows.tabs r 1) (fun row h => hrow 1 row (h1.subset h))
+  have h3 : (Rows.tabs r 3).Perm (E 3) := keyed_perm (hR 3)
+  obtain ⟨l3, e3⟩ := exists_map OwnerCounter.row (Rows.tabs r 3) (fun row h => hrow 3 row (h3.subset h))
   unfold decode
   step with Ledger.from_one_spec r.ledger l2 n2 e2 as ⟨ o2, h2 ⟩
   subst h2; dsimp only
@@ -560,12 +689,15 @@ theorem decode_spec (r : Rows) (E : Tables Val)
   subst ho0; dsimp only
   step with Transfer.from_rows_spec r.transfers l1 e1 as ⟨ o1, v1, ho1, hv1 ⟩
   subst ho1; dsimp only
+  step with OwnerCounter.from_rows_spec r.owners l3 e3 as ⟨ o3, v3, ho3, hv3 ⟩
+  subst ho3; dsimp only
   refine ⟨_, rfl, fun t => ?_⟩
   match t with
   | 0 => simp only [Snapshot.enc, hv0]; rw [← e0]; exact h0
   | 1 => simp only [Snapshot.enc, hv1]; rw [← e1]; exact h1
   | 2 => simp only [Snapshot.enc, f2]; exact .refl _
-  | t + 3 => simp only [Snapshot.enc, hnil (t + 3) (by omega)]; exact .refl _
+  | 3 => simp only [Snapshot.enc, hv3]; rw [← e3]; exact h3
+  | t + 4 => simp only [Snapshot.enc, hnil (t + 4) (by omega)]; exact .refl _
 
 /-! ## Partial loads
 
@@ -586,7 +718,7 @@ noncomputable def pickVec {α : Type} (plan : List (Query.Read Val)) (tabs : Tab
 /-- What loading `plan` from the tables of `s` decodes to: each table's rows its read keeps, none if the plan
 does not read it; a singleton table reads as fresh unless its read keeps its row. -/
 noncomputable def Snapshot.load (plan : List (Query.Read Val)) (s : Snapshot) : Snapshot :=
-  { ledger := (pickRows plan (Snapshot.enc s) 2 Ledger.row [s.ledger]).headD Ledger.zero, accounts := pickVec plan (Snapshot.enc s) 0 Account.row s.accounts, transfers := pickVec plan (Snapshot.enc s) 1 Transfer.row s.transfers }
+  { ledger := (pickRows plan (Snapshot.enc s) 2 Ledger.row [s.ledger]).headD Ledger.zero, accounts := pickVec plan (Snapshot.enc s) 0 Account.row s.accounts, transfers := pickVec plan (Snapshot.enc s) 1 Transfer.row s.transfers, owners := pickVec plan (Snapshot.enc s) 3 OwnerCounter.row s.owners }
 
 @[simp] theorem Snapshot.load_accounts (plan : List (Query.Read Val)) (s : Snapshot) :
     (Snapshot.load plan s).accounts.val = pickRows plan (Snapshot.enc s) 0 Account.row s.accounts.val :=
@@ -596,10 +728,14 @@ noncomputable def Snapshot.load (plan : List (Query.Read Val)) (s : Snapshot) : 
     (Snapshot.load plan s).transfers.val = pickRows plan (Snapshot.enc s) 1 Transfer.row s.transfers.val :=
   alloc.vec.Vec.from_val _ _
 
+@[simp] theorem Snapshot.load_owners (plan : List (Query.Read Val)) (s : Snapshot) :
+    (Snapshot.load plan s).owners.val = pickRows plan (Snapshot.enc s) 3 OwnerCounter.row s.owners.val :=
+  alloc.vec.Vec.from_val _ _
+
 
 /-- Rows holding, for each table, what `plan` loads from the tables of `s` decode to `Snapshot.load plan s`. -/
 theorem decode_load (plan : List (Query.Read Val)) (s : Snapshot) (r : Rows)
-    (h : ∀ t, t < 3 → Rows.tabs r t = load plan (Snapshot.enc s) t) :
+    (h : ∀ t, t < 4 → Rows.tabs r t = load plan (Snapshot.enc s) t) :
     decode r = ok (some (Snapshot.load plan s)) := by
   have e2 := h 2 (by omega)
   rw [load_pick plan _ 2 Ledger.row [s.ledger] rfl] at e2
@@ -608,6 +744,8 @@ theorem decode_load (plan : List (Query.Read Val)) (s : Snapshot) (r : Rows)
   rw [load_pick plan _ 0 Account.row s.accounts.val rfl] at e0
   have e1 := h 1 (by omega)
   rw [load_pick plan _ 1 Transfer.row s.transfers.val rfl] at e1
+  have e3 := h 3 (by omega)
+  rw [load_pick plan _ 3 OwnerCounter.row s.owners.val rfl] at e3
   simp only [Rows.tabs] at *
   apply eq_ok_of_spec
   unfold decode
@@ -617,6 +755,8 @@ theorem decode_load (plan : List (Query.Read Val)) (s : Snapshot) (r : Rows)
   subst ho0; dsimp only
   step with Transfer.from_rows_spec r.transfers _ e1 as ⟨ o1, v1, ho1, hv1 ⟩
   subst ho1; dsimp only
+  step with OwnerCounter.from_rows_spec r.owners _ e3 as ⟨ o3, v3, ho3, hv3 ⟩
+  subst ho3; dsimp only
   simp only [WP.spec_ok, Option.some.injEq, Snapshot.load]
   congr 1 <;> apply alloc.vec.Vec.ext <;> simp [pickVec, *]
 
@@ -653,11 +793,22 @@ theorem holds_in_2 (s : Snapshot) (i j : Nat) (p : Query.Pred Val) (w : Query.Wi
     (l := [s.ledger]) (h := rfl)]
   cases r[i]? <;> rfl
 
+/-- `IN` a column of a read of table 3, as a test on the snapshot's rows. -/
+theorem holds_in_3 (s : Snapshot) (i j : Nat) (p : Query.Pred Val) (w : Query.Window) (r : List Val) :
+    (Query.Pred.isIn i 3 p j w).holds (Snapshot.enc s) r =
+      match r[i]? with
+      | none => false
+      | some x => (w.apply ((s.owners.val).filter (fun y => p.holds (Snapshot.enc s) (OwnerCounter.row y)))).any
+          (fun y => decide ((OwnerCounter.row y)[j]? = some x)) := by
+  rw [Query.holds_isIn (tabs := Snapshot.enc s) (i := i) (t := 3) (j := j) (p := p) (w := w) (r := r) (f := OwnerCounter.row)
+    (l := s.owners.val) (h := rfl)]
+  cases r[i]? <;> rfl
+
 
 end PartialLoads
 
 /-- Rows in a snapshot's keyed tables; a write adds at most one. -/
-def Snapshot.size (s : Snapshot) : Nat := s.accounts.length + s.transfers.length
+def Snapshot.size (s : Snapshot) : Nat := s.accounts.length + s.transfers.length + s.owners.length
 
 /-! ## Loading
 
@@ -672,7 +823,7 @@ structure Fits : Prop where
   rows : A.IsRow = IsRow
   enc : ∀ s, A.enc (toSt s) = Snapshot.enc s
   init : A.enc A.init = Snapshot.enc Snapshot.empty
-  nil : ∀ s t, 3 ≤ t → A.enc s t = []
+  nil : ∀ s t, 4 ≤ t → A.enc s t = []
 
 variable {A toSt}
 
@@ -803,7 +954,7 @@ variable {St : Type} (A : App St Write Val) (toSt : Snapshot → St) (ts : List 
 
 /-- Rows the compiled `SELECT` of each table returns, in any order. -/
 def Loads (db : Pg.PgDb Val) (r : Rows) : Prop :=
-  ∀ t, t < 3 → ∃ q ps R0, Pg.selectA valKind ts tv t none = some (q, ps) ∧
+  ∀ t, t < 4 → ∃ q ps R0, Pg.selectA valKind ts tv t none = some (q, ps) ∧
     Pg.selected valKind db q ps = some R0 ∧ (Rows.tabs r t).Perm R0
 
 inductive PgServed : Pg.PgDb Val → St → Prop
@@ -822,13 +973,13 @@ inductive PgServed : Pg.PgDb Val → St → Prop
 
 variable {A toSt ts tv Step}
 
-theorem Rows.tabs_nil (r : Rows) (t : Nat) (h : 3 ≤ t) : Rows.tabs r t = [] := by
+theorem Rows.tabs_nil (r : Rows) (t : Nat) (h : 4 ≤ t) : Rows.tabs r t = [] := by
   obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le' h
   simp only [Rows.tabs]
 
 /-- The tenant's view of a `PgServed` database is `Served`, with the same state. -/
 theorem pg_served (hs : SqlFits A) (hf : Fits A toSt) (hv : Pg.Valid ts) (htv : valKind tv = some .int)
-    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 3) {db : Pg.PgDb Val} {s : St}
+    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 4) {db : Pg.PgDb Val} {s : St}
     (h : PgServed A toSt ts tv Step db s) : Pg.Matches valKind ts db ∧ Served A toSt (Pg.view ts tv db) s := by
   induction h with
   | fresh hm he => exact ⟨hm, he ▸ .fresh⟩
@@ -851,7 +1002,7 @@ theorem pg_served (hs : SqlFits A) (hf : Fits A toSt) (hv : Pg.Valid ts) (htv : 
 
 /-- An `Inv` kept by init, row reordering and every `Step` holds on PostgreSQL and on every load. -/
 theorem pg_loaded_inv (hs : SqlFits A) (hf : Fits A toSt) (hv : Pg.Valid ts) (htv : valKind tv = some .int)
-    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 3) (Inv : St → Prop) (hinit : Inv A.init)
+    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 4) (Inv : St → Prop) (hinit : Inv A.init)
     (hequiv : ∀ snap s', A.Equiv (toSt snap) s' → Inv s' → Inv (toSt snap))
     (hstep : ∀ snap ws, Step snap ws → Inv (toSt snap) → Inv (ws.val.foldl A.step (toSt snap)))
     {db : Pg.PgDb Val} {s : St} (h : PgServed A toSt ts tv Step db s) :

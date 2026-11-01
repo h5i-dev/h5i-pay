@@ -123,9 +123,9 @@ def sqlW : h5i_app_sql.Write → AWrite Val
 
 /-! ## `Payment` (table `payments`) -/
 
-/-- Columns `id`, `merchant`, `amount`, `currency`, `status`, `manual_capture`, `attempts`, `authorized`, `captured`, `refunded`, `refund_pending`, `operator`, `ledger_done`. -/
+/-- Columns `id`, `merchant`, `amount`, `currency`, `status`, `manual_capture`, `attempts`, `authorized`, `captured`, `refunded`, `refund_pending`, `operator`, `ledger_done`, `seq`. -/
 def Payment.row (x : Payment) : List Val :=
-  [int x.id.val, int x.merchant.val, int x.amount.val, int x.currency.val, int x.status.val, .Bool x.manual_capture, int x.attempts.val, int x.authorized.val, int x.captured.val, int x.refunded.val, int x.refund_pending.val, int x.operator.val, .Bool x.ledger_done]
+  [int x.id.val, int x.merchant.val, int x.amount.val, int x.currency.val, int x.status.val, .Bool x.manual_capture, int x.attempts.val, int x.authorized.val, int x.captured.val, int x.refunded.val, int x.refund_pending.val, int x.operator.val, .Bool x.ledger_done, int x.seq.val]
 
 def Payment.table : Nat := 0
 def Payment.keyLen : Nat := 1
@@ -142,6 +142,7 @@ def Payment.col_refunded : Nat := 9
 def Payment.col_refund_pending : Nat := 10
 def Payment.col_operator : Nat := 11
 def Payment.col_ledger_done : Nat := 12
+def Payment.col_seq : Nat := 13
 
 @[simp] theorem Payment.row_col_id (x : Payment) :
     (Payment.row x)[Payment.col_id]? = some (int x.id.val) := by
@@ -195,7 +196,11 @@ def Payment.col_ledger_done : Nat := 12
     (Payment.row x)[Payment.col_ledger_done]? = some (.Bool x.ledger_done) := by
   simp [Payment.row, Payment.col_ledger_done]
 
-@[simp] theorem Payment.row_length (x : Payment) : (Payment.row x).length = 13 := rfl
+@[simp] theorem Payment.row_col_seq (x : Payment) :
+    (Payment.row x)[Payment.col_seq]? = some (int x.seq.val) := by
+  simp [Payment.row, Payment.col_seq]
+
+@[simp] theorem Payment.row_length (x : Payment) : (Payment.row x).length = 14 := rfl
 
 @[step] theorem Payment.to_row_spec (x : Payment) : Payment.to_row x ⦃ v => v.val = Payment.row x ⦄ := by
   have := usize_max_le
@@ -618,18 +623,113 @@ def Counter.putA (x : Counter) : AWrite Val := .put Counter.table Counter.keyLen
 /-- A fresh tenant's `Counter`: all zeros. -/
 def Counter.zero : Counter := { next_id := 0#u64 }
 
+/-! ## `MerchantCounter` (table `merchant_counters`) -/
+
+/-- Columns `merchant`, `next`. -/
+def MerchantCounter.row (x : MerchantCounter) : List Val :=
+  [int x.merchant.val, int x.next.val]
+
+def MerchantCounter.table : Nat := 5
+def MerchantCounter.keyLen : Nat := 1
+def MerchantCounter.col_merchant : Nat := 0
+def MerchantCounter.col_next : Nat := 1
+
+@[simp] theorem MerchantCounter.row_col_merchant (x : MerchantCounter) :
+    (MerchantCounter.row x)[MerchantCounter.col_merchant]? = some (int x.merchant.val) := by
+  simp [MerchantCounter.row, MerchantCounter.col_merchant]
+
+@[simp] theorem MerchantCounter.row_col_next (x : MerchantCounter) :
+    (MerchantCounter.row x)[MerchantCounter.col_next]? = some (int x.next.val) := by
+  simp [MerchantCounter.row, MerchantCounter.col_next]
+
+@[simp] theorem MerchantCounter.row_length (x : MerchantCounter) : (MerchantCounter.row x).length = 2 := rfl
+
+@[step] theorem MerchantCounter.to_row_spec (x : MerchantCounter) : MerchantCounter.to_row x ⦃ v => v.val = MerchantCounter.row x ⦄ := by
+  have := usize_max_le
+  unfold MerchantCounter.to_row; step* <;> simp_all [MerchantCounter.row] <;> scalar_tac
+
+theorem MerchantCounter.row_inj : Function.Injective MerchantCounter.row := by
+  intro a b h; cases a; cases b; simp_all [MerchantCounter.row]
+
+theorem MerchantCounter.clone_eq (x : MerchantCounter) : MerchantCounter.Insts.CoreCloneClone.clone x = ok x := by
+  simp [MerchantCounter.Insts.CoreCloneClone.clone, lift]
+
+@[step] theorem MerchantCounter.clone_spec (x : MerchantCounter) : MerchantCounter.Insts.CoreCloneClone.clone x ⦃ y => y = x ⦄ := by
+  rw [MerchantCounter.clone_eq]; simp
+
+def MerchantCounter.putA (x : MerchantCounter) : AWrite Val := .put MerchantCounter.table MerchantCounter.keyLen (MerchantCounter.row x)
+
+@[step] theorem MerchantCounter.sql_put_spec (x : MerchantCounter) : MerchantCounter.sql_put x ⦃ w => sqlW w = MerchantCounter.putA x ⦄ := by
+  unfold MerchantCounter.sql_put; step*; simp_all [sqlW, MerchantCounter.putA, MerchantCounter.table, MerchantCounter.keyLen, MerchantCounter.TABLE, MerchantCounter.KEY_LEN]
+
+/-- Insert, or replace the row with the same key. -/
+@[step] theorem MerchantCounter.put_spec (v : alloc.vec.Vec MerchantCounter) (x : MerchantCounter) (h : v.length < Usize.max) :
+    MerchantCounter.put v x ⦃ v' => v'.val = upsert (fun y => y.merchant) x v.val ⦄ := by
+  unfold MerchantCounter.put MerchantCounter.put_loop
+  apply WP.spec_mono (loop_search v.val (fun q => decide (q.merchant = x.merchant))
+    (fun y : alloc.vec.Vec MerchantCounter => y.val) (fun j _ => v.val.set j x) (v.val ++ [x]) _ ?_ 0#usize (by simp))
+  · intro r hr; rw [hr, show ((0#usize : Usize) : Nat) = 0 from rfl]
+    exact upsert_loop_result (fun y => y.merchant) x _ 0 (Nat.zero_le _) (by simp)
+  · intro j hj; unfold MerchantCounter.put_loop.body; h5i_step
+
+/-- The rows without this key. -/
+@[step] theorem MerchantCounter.del_spec (v : alloc.vec.Vec MerchantCounter) (merchant : U64) :
+    MerchantCounter.del v merchant ⦃ v' => v'.val = v.val.filter (fun y => ¬(y.merchant = merchant)) ⦄ := by
+  unfold MerchantCounter.del MerchantCounter.del_loop
+  apply WP.spec_mono (loop_fold v.val (fun w : alloc.vec.Vec MerchantCounter => w.val)
+    (fun acc y => if decide ¬(y.merchant = merchant) then acc ++ [y] else acc)
+    (fun w j => w.length ≤ j) (fun x => MerchantCounter.del_loop.body v merchant x.1 x.2) ?_ _ 0#usize (by simp) (by simp))
+  · intro r hr; rw [hr, foldl_filter]; simp
+  · intro o j hj ho; have := v.len_ineq; unfold MerchantCounter.del_loop.body; h5i_step
+
+/-- The rows whose column `col` does not hold `val`. -/
+@[step] theorem MerchantCounter.del_where_spec (v : alloc.vec.Vec MerchantCounter) (col : U32) (val : Val) :
+    MerchantCounter.del_where v col val ⦃ v' => v'.val = v.val.filter (fun y => ¬((MerchantCounter.row y)[col.val]? = some val)) ⦄ := by
+  unfold MerchantCounter.del_where MerchantCounter.del_where_loop
+  apply WP.spec_mono (loop_fold v.val (fun w : alloc.vec.Vec MerchantCounter => w.val)
+    (fun acc y => if decide ¬((MerchantCounter.row y)[col.val]? = some val) then acc ++ [y] else acc)
+    (fun w j => w.length ≤ j) (fun x => MerchantCounter.del_where_loop.body v col val x.1 x.2) ?_ _ 0#usize (by simp) (by simp))
+  · intro r hr; rw [hr, foldl_filter]; simp
+  · intro o j hj ho; have := v.len_ineq; unfold MerchantCounter.del_where_loop.body; h5i_step
+
+def MerchantCounter.delA (merchant : U64) : AWrite Val := .del MerchantCounter.table [int merchant.val]
+def MerchantCounter.delWhereA (col : Nat) (val : Val) : AWrite Val := .delWhere MerchantCounter.table col val
+
+@[step] theorem MerchantCounter.sql_del_spec (merchant : U64) : MerchantCounter.sql_del merchant ⦃ w => sqlW w = MerchantCounter.delA merchant ⦄ := by
+  unfold MerchantCounter.sql_del; step* <;> simp_all [sqlW, MerchantCounter.delA, MerchantCounter.table, MerchantCounter.TABLE] <;> scalar_tac
+
+@[step] theorem MerchantCounter.sql_del_where_spec (col : U32) (val : Val) :
+    MerchantCounter.sql_del_where col val ⦃ w => sqlW w = MerchantCounter.delWhereA col.val val ⦄ := by
+  unfold MerchantCounter.sql_del_where; simp [sqlW, MerchantCounter.delWhereA, MerchantCounter.table, MerchantCounter.TABLE]
+
+/-! Row writes on the encoding match the list operations. -/
+
+@[simp] theorem MerchantCounter.map_put (x : MerchantCounter) (l : List MerchantCounter) :
+    upsert (·.take 1) (MerchantCounter.row x) (l.map MerchantCounter.row) = (upsert (fun y => y.merchant) x l).map MerchantCounter.row :=
+  map_upsert _ _ _ _ _ (fun y => by simp [MerchantCounter.row])
+
+@[simp] theorem MerchantCounter.map_del (merchant : U64) (l : List MerchantCounter) :
+    (l.map MerchantCounter.row).filter (fun r => !decide (r.take 1 = [int merchant.val])) =
+      (l.filter (fun y => !decide (y.merchant = merchant))).map MerchantCounter.row :=
+  map_filter_of _ _ _ _ (fun y => by simp [MerchantCounter.row])
+
+@[simp] theorem MerchantCounter.map_del_where (col : Nat) (val : Val) (l : List MerchantCounter) :
+    (l.map MerchantCounter.row).filter (fun r => !decide (r[col]? = some val)) =
+      (l.filter (fun y => !decide ((MerchantCounter.row y)[col]? = some val))).map MerchantCounter.row := by
+  rw [List.filter_map]; rfl
+
 /-! ## Decoding -/
 
 /-- Steps through a generated `from_row`. -/
 macro "row_tac" : tactic => `(tactic| (
   repeat (first
     | (step*; done)
-    | (simp_all only [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row, List.getElem_cons_zero, List.getElem_cons_succ, Nat.zero_add, Nat.reduceAdd, bind_tc_ok, u64_from_val, u32_from_val, bool_from_val, bytes_from_val]; step*))
+    | (simp_all only [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row, MerchantCounter.row, List.getElem_cons_zero, List.getElem_cons_succ, Nat.zero_add, Nat.reduceAdd, bind_tc_ok, u64_from_val, u32_from_val, bool_from_val, bytes_from_val]; step*))
   all_goals simp_all))
 
 theorem Payment.from_row_spec (x : Payment) (v : alloc.vec.Vec Val) (h : v.val = Payment.row x) :
     Payment.from_row v ⦃ o => o = some x ⦄ := by
-  have hl : v.length = 13 := by simp [alloc.vec.Vec.length, h, Payment.row]
+  have hl : v.length = 14 := by simp [alloc.vec.Vec.length, h, Payment.row]
   unfold Payment.from_row; row_tac
 
 theorem Refund.from_row_spec (x : Refund) (v : alloc.vec.Vec Val) (h : v.val = Refund.row x) :
@@ -651,6 +751,11 @@ theorem Counter.from_row_spec (x : Counter) (v : alloc.vec.Vec Val) (h : v.val =
     Counter.from_row v ⦃ o => o = some x ⦄ := by
   have hl : v.length = 1 := by simp [alloc.vec.Vec.length, h, Counter.row]
   unfold Counter.from_row; row_tac
+
+theorem MerchantCounter.from_row_spec (x : MerchantCounter) (v : alloc.vec.Vec Val) (h : v.val = MerchantCounter.row x) :
+    MerchantCounter.from_row v ⦃ o => o = some x ⦄ := by
+  have hl : v.length = 2 := by simp [alloc.vec.Vec.length, h, MerchantCounter.row]
+  unfold MerchantCounter.from_row; row_tac
 
 theorem Payment.from_rows_spec (rows : alloc.vec.Vec (alloc.vec.Vec Val)) (l : List Payment)
     (h : rows.val.map (·.val) = l.map Payment.row) :
@@ -738,6 +843,22 @@ theorem Counter.from_one_spec (rows : alloc.vec.Vec (alloc.vec.Vec Val)) (l : Li
     step with Counter.from_row_spec x w this
     simp_all
 
+theorem MerchantCounter.from_rows_spec (rows : alloc.vec.Vec (alloc.vec.Vec Val)) (l : List MerchantCounter)
+    (h : rows.val.map (·.val) = l.map MerchantCounter.row) :
+    MerchantCounter.from_rows rows ⦃ o => ∃ v, o = some v ∧ v.val = l ⦄ := by
+  have e : MerchantCounter.from_rows_loop rows (alloc.vec.Vec.new MerchantCounter) true 0#usize =
+      loop (fun x => rowsBody MerchantCounter.from_row rows x.1 x.2.1 x.2.2) (alloc.vec.Vec.new MerchantCounter, true, 0#usize) := by
+    unfold MerchantCounter.from_rows_loop; congr 1; funext ⟨a, b, c⟩
+    simp only []; unfold MerchantCounter.from_rows_loop.body rowsBody
+    dsimp only
+    split <;> (try rfl)
+    congr 1; funext v; congr 1; funext o; cases o <;> rfl
+  have hl : MerchantCounter.from_rows_loop rows (alloc.vec.Vec.new MerchantCounter) true 0#usize ⦃ r => r.2 = true ∧ r.1.val = l ⦄ := by
+    rw [e]; exact rows_loop MerchantCounter.from_row MerchantCounter.row (fun x v hv => MerchantCounter.from_row_spec x v hv) rows l h
+  unfold MerchantCounter.from_rows
+  step with hl
+  simp [ok1_post, l_post]
+
 /-! ## Tables -/
 
 /-- Key length per table. -/
@@ -747,6 +868,7 @@ def kl : Nat → Nat
   | 2 => 1
   | 3 => 1
   | 4 => 0
+  | 5 => 1
   | _ => 0
 
 @[simp] theorem kl_0 : kl 0 = 1 := rfl
@@ -754,6 +876,7 @@ def kl : Nat → Nat
 @[simp] theorem kl_2 : kl 2 = 1 := rfl
 @[simp] theorem kl_3 : kl 3 = 1 := rfl
 @[simp] theorem kl_4 : kl 4 = 0 := rfl
+@[simp] theorem kl_5 : kl 5 = 1 := rfl
 
 /-- `row` encodes a value of table `t`'s row type. -/
 def IsRow : Nat → List Val → Prop
@@ -762,24 +885,25 @@ def IsRow : Nat → List Val → Prop
   | 2 => fun r => ∃ x : Event, r = Event.row x
   | 3 => fun r => ∃ x : PspRef, r = PspRef.row x
   | 4 => fun r => ∃ x : Counter, r = Counter.row x
+  | 5 => fun r => ∃ x : MerchantCounter, r = MerchantCounter.row x
   | _ => fun _ => False
 
 /-- Split a goal about table `t` into one goal per table. -/
-macro "cases_table " t:ident : tactic => `(tactic| rcases $t:ident with _ | _ | _ | _ | _ | $t:ident)
+macro "cases_table " t:ident : tactic => `(tactic| rcases $t:ident with _ | _ | _ | _ | _ | _ | $t:ident)
 
 /-- A write's table writes map a state's encoding to the next: `schema_step [enc, sqlA, applyWrite]`. -/
 macro "schema_step" " [" ls:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic| (
   intro s w; funext t
   cases w <;> cases_table t <;>
-    simp [applyAllW, applyW, upsert, Payment.putA, Payment.table, Payment.keyLen, Payment.delA, Payment.delWhereA, Refund.putA, Refund.table, Refund.keyLen, Refund.delA, Refund.delWhereA, Event.putA, Event.table, Event.keyLen, Event.delA, Event.delWhereA, PspRef.putA, PspRef.table, PspRef.keyLen, PspRef.delA, PspRef.delWhereA, Counter.putA, Counter.table, Counter.keyLen, Counter.row, $ls,*] <;>
+    simp [applyAllW, applyW, upsert, Payment.putA, Payment.table, Payment.keyLen, Payment.delA, Payment.delWhereA, Refund.putA, Refund.table, Refund.keyLen, Refund.delA, Refund.delWhereA, Event.putA, Event.table, Event.keyLen, Event.delA, Event.delWhereA, PspRef.putA, PspRef.table, PspRef.keyLen, PspRef.delA, PspRef.delWhereA, Counter.putA, Counter.table, Counter.keyLen, Counter.row, MerchantCounter.putA, MerchantCounter.table, MerchantCounter.keyLen, MerchantCounter.delA, MerchantCounter.delWhereA, $ls,*] <;>
     first
-      | exact map_filter_of _ _ _ _ (fun y => by simp [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row])
-      | (congr 1; exact List.filter_congr (fun y _ => by simp [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row]))))
+      | exact map_filter_of _ _ _ _ (fun y => by simp [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row, MerchantCounter.row])
+      | (congr 1; exact List.filter_congr (fun y _ => by simp [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row, MerchantCounter.row]))))
 
 /-- Every table write is well formed: `schema_ok [sqlA]`. -/
 macro "schema_ok" " [" ls:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic| (
   intro w; cases w <;>
-    simp [WriteOk, RowOk, IsRow, Payment.putA, Payment.table, Payment.keyLen, Payment.delA, Payment.delWhereA, Refund.putA, Refund.table, Refund.keyLen, Refund.delA, Refund.delWhereA, Event.putA, Event.table, Event.keyLen, Event.delA, Event.delWhereA, PspRef.putA, PspRef.table, PspRef.keyLen, PspRef.delA, PspRef.delWhereA, Counter.putA, Counter.table, Counter.keyLen, $ls,*]))
+    simp [WriteOk, RowOk, IsRow, Payment.putA, Payment.table, Payment.keyLen, Payment.delA, Payment.delWhereA, Refund.putA, Refund.table, Refund.keyLen, Refund.delA, Refund.delWhereA, Event.putA, Event.table, Event.keyLen, Event.delA, Event.delWhereA, PspRef.putA, PspRef.table, PspRef.keyLen, PspRef.delA, PspRef.delWhereA, Counter.putA, Counter.table, Counter.keyLen, MerchantCounter.putA, MerchantCounter.table, MerchantCounter.keyLen, MerchantCounter.delA, MerchantCounter.delWhereA, $ls,*]))
 
 /-- A fresh tenant's tables: `schema_init [enc, init]`. -/
 macro "schema_init" " [" ls:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic| (
@@ -798,11 +922,12 @@ def Snapshot.enc (s : Snapshot) : Tables Val
   | 2 => s.events.val.map Event.row
   | 3 => s.refs.val.map PspRef.row
   | 4 => [Counter.row s.counter]
+  | 5 => s.merchants.val.map MerchantCounter.row
   | _ => []
 
 /-- A fresh tenant's snapshot. -/
 def Snapshot.empty : Snapshot :=
-  { counter := Counter.zero, payments := alloc.vec.Vec.new Payment, refunds := alloc.vec.Vec.new Refund, events := alloc.vec.Vec.new Event, refs := alloc.vec.Vec.new PspRef }
+  { counter := Counter.zero, payments := alloc.vec.Vec.new Payment, refunds := alloc.vec.Vec.new Refund, events := alloc.vec.Vec.new Event, refs := alloc.vec.Vec.new PspRef, merchants := alloc.vec.Vec.new MerchantCounter }
 
 /-- Stored rows, table by table. -/
 def Rows.tabs (r : Rows) : Tables Val
@@ -811,6 +936,7 @@ def Rows.tabs (r : Rows) : Tables Val
   | 2 => r.events.val.map (·.val)
   | 3 => r.refs.val.map (·.val)
   | 4 => r.counter.val.map (·.val)
+  | 5 => r.merchants.val.map (·.val)
   | _ => []
 
 theorem Snapshot.clone_eq (s : Snapshot) : Snapshot.Insts.CoreCloneClone.clone s = ok s := by
@@ -819,13 +945,14 @@ theorem Snapshot.clone_eq (s : Snapshot) : Snapshot.Insts.CoreCloneClone.clone s
     vec_clone_eq Payment.Insts.CoreCloneClone s.payments Payment.clone_eq,
     vec_clone_eq Refund.Insts.CoreCloneClone s.refunds Refund.clone_eq,
     vec_clone_eq Event.Insts.CoreCloneClone s.events Event.clone_eq,
-    vec_clone_eq PspRef.Insts.CoreCloneClone s.refs PspRef.clone_eq]
+    vec_clone_eq PspRef.Insts.CoreCloneClone s.refs PspRef.clone_eq,
+    vec_clone_eq MerchantCounter.Insts.CoreCloneClone s.merchants MerchantCounter.clone_eq]
 
 /-- `decode` reads back tables `E` up to row order (an empty singleton table reads as its fresh row). -/
 theorem decode_spec (r : Rows) (E : Tables Val)
     (hrow : ∀ t, ∀ row ∈ E t, IsRow t row)
     (hone4 : (E 4).length = 1)
-    (hnil : ∀ t, 5 ≤ t → E t = [])
+    (hnil : ∀ t, 6 ≤ t → E t = [])
     (hR : ∀ t, (Rows.tabs r t).Perm (E t) ∨ (Rows.tabs r t = [] ∧ E t = Snapshot.enc Snapshot.empty t)) :
     decode r ⦃ o => ∃ s, o = some s ∧ ∀ t, (Snapshot.enc s t).Perm (E t) ⦄ := by
   obtain ⟨l4, n4, e4, f4⟩ := one_row Counter.row Counter.zero (Rows.tabs r 4) (E 4) hone4 (hrow 4) (hR 4)
@@ -837,6 +964,8 @@ theorem decode_spec (r : Rows) (E : Tables Val)
   obtain ⟨l2, e2⟩ := exists_map Event.row (Rows.tabs r 2) (fun row h => hrow 2 row (h2.subset h))
   have h3 : (Rows.tabs r 3).Perm (E 3) := keyed_perm (hR 3)
   obtain ⟨l3, e3⟩ := exists_map PspRef.row (Rows.tabs r 3) (fun row h => hrow 3 row (h3.subset h))
+  have h5 : (Rows.tabs r 5).Perm (E 5) := keyed_perm (hR 5)
+  obtain ⟨l5, e5⟩ := exists_map MerchantCounter.row (Rows.tabs r 5) (fun row h => hrow 5 row (h5.subset h))
   unfold decode
   step with Counter.from_one_spec r.counter l4 n4 e4 as ⟨ o4, h4 ⟩
   subst h4; dsimp only
@@ -848,6 +977,8 @@ theorem decode_spec (r : Rows) (E : Tables Val)
   subst ho2; dsimp only
   step with PspRef.from_rows_spec r.refs l3 e3 as ⟨ o3, v3, ho3, hv3 ⟩
   subst ho3; dsimp only
+  step with MerchantCounter.from_rows_spec r.merchants l5 e5 as ⟨ o5, v5, ho5, hv5 ⟩
+  subst ho5; dsimp only
   refine ⟨_, rfl, fun t => ?_⟩
   match t with
   | 0 => simp only [Snapshot.enc, hv0]; rw [← e0]; exact h0
@@ -855,7 +986,8 @@ theorem decode_spec (r : Rows) (E : Tables Val)
   | 2 => simp only [Snapshot.enc, hv2]; rw [← e2]; exact h2
   | 3 => simp only [Snapshot.enc, hv3]; rw [← e3]; exact h3
   | 4 => simp only [Snapshot.enc, f4]; exact .refl _
-  | t + 5 => simp only [Snapshot.enc, hnil (t + 5) (by omega)]; exact .refl _
+  | 5 => simp only [Snapshot.enc, hv5]; rw [← e5]; exact h5
+  | t + 6 => simp only [Snapshot.enc, hnil (t + 6) (by omega)]; exact .refl _
 
 /-! ## Partial loads
 
@@ -876,7 +1008,7 @@ noncomputable def pickVec {α : Type} (plan : List (Query.Read Val)) (tabs : Tab
 /-- What loading `plan` from the tables of `s` decodes to: each table's rows its read keeps, none if the plan
 does not read it; a singleton table reads as fresh unless its read keeps its row. -/
 noncomputable def Snapshot.load (plan : List (Query.Read Val)) (s : Snapshot) : Snapshot :=
-  { counter := (pickRows plan (Snapshot.enc s) 4 Counter.row [s.counter]).headD Counter.zero, payments := pickVec plan (Snapshot.enc s) 0 Payment.row s.payments, refunds := pickVec plan (Snapshot.enc s) 1 Refund.row s.refunds, events := pickVec plan (Snapshot.enc s) 2 Event.row s.events, refs := pickVec plan (Snapshot.enc s) 3 PspRef.row s.refs }
+  { counter := (pickRows plan (Snapshot.enc s) 4 Counter.row [s.counter]).headD Counter.zero, payments := pickVec plan (Snapshot.enc s) 0 Payment.row s.payments, refunds := pickVec plan (Snapshot.enc s) 1 Refund.row s.refunds, events := pickVec plan (Snapshot.enc s) 2 Event.row s.events, refs := pickVec plan (Snapshot.enc s) 3 PspRef.row s.refs, merchants := pickVec plan (Snapshot.enc s) 5 MerchantCounter.row s.merchants }
 
 @[simp] theorem Snapshot.load_payments (plan : List (Query.Read Val)) (s : Snapshot) :
     (Snapshot.load plan s).payments.val = pickRows plan (Snapshot.enc s) 0 Payment.row s.payments.val :=
@@ -894,10 +1026,14 @@ noncomputable def Snapshot.load (plan : List (Query.Read Val)) (s : Snapshot) : 
     (Snapshot.load plan s).refs.val = pickRows plan (Snapshot.enc s) 3 PspRef.row s.refs.val :=
   alloc.vec.Vec.from_val _ _
 
+@[simp] theorem Snapshot.load_merchants (plan : List (Query.Read Val)) (s : Snapshot) :
+    (Snapshot.load plan s).merchants.val = pickRows plan (Snapshot.enc s) 5 MerchantCounter.row s.merchants.val :=
+  alloc.vec.Vec.from_val _ _
+
 
 /-- Rows holding, for each table, what `plan` loads from the tables of `s` decode to `Snapshot.load plan s`. -/
 theorem decode_load (plan : List (Query.Read Val)) (s : Snapshot) (r : Rows)
-    (h : ∀ t, t < 5 → Rows.tabs r t = load plan (Snapshot.enc s) t) :
+    (h : ∀ t, t < 6 → Rows.tabs r t = load plan (Snapshot.enc s) t) :
     decode r = ok (some (Snapshot.load plan s)) := by
   have e4 := h 4 (by omega)
   rw [load_pick plan _ 4 Counter.row [s.counter] rfl] at e4
@@ -910,6 +1046,8 @@ theorem decode_load (plan : List (Query.Read Val)) (s : Snapshot) (r : Rows)
   rw [load_pick plan _ 2 Event.row s.events.val rfl] at e2
   have e3 := h 3 (by omega)
   rw [load_pick plan _ 3 PspRef.row s.refs.val rfl] at e3
+  have e5 := h 5 (by omega)
+  rw [load_pick plan _ 5 MerchantCounter.row s.merchants.val rfl] at e5
   simp only [Rows.tabs] at *
   apply eq_ok_of_spec
   unfold decode
@@ -923,6 +1061,8 @@ theorem decode_load (plan : List (Query.Read Val)) (s : Snapshot) (r : Rows)
   subst ho2; dsimp only
   step with PspRef.from_rows_spec r.refs _ e3 as ⟨ o3, v3, ho3, hv3 ⟩
   subst ho3; dsimp only
+  step with MerchantCounter.from_rows_spec r.merchants _ e5 as ⟨ o5, v5, ho5, hv5 ⟩
+  subst ho5; dsimp only
   simp only [WP.spec_ok, Option.some.injEq, Snapshot.load]
   congr 1 <;> apply alloc.vec.Vec.ext <;> simp [pickVec, *]
 
@@ -981,11 +1121,22 @@ theorem holds_in_4 (s : Snapshot) (i j : Nat) (p : Query.Pred Val) (w : Query.Wi
     (l := [s.counter]) (h := rfl)]
   cases r[i]? <;> rfl
 
+/-- `IN` a column of a read of table 5, as a test on the snapshot's rows. -/
+theorem holds_in_5 (s : Snapshot) (i j : Nat) (p : Query.Pred Val) (w : Query.Window) (r : List Val) :
+    (Query.Pred.isIn i 5 p j w).holds (Snapshot.enc s) r =
+      match r[i]? with
+      | none => false
+      | some x => (w.apply ((s.merchants.val).filter (fun y => p.holds (Snapshot.enc s) (MerchantCounter.row y)))).any
+          (fun y => decide ((MerchantCounter.row y)[j]? = some x)) := by
+  rw [Query.holds_isIn (tabs := Snapshot.enc s) (i := i) (t := 5) (j := j) (p := p) (w := w) (r := r) (f := MerchantCounter.row)
+    (l := s.merchants.val) (h := rfl)]
+  cases r[i]? <;> rfl
+
 
 end PartialLoads
 
 /-- Rows in a snapshot's keyed tables; a write adds at most one. -/
-def Snapshot.size (s : Snapshot) : Nat := s.payments.length + s.refunds.length + s.events.length + s.refs.length
+def Snapshot.size (s : Snapshot) : Nat := s.payments.length + s.refunds.length + s.events.length + s.refs.length + s.merchants.length
 
 /-! ## Loading
 
@@ -1000,7 +1151,7 @@ structure Fits : Prop where
   rows : A.IsRow = IsRow
   enc : ∀ s, A.enc (toSt s) = Snapshot.enc s
   init : A.enc A.init = Snapshot.enc Snapshot.empty
-  nil : ∀ s t, 5 ≤ t → A.enc s t = []
+  nil : ∀ s t, 6 ≤ t → A.enc s t = []
 
 variable {A toSt}
 
@@ -1131,7 +1282,7 @@ variable {St : Type} (A : App St Write Val) (toSt : Snapshot → St) (ts : List 
 
 /-- Rows the compiled `SELECT` of each table returns, in any order. -/
 def Loads (db : Pg.PgDb Val) (r : Rows) : Prop :=
-  ∀ t, t < 5 → ∃ q ps R0, Pg.selectA valKind ts tv t none = some (q, ps) ∧
+  ∀ t, t < 6 → ∃ q ps R0, Pg.selectA valKind ts tv t none = some (q, ps) ∧
     Pg.selected valKind db q ps = some R0 ∧ (Rows.tabs r t).Perm R0
 
 inductive PgServed : Pg.PgDb Val → St → Prop
@@ -1150,13 +1301,13 @@ inductive PgServed : Pg.PgDb Val → St → Prop
 
 variable {A toSt ts tv Step}
 
-theorem Rows.tabs_nil (r : Rows) (t : Nat) (h : 5 ≤ t) : Rows.tabs r t = [] := by
+theorem Rows.tabs_nil (r : Rows) (t : Nat) (h : 6 ≤ t) : Rows.tabs r t = [] := by
   obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le' h
   simp only [Rows.tabs]
 
 /-- The tenant's view of a `PgServed` database is `Served`, with the same state. -/
 theorem pg_served (hs : SqlFits A) (hf : Fits A toSt) (hv : Pg.Valid ts) (htv : valKind tv = some .int)
-    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 5) {db : Pg.PgDb Val} {s : St}
+    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 6) {db : Pg.PgDb Val} {s : St}
     (h : PgServed A toSt ts tv Step db s) : Pg.Matches valKind ts db ∧ Served A toSt (Pg.view ts tv db) s := by
   induction h with
   | fresh hm he => exact ⟨hm, he ▸ .fresh⟩
@@ -1179,7 +1330,7 @@ theorem pg_served (hs : SqlFits A) (hf : Fits A toSt) (hv : Pg.Valid ts) (htv : 
 
 /-- An `Inv` kept by init, row reordering and every `Step` holds on PostgreSQL and on every load. -/
 theorem pg_loaded_inv (hs : SqlFits A) (hf : Fits A toSt) (hv : Pg.Valid ts) (htv : valKind tv = some .int)
-    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 5) (Inv : St → Prop) (hinit : Inv A.init)
+    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 6) (Inv : St → Prop) (hinit : Inv A.init)
     (hequiv : ∀ snap s', A.Equiv (toSt snap) s' → Inv s' → Inv (toSt snap))
     (hstep : ∀ snap ws, Step snap ws → Inv (toSt snap) → Inv (ws.val.foldl A.step (toSt snap)))
     {db : Pg.PgDb Val} {s : St} (h : PgServed A toSt ts tv Step db s) :
