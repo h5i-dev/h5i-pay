@@ -84,6 +84,8 @@ async fn scheduled_recovery_covers_every_tenant() {
         let tok = h5i_pay_tests::user_token(t, 7);
         let v: Value = http.get(format!("{base_url}/v1/payments/0")).bearer_auth(tok).send().await.unwrap().json().await.unwrap();
         assert_eq!(v["status"], "captured", "tenant {t}: {v}");
+        // F2: synced and marked, so later passes skip it.
+        assert_eq!(v["ledger_done"], json!(true), "tenant {t}: {v}");
         let op = h5i_pay_tests::operator_token(t);
         let audit: Value = http.get(format!("{base_url}/v1/ledger/audit")).bearer_auth(op).send().await.unwrap().json().await.unwrap();
         assert_eq!(audit["ok"], json!(true), "tenant {t}: {audit}");

@@ -50,9 +50,9 @@ took 29.5 minutes and 52,219 transactions, measured in a separate run with
 `E2E_RECOVERY_PASSES=1`, longer than its own 5-minute schedule). After, one
 read-only query selects the unfinished work. It still costs O(captured
 payments) inside PostgreSQL (the anti-join on the ledger's transfer ids):
-10 ms at 1k, 78 ms at 10k, 852 ms at 100k payments with nothing to fix. A
-"ledger complete" marker per payment would make that O(unfinished); not
-done, as 0.85 s every five minutes at 100k payments is small.
+10 ms at 1k, 78 ms at 10k, 852 ms at 100k payments with nothing to fix.
+Since F2 a per-payment "ledger complete" marker makes it O(unfinished):
+7.8 ms at 100k with nothing to fix (see "After F" below).
 
 `POST /v1/reconcile` is unchanged by B1–B3 and is O(tenant) by nature: it
 loads both kernels' full snapshots and the PSP report, classifies on one

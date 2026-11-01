@@ -291,6 +291,7 @@ async fn payments_load_for_matches_the_whole_tenant() {
             4 => d::PspResult::RefundSucceeded { refund: id(r) },
             _ => d::PspResult::RefundFailed { refund: id(r) },
         };
+        let whole = pg.snapshot(TenantId(org)).await.unwrap();
         let cmd = match rng.below(13) {
             0 | 1 => d::Command::Create { amount: amount(&mut rng), currency: 392, manual_capture: rng.below(2) == 0 },
             2 => d::Command::BeginAuthorize { id: id(&mut rng) },
@@ -303,14 +304,22 @@ async fn payments_load_for_matches_the_whole_tenant() {
             10 => d::Command::List,
             11 => d::Command::GetRefund { id: id(&mut rng) },
             _ => {
-                match rng.below(3) {
+                match rng.below(4) {
                     0 => d::Command::Refunds { payment: id(&mut rng) },
                     1 => d::Command::GetRef { payment: id(&mut rng) },
-                    _ => d::Command::View { id: id(&mut rng) },
+                    2 => d::Command::View { id: id(&mut rng) },
+                    _ => {
+                        // Usually the payment's true refunds, so marks succeed.
+                        let payment = id(&mut rng);
+                        let mut refunds: Vec<d::Refund> = whole.refunds.iter().filter(|r| r.payment == payment).copied().collect();
+                        if rng.below(4) == 0 {
+                            refunds.pop();
+                        }
+                        d::Command::MarkPosted { payment, captured: amount(&mut rng), refunds }
+                    }
                 }
             }
         };
-        let whole = pg.snapshot(TenantId(org)).await.unwrap();
         let part = pg.snapshot_for(&actor, &cmd).await.unwrap();
         assert_eq!(d::transition(&actor, &part, &cmd), d::transition(&actor, &whole, &cmd), "step {i}: {cmd:?}");
         pg.execute(&actor, &cmd).await.unwrap().ok();

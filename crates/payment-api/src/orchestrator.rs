@@ -326,7 +326,9 @@ impl Orchestrator {
             match self.reserve(tenant, &p, &refund).await? {
                 Ok(()) => {}
                 Err(l::Error::Insufficient) => {
-                    self.record(tenant, id, d::PspResult::RefundFailed { refund: rid }).await?;
+                    // Recorded and synced (nothing to release), so the
+                    // payment is marked posted again.
+                    self.record_refund(tenant, id, rid, false).await?;
                     return Err(OrchError::MerchantBalance);
                 }
                 Err(e) => return Err(OrchError::Ledger(e)),
@@ -440,11 +442,19 @@ impl Orchestrator {
     /// postings that exist are replays. One `View` reads the payment and
     /// its refunds; the legs go to the ledger as linked batches of at most
     /// `MAX_PLANNED_BATCH` transfers (one command for a capture with up to
-    /// 31 refunds).
+    /// 31 refunds). When every batch went in, `MarkPosted` marks the payment
+    /// `ledger_done` as of the state the `View` read; if the payment changed
+    /// since, the kernel leaves it unmarked and recovery syncs it again.
     pub async fn sync_ledger(&self, tenant: u64, id: u64) -> Result<()> {
+        self.sync_ledger_with(tenant, id, false).await
+    }
+
+    /// [`Orchestrator::sync_ledger`]; `force` posts even a payment marked
+    /// `ledger_done` (recovery, when the journal lacks one of its postings).
+    async fn sync_ledger_with(&self, tenant: u64, id: u64, force: bool) -> Result<()> {
         let v = self.view(&self.op_p(tenant), id).await?;
         let p = v.payment;
-        if p.status != d::CAPTURED {
+        if p.status != d::CAPTURED || (p.ledger_done && !force) {
             return Ok(());
         }
         let clearing = self.account(tenant, 0, p.currency, PSP_CLEARING, false).await?;
@@ -503,7 +513,12 @@ impl Orchestrator {
                 }
             }
         }
-        Ok(())
+        let mark = d::Command::MarkPosted { payment: id, captured: p.captured, refunds: v.refunds };
+        match self.pay(&self.op_p(tenant), mark).await? {
+            // Marked, already marked, or changed meanwhile (left for recovery).
+            Ok(_) => Ok(()),
+            Err(e) => Err(OrchError::Payment(e)),
+        }
     }
 
     /// Finish what crashes and timeouts left half done, for one tenant
@@ -515,8 +530,9 @@ impl Orchestrator {
     }
 
     /// One tenant's unfinished work, read from both kernels (one snapshot
-    /// each), by the rule the scheduled job's query applies in SQL
-    /// (`payment_storage::recovery_work`).
+    /// each): the scheduled job's rule (`payment_storage::recovery_work`),
+    /// and also every captured payment whose postings the journal lacks
+    /// even though it is marked (`needs_ledger_sync`).
     pub async fn find_work(&self, tenant: u64) -> Result<payment_storage::RecoveryWork> {
         let pay = self.payments.snapshot(TenantId(tenant)).await?;
         let journal = self.ledger.snapshot(TenantId(tenant)).await?;
@@ -531,7 +547,9 @@ impl Orchestrator {
             if p.refund_pending > 0 {
                 w.refunds.push(p.id);
             }
-            if payment_storage::needs_ledger_sync(p, &pay.refunds, |id| ids.contains(&id)) {
+            // The marker, and the journal itself: this per-tenant pass also
+            // finds postings lost after a payment was marked.
+            if payment_storage::ledger_pending(p) || payment_storage::needs_ledger_sync(p, &pay.refunds, |id| ids.contains(&id)) {
                 w.ledger.push(p.id);
             }
         }
@@ -577,7 +595,7 @@ impl Orchestrator {
             }
         }
         let todo: Vec<u64> = work.ledger.iter().copied().filter(|id| !synced.contains(id)).collect();
-        let ledger: Vec<_> = stream::iter(todo).map(|id| self.sync_ledger(tenant, id)).buffer_unordered(PSP_CONCURRENCY).collect().await;
+        let ledger: Vec<_> = stream::iter(todo).map(|id| self.sync_ledger_with(tenant, id, true)).buffer_unordered(PSP_CONCURRENCY).collect().await;
         for r in ledger {
             r?;
             rep.ledger_synced += 1;

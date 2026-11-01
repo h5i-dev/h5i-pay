@@ -115,6 +115,19 @@ committed history is such a sequence.
    `writes_record_operator`); that the principal names the right person is
    the token's job.
 
+7. **The ledger marker (F2).** The payment kernel proves that only an
+   operator's `MarkPosted` sets `ledger_done`, only on the state it names
+   (the captured amount and exactly the payment's current refund rows), and
+   that every other command writing the payment or one of its refunds
+   clears it (`marked_only_as_seen`, `changes_clear_ledger_done`). That the
+   ledger really holds the postings when the orchestrator sends
+   `MarkPosted` is the orchestrator's (trusted) part: `sync_ledger` sends
+   it only after every batch was accepted (`Posted`/`Exists`). The ledger
+   never deletes or rewrites a transfer, so a marked payment's postings stay
+   unless rows are changed outside the engines; the scheduled recovery
+   trusts the marker, and `POST /v1/recover` and reconciliation also check
+   the journal itself.
+
 ## Not proven (known limits)
 
 - **The orchestrator is not verified.** The payment kernel guarantees that

@@ -123,9 +123,9 @@ def sqlW : h5i_app_sql.Write → AWrite Val
 
 /-! ## `Payment` (table `payments`) -/
 
-/-- Columns `id`, `merchant`, `amount`, `currency`, `status`, `manual_capture`, `attempts`, `authorized`, `captured`, `refunded`, `refund_pending`, `operator`. -/
+/-- Columns `id`, `merchant`, `amount`, `currency`, `status`, `manual_capture`, `attempts`, `authorized`, `captured`, `refunded`, `refund_pending`, `operator`, `ledger_done`. -/
 def Payment.row (x : Payment) : List Val :=
-  [int x.id.val, int x.merchant.val, int x.amount.val, int x.currency.val, int x.status.val, .Bool x.manual_capture, int x.attempts.val, int x.authorized.val, int x.captured.val, int x.refunded.val, int x.refund_pending.val, int x.operator.val]
+  [int x.id.val, int x.merchant.val, int x.amount.val, int x.currency.val, int x.status.val, .Bool x.manual_capture, int x.attempts.val, int x.authorized.val, int x.captured.val, int x.refunded.val, int x.refund_pending.val, int x.operator.val, .Bool x.ledger_done]
 
 def Payment.table : Nat := 0
 def Payment.keyLen : Nat := 1
@@ -141,6 +141,7 @@ def Payment.col_captured : Nat := 8
 def Payment.col_refunded : Nat := 9
 def Payment.col_refund_pending : Nat := 10
 def Payment.col_operator : Nat := 11
+def Payment.col_ledger_done : Nat := 12
 
 @[simp] theorem Payment.row_col_id (x : Payment) :
     (Payment.row x)[Payment.col_id]? = some (int x.id.val) := by
@@ -190,7 +191,11 @@ def Payment.col_operator : Nat := 11
     (Payment.row x)[Payment.col_operator]? = some (int x.operator.val) := by
   simp [Payment.row, Payment.col_operator]
 
-@[simp] theorem Payment.row_length (x : Payment) : (Payment.row x).length = 12 := rfl
+@[simp] theorem Payment.row_col_ledger_done (x : Payment) :
+    (Payment.row x)[Payment.col_ledger_done]? = some (.Bool x.ledger_done) := by
+  simp [Payment.row, Payment.col_ledger_done]
+
+@[simp] theorem Payment.row_length (x : Payment) : (Payment.row x).length = 13 := rfl
 
 @[step] theorem Payment.to_row_spec (x : Payment) : Payment.to_row x ⦃ v => v.val = Payment.row x ⦄ := by
   have := usize_max_le
@@ -624,7 +629,7 @@ macro "row_tac" : tactic => `(tactic| (
 
 theorem Payment.from_row_spec (x : Payment) (v : alloc.vec.Vec Val) (h : v.val = Payment.row x) :
     Payment.from_row v ⦃ o => o = some x ⦄ := by
-  have hl : v.length = 12 := by simp [alloc.vec.Vec.length, h, Payment.row]
+  have hl : v.length = 13 := by simp [alloc.vec.Vec.length, h, Payment.row]
   unfold Payment.from_row; row_tac
 
 theorem Refund.from_row_spec (x : Refund) (v : alloc.vec.Vec Val) (h : v.val = Refund.row x) :

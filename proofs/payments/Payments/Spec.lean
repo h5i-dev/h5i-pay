@@ -88,6 +88,17 @@ def Step (p p' : Payment) : Prop :=
   p'.id = p.id ∧ p'.merchant = p.merchant ∧ p'.amount = p.amount ∧ p'.currency = p.currency ∧
   (p'.status = p.status ∨ Allowed p.status.val p'.status.val) ∧ (PayInv p → PayInv p')
 
+/-- Refunds `x` and `y` are the same refund (the audit field aside). -/
+abbrev SameRefund (x y : Refund) : Prop :=
+  x.id = y.id ∧ x.payment = y.payment ∧ x.amount = y.amount ∧ x.status = y.status
+
+/-- Every refund of `xs` is in `ys` (found by id), the same. -/
+def RefundsCover (xs ys : List Refund) : Prop :=
+  ∀ x ∈ xs, ∃ y, ys.find? (fun r => r.id.val = x.id.val) = some y ∧ SameRefund x y
+
+/-- The refund rows of payment `id`. -/
+def refundsOf (s : St) (id : Nat) : List Refund := s.refunds.filter (fun r => r.payment.val = id)
+
 def applyWrite (s : St) : Write → St
   | .PutPayment p => { s with payments := H5iAppLib.upsert (·.id) p s.payments }
   | .PutRefund r => { s with refunds := H5iAppLib.upsert (·.id) r s.refunds }

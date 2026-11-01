@@ -112,6 +112,10 @@ h5i_app_schema::schema! {
         refunded: u64,
         refund_pending: u64,
         operator: u64,
+        /// The ledger holds every posting this payment needs, as of its
+        /// current state: set only by `MarkPosted`, cleared by every other
+        /// command that writes the payment.
+        ledger_done: bool,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -187,6 +191,11 @@ pub enum Command {
     /// A payment with its refunds and PSP reference: what `Get`, `Refunds`
     /// and `GetRef` return, in one command.
     View { id: u64 },
+    /// The ledger holds every posting of `payment` as of `captured` and
+    /// `refunds` (operator only: the orchestrator, after its ledger sync
+    /// succeeded). Marks the payment `ledger_done` if that is still its
+    /// state; if it changed meanwhile, nothing is written (`Stale`).
+    MarkPosted { payment: u64, captured: u64, refunds: Vec<Refund> },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -312,6 +321,7 @@ fn with_status(p: Payment, status: u32, authorized: u64, captured: u64, op: u64)
         refunded: p.refunded,
         refund_pending: p.refund_pending,
         operator: op,
+        ledger_done: false,
     }
 }
 
@@ -330,6 +340,7 @@ fn with_refunds(p: Payment, refunded: u64, refund_pending: u64, op: u64) -> Paym
         refunded,
         refund_pending,
         operator: op,
+        ledger_done: false,
     }
 }
 
@@ -354,6 +365,7 @@ fn create(actor: &Principal, s: &Snapshot, amount: u64, currency: u32, manual_ca
         refunded: 0,
         refund_pending: 0,
         operator: operator_of(actor),
+        ledger_done: false,
     };
     let c2 = Counter { next_id: c.next_id + 1 };
     Ok((two(Write::PutPayment(p), Write::SetCounter(c2)), Reply::Created(p.id)))
@@ -383,6 +395,7 @@ fn begin_authorize(actor: &Principal, s: &Snapshot, id: u64) -> Outcome {
                     refunded: p.refunded,
                     refund_pending: p.refund_pending,
                     operator: operator_of(actor),
+                    ledger_done: false,
                 };
                 Ok((one(Write::PutPayment(p2)), Reply::Payment(p2)))
             }
@@ -713,6 +726,74 @@ fn view(actor: &Principal, s: &Snapshot, id: u64) -> Outcome {
     }
 }
 
+/// Do `a` and `b` describe the same refund (the audit field aside)?
+pub fn same_refund(a: &Refund, b: &Refund) -> bool {
+    a.id == b.id && a.payment == b.payment && a.amount == b.amount && a.status == b.status
+}
+
+/// Does `ys` hold refund `x` (by id), the same?
+fn has_same(ys: &Vec<Refund>, x: &Refund) -> bool {
+    match find_refund(ys, x.id) {
+        None => false,
+        Some(y) => same_refund(x, &y),
+    }
+}
+
+/// Is every refund of `xs` in `ys`, the same?
+pub fn covers(xs: &Vec<Refund>, ys: &Vec<Refund>) -> bool {
+    let mut all = true;
+    let mut i = 0;
+    while i < xs.len() {
+        if !has_same(ys, &xs[i]) {
+            all = false;
+        }
+        i += 1;
+    }
+    all
+}
+
+/// `p` marked as fully posted in the ledger, by operator `op`.
+fn with_ledger_done(p: Payment, op: u64) -> Payment {
+    Payment {
+        id: p.id,
+        merchant: p.merchant,
+        amount: p.amount,
+        currency: p.currency,
+        status: p.status,
+        manual_capture: p.manual_capture,
+        attempts: p.attempts,
+        authorized: p.authorized,
+        captured: p.captured,
+        refunded: p.refunded,
+        refund_pending: p.refund_pending,
+        operator: op,
+        ledger_done: true,
+    }
+}
+
+fn mark_posted(actor: &Principal, s: &Snapshot, id: u64, captured: u64, seen: &Vec<Refund>) -> Outcome {
+    if !is_operator(actor) {
+        return Err(Error::Forbidden);
+    }
+    match find_payment(&s.payments, id) {
+        None => Err(Error::NotFound),
+        Some(p) => {
+            if p.status != CAPTURED {
+                Err(Error::InvalidTransition)
+            } else if p.ledger_done {
+                Ok((Vec::new(), Reply::Unchanged))
+            } else {
+                let rows = refunds_for(&s.refunds, id);
+                if p.captured == captured && covers(&rows, seen) && covers(seen, &rows) {
+                    Ok((one(Write::PutPayment(with_ledger_done(p, operator_of(actor)))), Reply::Status(CAPTURED)))
+                } else {
+                    Ok((Vec::new(), Reply::Stale))
+                }
+            }
+        }
+    }
+}
+
 fn visible(actor: &Principal, s: &Snapshot) -> Vec<Payment> {
     let mut out = Vec::new();
     let mut i = 0;
@@ -742,6 +823,7 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
         Command::Refunds { payment } => refunds_of(actor, s, *payment),
         Command::GetRef { payment } => get_ref(actor, s, *payment),
         Command::View { id } => view(actor, s, *id),
+        Command::MarkPosted { payment, captured, refunds } => mark_posted(actor, s, *payment, *captured, refunds),
     }
 }
 
@@ -841,6 +923,10 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
             out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*id))));
             out.push(rd_where(T_REFUNDS, p_eq(REFUND_PAYMENT, v_int(*id))));
             out.push(rd_where(T_REFS, p_eq(REF_PAYMENT, v_int(*id))));
+        }
+        Command::MarkPosted { payment, .. } => {
+            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));
+            out.push(rd_where(T_REFUNDS, p_eq(REFUND_PAYMENT, v_int(*payment))));
         }
     }
     Some(out)
@@ -983,6 +1069,36 @@ mod tests {
         // A user is never an operator, whatever its id.
         let u9 = Principal { org: 1, actor: Actor::User(9) };
         assert_eq!(run(&s, u9, Command::Record { payment: id, result: PspResult::Canceled }).1, Err(Error::Forbidden));
+    }
+
+    #[test]
+    fn ledger_done_is_set_only_on_the_state_it_names_and_cleared_by_changes() {
+        let (s, id) = captured(100);
+        let p = pay(&s, id);
+        assert!(!p.ledger_done);
+        let mark = |captured, refunds: Vec<Refund>| Command::MarkPosted { payment: id, captured, refunds };
+        assert_eq!(run(&s, M, mark(100, vec![])).1, Err(Error::Forbidden));
+        assert_eq!(run(&s, OP, mark(99, vec![])).1, Ok(Reply::Stale));
+        let (s, r) = run(&s, OP, mark(100, vec![]));
+        assert_eq!((r, pay(&s, id).ledger_done), (Ok(Reply::Status(CAPTURED)), true));
+        assert_eq!(run(&s, OP, mark(100, vec![])).1, Ok(Reply::Unchanged));
+        // A refund needs new postings: the mark goes.
+        let (s, r) = run(&s, M, Command::RequestRefund { payment: id, amount: 10 });
+        let Ok(Reply::Created(rid)) = r else { panic!("{r:?}") };
+        assert!(!pay(&s, id).ledger_done);
+        let pending = find_refund(&s.refunds, rid).unwrap();
+        // The orchestrator saw no refund: stale. A refund it did not see: stale.
+        assert_eq!(run(&s, OP, mark(100, vec![])).1, Ok(Reply::Stale));
+        let other = Refund { id: rid + 1, ..pending };
+        assert_eq!(run(&s, OP, mark(100, vec![pending, other])).1, Ok(Reply::Stale));
+        let (s, _) = run(&s, OP, mark(100, vec![pending]));
+        assert!(pay(&s, id).ledger_done);
+        let (s, _) = run(&s, OP, Command::Record { payment: id, result: PspResult::RefundSucceeded { refund: rid } });
+        assert!(!pay(&s, id).ledger_done);
+        // The pending refund it saw has since succeeded: stale.
+        assert_eq!(run(&s, OP, mark(100, vec![pending])).1, Ok(Reply::Stale));
+        let done = find_refund(&s.refunds, rid).unwrap();
+        assert_eq!(run(&s, OP, mark(100, vec![done])).1, Ok(Reply::Status(CAPTURED)));
     }
 
     #[test]

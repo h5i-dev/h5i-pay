@@ -51,11 +51,6 @@ theorem may_manage_eq (actor : Principal) (p : Payment) :
     may_manage actor p = ok (actor.operator || decide (p.merchant = actor.user)) := by
   unfold may_manage; simp only [is_operator_eq, user_of_eq, bind_tc_ok, bind_ok]; cases actor.operator <;> simp
 
-theorem vec_index_eq {α : Type} (v : alloc.vec.Vec α) (i : Usize) (h : i.val < v.val.length) :
-    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice α) v i = ok v.val[i.val] := by
-  rw [alloc.vec.Vec.index_slice_index]; unfold alloc.vec.Vec.index_usize
-  simp [h]
-
 /-! ## Each command reads its keys -/
 
 /-- `s'` agrees with `s` on the payment with id `id`. -/
@@ -149,52 +144,6 @@ theorem get_refund_congr (a : Principal) (s s' : Snapshot) (id : U64) (hR : Agre
 
 /-! ## The listings are filters -/
 
-def refundsStep (id : U64) (acc : List Refund) (x : Refund) : List Refund :=
-  if x.payment = id then acc ++ [x] else acc
-
-theorem foldl_refundsStep (id : U64) (l acc : List Refund) :
-    l.foldl (refundsStep id) acc = acc ++ l.filter (fun x => decide (x.payment = id)) := by
-  induction l generalizing acc with
-  | nil => simp
-  | cons x xs ih =>
-    simp only [List.foldl_cons, ih, refundsStep, List.filter_cons]
-    split <;> simp_all
-
-theorem refunds_loop_spec (v : alloc.vec.Vec Refund) (id : U64) :
-    refunds_for v id ⦃ out => out.val = v.val.filter (fun x => decide (x.payment = id)) ⦄ := by
-  unfold refunds_for refunds_for_loop
-  have h := loop_fold v.val (fun w : alloc.vec.Vec Refund => w.val) (refundsStep id)
-    (fun w k => w.length + (v.length - k) ≤ Usize.max)
-    (fun x => refunds_for_loop.body v id x.1 x.2) ?_ (alloc.vec.Vec.new Refund) 0#usize (by simp)
-    (by simp [alloc.vec.Vec.length])
-  · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_refundsStep]; simp)
-  · intro w j hj hw
-    unfold refunds_for_loop.body
-    simp only [alloc.vec.Vec.length] at hj hw
-    simp only [alloc.vec.Vec.len]
-    split
-    · rename_i hlt
-      have hlt' : j.val < v.val.length := by scalar_tac
-      rw [vec_index_eq v j hlt']
-      simp only [bind_ok]
-      by_cases hb : v.val[j.val].payment = id
-      · simp only [hb, if_true]
-        step*
-        simp only [FoldStep]
-        refine ⟨hlt', ?_, by scalar_tac, ?_⟩
-        · simp_all [refundsStep]
-        · simp only [alloc.vec.Vec.length] at *; scalar_tac
-      · simp only [hb, if_false, bind_ok]
-        step*
-        simp only [FoldStep]
-        refine ⟨hlt', ?_, by scalar_tac, ?_⟩
-        · show w.val = refundsStep id w.val v.val[j.val]
-          simp only [refundsStep, if_neg hb]
-        · simp only [alloc.vec.Vec.length] at *; scalar_tac
-    · rename_i hge
-      simp only [WP.spec_ok, FoldStep, and_true]
-      scalar_tac
-
 theorem refunds_for_congr (v v' : alloc.vec.Vec Refund) (id : U64)
     (hr : v'.val.filter (fun x => decide (x.payment = id)) = v.val.filter (fun x => decide (x.payment = id))) :
     refunds_for v' id = refunds_for v id := by
@@ -210,6 +159,13 @@ theorem refunds_of_congr (a : Principal) (s s' : Snapshot) (id : U64) (h : Agree
     refunds_of a s' id = refunds_of a s id := by
   simp only [AgreeP] at h
   unfold refunds_of
+  simp only [find_payment_eq, h, refunds_for_congr s.refunds s'.refunds id hr]
+
+theorem mark_posted_congr (a : Principal) (s s' : Snapshot) (id cap : U64) (seen : alloc.vec.Vec Refund) (h : AgreeP s s' id)
+    (hr : s'.refunds.val.filter (fun x => decide (x.payment = id)) = s.refunds.val.filter (fun x => decide (x.payment = id))) :
+    mark_posted a s' id cap seen = mark_posted a s id cap seen := by
+  simp only [AgreeP] at h
+  unfold mark_posted
   simp only [find_payment_eq, h, refunds_for_congr s.refunds s'.refunds id hr]
 
 theorem view_congr (a : Principal) (s s' : Snapshot) (id : U64) (h : AgreeP s s' id) (hf : AgreeF s s' id)
@@ -429,6 +385,14 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
     simp only [readsA, Option.some.injEq] at hp; subst hp
     simp only [transition]
     apply view_congr a s _ id (agreeP_load _ s id (by simp)) (agreeF_load _ s id (by simp))
+    rw [Snapshot.load_refunds, pickRows_filter _ _ _ _ _ ⟨1, eqU 1 id, {}⟩ (by simp) rfl]
+    apply filter_slice
+    intro x _ hx
+    simp_all [eqU, Pred.holds, Refund.row]
+  | MarkPosted id cap seen =>
+    simp only [readsA, Option.some.injEq] at hp; subst hp
+    simp only [transition]
+    apply mark_posted_congr a s _ id cap seen (agreeP_load _ s id (by simp))
     rw [Snapshot.load_refunds, pickRows_filter _ _ _ _ _ ⟨1, eqU 1 id, {}⟩ (by simp) rfl]
     apply filter_slice
     intro x _ hx

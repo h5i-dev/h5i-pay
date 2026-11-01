@@ -57,6 +57,9 @@ impl Store<PaymentsApp> for PaymentsStore {
         for t in ["payments", "refunds", "psp_events", "psp_refs"] {
             ddl.push(crate::add_column(t, "operator", "BIGINT NOT NULL DEFAULT 0"));
         }
+        // F2: the ledger-complete marker. Older rows start unmarked; the
+        // first recovery pass syncs and marks them.
+        ddl.push(crate::add_column("payments", "ledger_done", "BOOLEAN NOT NULL DEFAULT false"));
         ddl.push("CREATE INDEX IF NOT EXISTS payments_merchant ON payments (tenant_id, merchant)".into());
         ddl.push("CREATE INDEX IF NOT EXISTS refunds_payment ON refunds (tenant_id, payment)".into());
         ddl.push(format!(
@@ -65,7 +68,13 @@ impl Store<PaymentsApp> for PaymentsStore {
             k::PROCESSING,
             k::AUTHORIZED
         ));
-        ddl.push(format!("CREATE INDEX IF NOT EXISTS payments_captured ON payments (tenant_id, id) WHERE status = {}", k::CAPTURED));
+        // Recovery's ledger work: captured and not marked complete (F2).
+        // It replaces the index on every captured payment.
+        ddl.push("DROP INDEX IF EXISTS payments_captured".into());
+        ddl.push(format!(
+            "CREATE INDEX IF NOT EXISTS payments_unposted ON payments (tenant_id, id) WHERE status = {} AND NOT ledger_done",
+            k::CAPTURED
+        ));
         ddl
     }
 
@@ -101,9 +110,10 @@ impl Store<PaymentsApp> for PaymentsStore {
             k::Command::Create { .. } => Lock::Keys(vec![counter()]),
             k::Command::RequestRefund { payment, .. } => Lock::Keys(vec![pay(payment), counter()]),
             k::Command::BeginAuthorize { id } | k::Command::Cancel { id } => Lock::Keys(vec![pay(id)]),
-            k::Command::Record { payment, .. } | k::Command::Event { payment, .. } | k::Command::AttachRef { payment, .. } => {
-                Lock::Keys(vec![pay(payment)])
-            }
+            k::Command::Record { payment, .. }
+            | k::Command::Event { payment, .. }
+            | k::Command::AttachRef { payment, .. }
+            | k::Command::MarkPosted { payment, .. } => Lock::Keys(vec![pay(payment)]),
             k::Command::Get { .. }
             | k::Command::List
             | k::Command::GetRefund { .. }
@@ -149,6 +159,7 @@ pub fn payment_json(p: &k::Payment) -> Out {
         ("refunded", p.refunded.into()),
         ("refund_pending", p.refund_pending.into()),
         ("operator", p.operator.into()),
+        ("ledger_done", p.ledger_done.into()),
     ])
 }
 
@@ -242,6 +253,8 @@ struct StoredPayment {
     refund_pending: u64,
     #[serde(default)]
     operator: u64,
+    #[serde(default)]
+    ledger_done: bool,
 }
 
 fn store_payment(p: &k::Payment) -> StoredPayment {
@@ -258,6 +271,7 @@ fn store_payment(p: &k::Payment) -> StoredPayment {
         refunded: p.refunded,
         refund_pending: p.refund_pending,
         operator: p.operator,
+        ledger_done: p.ledger_done,
     }
 }
 
@@ -275,6 +289,7 @@ fn load_payment(p: StoredPayment) -> k::Payment {
         refunded: p.refunded,
         refund_pending: p.refund_pending,
         operator: p.operator,
+        ledger_done: p.ledger_done,
     }
 }
 

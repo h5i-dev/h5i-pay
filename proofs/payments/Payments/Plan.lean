@@ -64,6 +64,7 @@ def readsA (a : Principal) : Command → Option (List (Read Val))
   | .Refunds p => some [⟨0, eqU 0 p, {}⟩, ⟨1, eqU 1 p, {}⟩]
   | .GetRef p => some [⟨0, eqU 0 p, {}⟩, ⟨3, eqU 0 p, {}⟩]
   | .View id => some [⟨0, eqU 0 id, {}⟩, ⟨1, eqU 1 id, {}⟩, ⟨3, eqU 0 id, {}⟩]
+  | .MarkPosted p _ _ => some [⟨0, eqU 0 p, {}⟩, ⟨1, eqU 1 p, {}⟩]
 
 /-! ## The extracted plans compute `readsA` -/
 

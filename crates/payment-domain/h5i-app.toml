@@ -22,6 +22,9 @@ theorems = [
   # SEC-02: operators only, and every row names who wrote it.
   "payment_domain.Theorems.operator_only",
   "payment_domain.Theorems.writes_record_operator",
+  # F2: the ledger-complete marker.
+  "payment_domain.Theorems.marked_only_as_seen",
+  "payment_domain.Theorems.changes_clear_ledger_done",
   "payment_domain.Policies.check_sound",
   # Read plans (`reads`, `PaymentsStore::load_for`).
   "payment_domain.Plan.reads_abs",
@@ -70,13 +73,13 @@ new = "PspResult::RefundSucceeded { refund: _ } => {}"
 
 [[mutant]]
 name = "refunds_plan_reads_by_refund_id"
-old = "out.push(rd_where(T_REFUNDS, p_eq(REFUND_PAYMENT, v_int(*payment))));"
-new = "out.push(rd_where(T_REFUNDS, p_eq(REFUND_ID, v_int(*payment))));"
+old = "Command::Refunds { payment } => {\n            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));\n            out.push(rd_where(T_REFUNDS, p_eq(REFUND_PAYMENT, v_int(*payment))));"
+new = "Command::Refunds { payment } => {\n            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));\n            out.push(rd_where(T_REFUNDS, p_eq(REFUND_ID, v_int(*payment))));"
 
 [[mutant]]
 name = "view_plan_misses_reference"
-old = "            out.push(rd_where(T_REFS, p_eq(REF_PAYMENT, v_int(*id))));\n        }\n    }\n    Some(out)"
-new = "        }\n    }\n    Some(out)"
+old = "            out.push(rd_where(T_REFS, p_eq(REF_PAYMENT, v_int(*id))));\n        }\n        Command::MarkPosted"
+new = "        }\n        Command::MarkPosted"
 
 # SEC-02: a user's principal must never count as an operator.
 [[mutant]]
@@ -89,3 +92,21 @@ new = "        Actor::User(_) => true,\n        Actor::Operator(_) => true,"
 name = "operator_id_dropped"
 old = "    let op = operator_of(actor);\n    match find_payment(&s.payments, id) {"
 new = "    let op = 0;\n    match find_payment(&s.payments, id) {"
+
+# F2: marking a payment whose refunds the orchestrator did not see.
+[[mutant]]
+name = "mark_ignores_refunds"
+old = "if p.captured == captured && covers(&rows, seen) && covers(seen, &rows) {"
+new = "if p.captured == captured {"
+
+# F2: a refund outcome that leaves the payment marked (recovery would skip it).
+[[mutant]]
+name = "refund_keeps_mark"
+old = "        refunded,\n        refund_pending,\n        operator: op,\n        ledger_done: false,"
+new = "        refunded,\n        refund_pending,\n        operator: op,\n        ledger_done: p.ledger_done,"
+
+# F2: the mark's plan must load the payment's refunds (else it marks on none).
+[[mutant]]
+name = "mark_plan_misses_refunds"
+old = "            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));\n            out.push(rd_where(T_REFUNDS, p_eq(REFUND_PAYMENT, v_int(*payment))));\n        }\n    }\n    Some(out)"
+new = "            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));\n        }\n    }\n    Some(out)"

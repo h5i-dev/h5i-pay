@@ -156,7 +156,7 @@ PROGRESS.md as it lands.
    The in-process orchestrator and the recovery job act as a named system
    operator. Update `docs/security-review.md` (close SEC-02 or say exactly
    what remains) and the runbooks.
-2. [ ] **Per-payment "ledger complete" marker.** `recovery_work`'s anti-join
+2. [x] **Per-payment "ledger complete" marker.** `recovery_work`'s anti-join
    on the ledger's transfer ids costs O(captured payments) every pass (852 ms
    at 100k payments with nothing to fix, `docs/benchmarks.md` B4). Record in
    the payment kernel when a payment's ledger postings are all done (set by

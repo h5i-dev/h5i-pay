@@ -115,7 +115,7 @@ pub struct RecoveryWork {
     pub psp: Vec<u64>,
     /// A refund pending: ask the PSP about it.
     pub refunds: Vec<u64>,
-    /// `CAPTURED` with a ledger posting missing (`needs_ledger_sync`).
+    /// `CAPTURED` and not marked `ledger_done` ([`ledger_pending`]).
     pub ledger: Vec<u64>,
 }
 
@@ -149,6 +149,15 @@ pub fn needs_ledger_sync(p: &payment_domain::Payment, refunds: &[payment_domain:
     })
 }
 
+/// Whether recovery must sync a payment's ledger postings: it is
+/// `CAPTURED` and not marked complete. The payment kernel clears
+/// `ledger_done` on every other write of the payment, so a payment changed
+/// since its last successful sync is always pending
+/// (`payment_domain.Theorems.changes_clear_ledger_done`).
+pub fn ledger_pending(p: &payment_domain::Payment) -> bool {
+    p.status == payment_domain::CAPTURED && !p.ledger_done
+}
+
 /// A connection outside the engines (cross-tenant reads, the `ops` schema).
 async fn connect_direct(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Client, tokio::task::JoinHandle<()>), DbError> {
     let mut cfg: tokio_postgres::Config = url.parse()?;
@@ -170,46 +179,30 @@ async fn connect_direct(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Clien
 
 /// Every tenant's unfinished work, in one read-only query: payments to ask
 /// the PSP about, payments with a pending refund, and captured payments
-/// whose ledger postings are incomplete ([`needs_ledger_sync`], the same
-/// rule in SQL, an anti-join on the ledger's transfer ids). Settled
-/// payments cost an index probe here, not a kernel command and a PSP call
-/// per pass. The unfinished statuses have a partial index
-/// (`payments_unfinished`); the captured ones are scanned once.
+/// whose ledger postings are not marked complete ([`ledger_pending`]).
+/// Each part is a partial index (`payments_unfinished`,
+/// `payments_unposted`), so a pass costs O(unfinished payments), not
+/// O(captured) (F2; before, an anti-join on the ledger's transfer ids per
+/// captured payment).
 ///
 /// This query crosses tenants and is outside the kernels: it reads ids and
 /// statuses, writes nothing, and runs in a read-only transaction. It only
-/// says where to look; every change is made per tenant through the engines,
-/// and a payment it missed would show in reconciliation.
+/// says where to look; every change is made per tenant through the engines.
+/// It trusts the marker: postings lost from the ledger after a payment was
+/// marked (e.g. a ledger restored to an older point) are not found here but
+/// by reconciliation and by `POST /v1/recover` (`Orchestrator::find_work`
+/// also checks the journal).
 pub async fn recovery_work(url: &str, tls: &DbTls) -> Result<Vec<RecoveryWork>, DbError> {
-    use ledger::{POST_CAPTURE, POST_REFUND_RELEASE, POST_REFUND_RESERVE, POST_REFUND_SETTLE};
-    use payment_domain::{AUTHORIZED, CAPTURED, PROCESSING, REFUND_FAILED, REFUND_PENDING, REFUND_SUCCEEDED};
-    // `ledger::system_transfer_id(kind, id)` in SQL: the top bit, the kind
-    // in bits 56..63, the id below. BIGINT holds the u64 bit pattern.
-    let tid = |kind: u32, col: &str| {
-        format!("((-9223372036854775808)::bigint | ({kind}::bigint << 56) | ({col} & 72057594037927935))")
-    };
-    let has = |kind: u32, col: &str, tenant: &str| {
-        format!("EXISTS (SELECT 1 FROM {LEDGER_SCHEMA}.transfers t WHERE t.tenant_id = {tenant} AND t.id = {})", tid(kind, col))
-    };
+    use payment_domain::{AUTHORIZED, CAPTURED, PROCESSING};
     let sql = format!(
         "SELECT tenant_id, id, 0 FROM {PAYMENTS_SCHEMA}.payments \
            WHERE status = {PROCESSING} OR (status = {AUTHORIZED} AND NOT manual_capture) \
          UNION ALL \
          SELECT tenant_id, id, 1 FROM {PAYMENTS_SCHEMA}.payments WHERE refund_pending > 0 \
          UNION ALL \
-         SELECT p.tenant_id, p.id, 2 FROM {PAYMENTS_SCHEMA}.payments p \
-           WHERE p.status = {CAPTURED} AND (NOT {cap} OR EXISTS ( \
-             SELECT 1 FROM {PAYMENTS_SCHEMA}.refunds r WHERE r.tenant_id = p.tenant_id AND r.payment = p.id AND ( \
-               (r.status = {REFUND_SUCCEEDED} AND (NOT {res} OR NOT {settle})) \
-               OR (r.status = {REFUND_FAILED} AND {res} AND NOT {release}) \
-               OR (r.status NOT IN ({REFUND_SUCCEEDED}, {REFUND_FAILED}) AND NOT {res})))) \
-         ORDER BY 1, 3, 2",
-        cap = has(POST_CAPTURE, "p.id", "p.tenant_id"),
-        res = has(POST_REFUND_RESERVE, "r.id", "r.tenant_id"),
-        settle = has(POST_REFUND_SETTLE, "r.id", "r.tenant_id"),
-        release = has(POST_REFUND_RELEASE, "r.id", "r.tenant_id"),
+         SELECT tenant_id, id, 2 FROM {PAYMENTS_SCHEMA}.payments WHERE status = {CAPTURED} AND NOT ledger_done \
+         ORDER BY 1, 3, 2"
     );
-    let _ = REFUND_PENDING;
     let (mut client, conn) = connect_direct(url, tls).await?;
     let tx = client.build_transaction().read_only(true).start().await?;
     let rows = match tx.query(sql.as_str(), &[]).await {

@@ -24,11 +24,11 @@ attribute [local simp] u32_val_eq
 @[step] theorem three_spec (a b c : Write) : three a b c ⦃ v => v.val = [a, b, c] ⦄ := by unfold three; step*
 
 @[step] theorem with_status_spec (p : Payment) (st : U32) (a c op : U64) :
-    with_status p st a c op ⦃ q => q = { p with status := st, authorized := a, captured := c, operator := op } ⦄ := by
+    with_status p st a c op ⦃ q => q = { p with status := st, authorized := a, captured := c, operator := op, ledger_done := false } ⦄ := by
   unfold with_status; step*
 
 @[step] theorem with_refunds_spec (p : Payment) (r q op : U64) :
-    with_refunds p r q op ⦃ x => x = { p with refunded := r, refund_pending := q, operator := op } ⦄ := by
+    with_refunds p r q op ⦃ x => x = { p with refunded := r, refund_pending := q, operator := op, ledger_done := false } ⦄ := by
   unfold with_refunds; step*
 
 @[step] theorem find_payment_spec (v : alloc.vec.Vec Payment) (id : U64) :
@@ -82,9 +82,9 @@ theorem findEvent_of {s : Snapshot} {id : U64} {o : Option Event}
   rcases h with h | h <;> rw [h] <;> simp [findEvent, Snapshot.toSt]
 
 /-- Writes that change one existing payment by a `Step`, recording
-operator `op` on it. -/
+operator `op` on it and clearing its ledger marker. -/
 def StepWrites (op : U64) (p : Payment) (ws : List Write) : Prop :=
-  ws = [] ∨ ∃ p', ws = [.PutPayment p'] ∧ Step p p' ∧ p'.operator = op
+  ws = [] ∨ ∃ p', ws = [.PutPayment p'] ∧ Step p p' ∧ p'.operator = op ∧ p'.ledger_done = false
 
 /-! ## Recording PSP results -/
 
@@ -95,7 +95,7 @@ def StepWrites (op : U64) (p : Payment) (ws : List Write) : Prop :=
   all_goals (intro ws rep h; obtain ⟨rfl, rfl⟩ := ok_inj h)
   all_goals first
     | (left; rfl)
-    | (right; refine ⟨p1, by simp_all, ?_, by simp_all⟩
+    | (right; refine ⟨p1, by simp_all, ?_, by simp_all, by simp_all⟩
        simp only [PROCESSING, AUTHORIZED] at *
        subst_vars
        refine ⟨rfl, rfl, rfl, rfl, .inr (by simp_all [Allowed]), ?_⟩
@@ -108,7 +108,7 @@ def StepWrites (op : U64) (p : Payment) (ws : List Write) : Prop :=
   all_goals (intro ws rep h; obtain ⟨rfl, rfl⟩ := ok_inj h)
   all_goals first
     | (left; rfl)
-    | (right; refine ⟨p1, by simp_all, ?_, by simp_all⟩
+    | (right; refine ⟨p1, by simp_all, ?_, by simp_all, by simp_all⟩
        simp only [PROCESSING, FAILED] at *
        subst_vars
        refine ⟨rfl, rfl, rfl, rfl, .inr (by simp_all [Allowed]), ?_⟩
@@ -121,7 +121,7 @@ def StepWrites (op : U64) (p : Payment) (ws : List Write) : Prop :=
   all_goals (intro ws rep h; obtain ⟨rfl, rfl⟩ := ok_inj h)
   all_goals first
     | (left; rfl)
-    | (right; refine ⟨p1, by simp_all, ?_, by simp_all⟩
+    | (right; refine ⟨p1, by simp_all, ?_, by simp_all, by simp_all⟩
        simp only [PROCESSING, AUTHORIZED, CAPTURED] at *
        subst_vars
        refine ⟨rfl, rfl, rfl, rfl, .inr (by simp_all [Allowed]), ?_⟩
@@ -134,7 +134,7 @@ def StepWrites (op : U64) (p : Payment) (ws : List Write) : Prop :=
   all_goals (intro ws rep h; obtain ⟨rfl, rfl⟩ := ok_inj h)
   all_goals first
     | (left; rfl)
-    | (right; refine ⟨p1, by simp_all, ?_, by simp_all⟩
+    | (right; refine ⟨p1, by simp_all, ?_, by simp_all, by simp_all⟩
        simp only [CREATED, PROCESSING, AUTHORIZED, CANCELED] at *
        subst_vars
        refine ⟨rfl, rfl, rfl, rfl, .inr (by simp_all [Allowed]), ?_⟩
@@ -144,7 +144,8 @@ def StepWrites (op : U64) (p : Payment) (ws : List Write) : Prop :=
 `Step`, recording operator `op` on both. -/
 def RefundWrites (s : St) (op : U64) (p : Payment) (refund : Nat) (ws : List Write) : Prop :=
   ws = [] ∨ ∃ rf rf' p', findRefund s refund = some rf ∧ rf'.id = rf.id ∧
-    ws = [.PutRefund rf', .PutPayment p'] ∧ Step p p' ∧ rf'.operator = op ∧ p'.operator = op
+    ws = [.PutRefund rf', .PutPayment p'] ∧ Step p p' ∧ rf'.operator = op ∧ p'.operator = op ∧
+    rf'.payment = p'.id ∧ p'.ledger_done = false
 
 @[step] theorem record_refund_spec (s : Snapshot) (p : Payment) (refund : U64) (b : Bool) (op : U64) :
     record_refund s p refund b op ⦃ r => ∀ ws rep, r = .Ok (ws, rep) →
@@ -160,7 +161,7 @@ def RefundWrites (s : St) (op : U64) (p : Payment) (refund : Nat) (ws : List Wri
        · rfl
        simp only [REFUND_PENDING] at *
        subst_vars
-       refine ⟨⟨rfl, rfl, rfl, rfl, .inl rfl, ?_⟩, by simp_all, by simp_all⟩
+       refine ⟨⟨rfl, rfl, rfl, rfl, .inl rfl, ?_⟩, by simp_all, by simp_all, by simp_all, by simp_all⟩
        simp only [PayInv]; intro h; simp_all <;> scalar_tac)
 
 /-- What recording a PSP result writes: nothing, or one `Step` of the
@@ -238,7 +239,7 @@ theorem event_spec (a : Principal) (s : Snapshot) (ev id : U64) (res : PspResult
 
 theorem create_spec (a : Principal) (s : Snapshot) (amt : U64) (cur : U32) (mc : Bool) :
     create a s amt cur mc ⦃ r => ∀ ws rep, r = .Ok (ws, rep) → ∃ n : U64, n.val = s.counter.next_id.val + 1 ∧
-      ws.val = [.PutPayment ⟨s.counter.next_id, a.user, amt, cur, CREATED, mc, 0#u64, 0#u64, 0#u64, 0#u64, 0#u64, a.opId⟩,
+      ws.val = [.PutPayment ⟨s.counter.next_id, a.user, amt, cur, CREATED, mc, 0#u64, 0#u64, 0#u64, 0#u64, 0#u64, a.opId, false⟩,
         .SetCounter ⟨n⟩] ⦄ := by
   unfold create
   simp only [user_of_eq, operator_of_eq, bind_tc_ok, bind_ok]
@@ -254,7 +255,7 @@ theorem begin_authorize_spec (a : Principal) (s : Snapshot) (id : U64) :
   step*
   all_goals try (simp only [core.num.U64.MAX, U64.rMax] at *; scalar_tac)
   intro ws rep h; obtain ⟨rfl, rfl⟩ := ok_inj h
-  refine ⟨p, findPay_of (Or.inr o_post) ‹_›, Or.inr ⟨_, v_post, ⟨rfl, rfl, rfl, rfl, .inr ?_, ?_⟩, rfl⟩⟩
+  refine ⟨p, findPay_of (Or.inr o_post) ‹_›, Or.inr ⟨_, v_post, ⟨rfl, rfl, rfl, rfl, .inr ?_, ?_⟩, rfl, rfl⟩⟩
   · simp only [CREATED, PROCESSING] at *; simp_all [Allowed]
   · simp only [PayInv, CREATED, PROCESSING] at *; intro h; simp_all
 
@@ -266,7 +267,7 @@ theorem cancel_spec (a : Principal) (s : Snapshot) (id : U64) :
   step*
   all_goals (intro ws rep h; obtain ⟨rfl, rfl⟩ := ok_inj h)
   · exact ⟨p, findPay_of (Or.inr o_post) ‹_›, Or.inl rfl⟩
-  · refine ⟨p, findPay_of (Or.inr o_post) ‹_›, Or.inr ⟨p2, v_post, ?_, by simp_all⟩⟩
+  · refine ⟨p, findPay_of (Or.inr o_post) ‹_›, Or.inr ⟨p2, v_post, ?_, by simp_all, by simp_all⟩⟩
     simp only [CREATED, CANCELED] at *
     subst_vars
     refine ⟨rfl, rfl, rfl, rfl, .inr (by simp_all [Allowed]), ?_⟩
@@ -275,6 +276,7 @@ theorem cancel_spec (a : Principal) (s : Snapshot) (id : U64) :
 theorem request_refund_spec (a : Principal) (s : Snapshot) (id amt : U64) :
     request_refund a s id amt ⦃ r => ∀ ws rep, r = .Ok (ws, rep) →
       ∃ p p' n, findPay (Snapshot.toSt s) id.val = some p ∧ Step p p' ∧ p'.operator = a.opId ∧
+        p'.ledger_done = false ∧
         n.val = s.counter.next_id.val + 1 ∧
         ws.val = [.PutRefund ⟨s.counter.next_id, p.id, amt, REFUND_PENDING, a.opId⟩, .PutPayment p', .SetCounter ⟨n⟩] ⦄ := by
   unfold request_refund
@@ -282,7 +284,7 @@ theorem request_refund_spec (a : Principal) (s : Snapshot) (id amt : U64) :
   step*
   all_goals try (simp only [core.num.U64.MAX, U64.rMax] at *; scalar_tac)
   intro ws rep h; obtain ⟨rfl, rfl⟩ := ok_inj h
-  refine ⟨p, p2, i4, findPay_of (Or.inr o_post) ‹_›, ?_, by simp_all, i4_post, v_post⟩
+  refine ⟨p, p2, i4, findPay_of (Or.inr o_post) ‹_›, ?_, by simp_all, by simp_all, i4_post, v_post⟩
   simp only [CAPTURED] at *
   subst_vars
   refine ⟨rfl, rfl, rfl, rfl, .inl rfl, ?_⟩
@@ -381,5 +383,141 @@ theorem view_writes (a : Principal) (s : Snapshot) (id : U64) ws r
       obtain ⟨out, -, h⟩ := bind_tc_eq_ok.1 h
       simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
     · simp at h
+
+/-! ## The ledger marker (F2) -/
+
+theorem vec_index_eq {α : Type} (v : alloc.vec.Vec α) (i : Usize) (h : i.val < v.val.length) :
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice α) v i = ok v.val[i.val] := by
+  rw [alloc.vec.Vec.index_slice_index]; unfold alloc.vec.Vec.index_usize
+  simp [h]
+
+def refundsStep (id : U64) (acc : List Refund) (x : Refund) : List Refund :=
+  if x.payment = id then acc ++ [x] else acc
+
+theorem foldl_refundsStep (id : U64) (l acc : List Refund) :
+    l.foldl (refundsStep id) acc = acc ++ l.filter (fun x => decide (x.payment = id)) := by
+  induction l generalizing acc with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl_cons, ih, refundsStep, List.filter_cons]
+    split <;> simp_all
+
+@[step] theorem refunds_loop_spec (v : alloc.vec.Vec Refund) (id : U64) :
+    refunds_for v id ⦃ out => out.val = v.val.filter (fun x => decide (x.payment = id)) ⦄ := by
+  unfold refunds_for refunds_for_loop
+  have h := loop_fold v.val (fun w : alloc.vec.Vec Refund => w.val) (refundsStep id)
+    (fun w k => w.length + (v.length - k) ≤ Usize.max)
+    (fun x => refunds_for_loop.body v id x.1 x.2) ?_ (alloc.vec.Vec.new Refund) 0#usize (by simp)
+    (by simp [alloc.vec.Vec.length])
+  · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_refundsStep]; simp)
+  · intro w j hj hw
+    unfold refunds_for_loop.body
+    simp only [alloc.vec.Vec.length] at hj hw
+    simp only [alloc.vec.Vec.len]
+    split
+    · rename_i hlt
+      have hlt' : j.val < v.val.length := by scalar_tac
+      rw [vec_index_eq v j hlt']
+      simp only [bind_ok]
+      by_cases hb : v.val[j.val].payment = id
+      · simp only [hb, if_true]
+        step*
+        simp only [FoldStep]
+        refine ⟨hlt', ?_, by scalar_tac, ?_⟩
+        · simp_all [refundsStep]
+        · simp only [alloc.vec.Vec.length] at *; scalar_tac
+      · simp only [hb, if_false, bind_ok]
+        step*
+        simp only [FoldStep]
+        refine ⟨hlt', ?_, by scalar_tac, ?_⟩
+        · show w.val = refundsStep id w.val v.val[j.val]
+          simp only [refundsStep, if_neg hb]
+        · simp only [alloc.vec.Vec.length] at *; scalar_tac
+    · rename_i hge
+      simp only [WP.spec_ok, FoldStep, and_true]
+      scalar_tac
+
+theorem same_refund_eq (x y : Refund) : same_refund x y = ok (decide (SameRefund x y)) := by
+  unfold same_refund SameRefund
+  by_cases h1 : x.id = y.id <;> by_cases h2 : x.payment = y.payment <;> by_cases h3 : x.amount = y.amount <;>
+    simp [h1, h2, h3]
+
+/-- `has_same` as a function on lists. -/
+def hasSameB (ys : List Refund) (x : Refund) : Bool :=
+  match ys.find? (fun r => r.id.val = x.id.val) with
+  | none => false
+  | some y => decide (SameRefund x y)
+
+theorem has_same_eq (ys : alloc.vec.Vec Refund) (x : Refund) : has_same ys x = ok (hasSameB ys.val x) := by
+  unfold has_same
+  rw [eq_ok_of_spec (find_refund_spec ys x.id)]
+  simp only [bind_ok, hasSameB]
+  cases ys.val.find? (fun r => r.id.val = x.id.val) <;> simp [same_refund_eq]
+
+theorem foldl_and (f : Refund → Bool) (l : List Refund) (b : Bool) :
+    l.foldl (fun acc x => acc && f x) b = (b && l.all f) := by
+  induction l generalizing b with
+  | nil => simp
+  | cons x xs ih => simp only [List.foldl_cons, ih, List.all_cons, Bool.and_assoc]
+
+@[step] theorem covers_spec (xs ys : alloc.vec.Vec Refund) :
+    covers xs ys ⦃ b => b = xs.val.all (hasSameB ys.val) ⦄ := by
+  unfold covers covers_loop
+  have h := loop_fold xs.val (fun b : Bool => b) (fun acc x => acc && hasSameB ys.val x)
+    (fun _ _ => True) (fun x => covers_loop.body xs ys x.1 x.2) ?_ true 0#usize (by simp) trivial
+  · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_and]; simp)
+  · intro b j hj _
+    unfold covers_loop.body
+    simp only [alloc.vec.Vec.len]
+    split
+    · rename_i hlt
+      have hlt' : j.val < xs.val.length := by scalar_tac
+      rw [vec_index_eq xs j hlt']
+      simp only [bind_ok, has_same_eq]
+      by_cases hb : hasSameB ys.val xs.val[j.val] = true
+      · simp only [hb, if_true, bind_ok]
+        step*
+        simp only [FoldStep]
+        exact ⟨hlt', by simp [hb], by scalar_tac, trivial⟩
+      · simp only [hb, Bool.false_eq_true, if_false, bind_ok]
+        step*
+        simp only [FoldStep]
+        exact ⟨hlt', by simp_all, by scalar_tac, trivial⟩
+    · rename_i hge
+      simp only [WP.spec_ok, FoldStep, and_true]
+      scalar_tac
+
+theorem covers_iff (xs ys : List Refund) : xs.all (hasSameB ys) = true ↔ RefundsCover xs ys := by
+  simp only [List.all_eq_true, RefundsCover]
+  refine forall_congr' fun x => imp_congr_right fun _ => ?_
+  unfold hasSameB
+  cases ys.find? (fun r => r.id.val = x.id.val) <;> simp
+
+theorem refundsOf_eq (s : Snapshot) (id : U64) :
+    s.refunds.val.filter (fun x => decide (x.payment = id)) = refundsOf (Snapshot.toSt s) id.val := by
+  simp [refundsOf, Snapshot.toSt]
+
+/-- `MarkPosted`: only an operator; it writes nothing, or the payment marked
+(and nothing else about it changed) when the payment is captured for the
+amount the orchestrator saw and its refund rows are exactly the ones the
+orchestrator saw. -/
+theorem mark_posted_spec (a : Principal) (s : Snapshot) (id cap : U64) (seen : alloc.vec.Vec Refund) :
+    mark_posted a s id cap seen ⦃ r => ∀ ws rep, r = .Ok (ws, rep) → a.operator = true ∧
+      (ws.val = [] ∨ ∃ p, findPay (Snapshot.toSt s) id.val = some p ∧ p.status = CAPTURED ∧ p.captured = cap ∧
+        RefundsCover (refundsOf (Snapshot.toSt s) id.val) seen.val ∧ RefundsCover seen.val (refundsOf (Snapshot.toSt s) id.val) ∧
+        ws.val = [.PutPayment { p with operator := a.opId, ledger_done := true }]) ⦄ := by
+  unfold mark_posted with_ledger_done
+  simp only [is_operator_eq, operator_of_eq, bind_ok]
+  cases ho : a.operator
+  · simp
+  · simp only [if_true]
+    step*
+    all_goals (intro ws rep h; first | (obtain ⟨rfl, rfl⟩ := ok_inj h) | simp at h)
+    all_goals try (refine ⟨rfl, ?_⟩)
+    all_goals first
+      | exact Or.inl rfl
+      | (refine Or.inr ⟨p, findPay_of (Or.inr o_post) ‹_›, by simp_all, by simp_all, ?_, ?_, by simp_all⟩
+         · rw [← covers_iff, ← refundsOf_eq]; simp_all
+         · rw [← covers_iff, ← refundsOf_eq]; simp_all)
 
 end payment_domain.Commands

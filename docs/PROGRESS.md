@@ -178,6 +178,47 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### F2: per-payment "ledger complete" marker; recovery O(unfinished)
+
+- Payment field `ledger_done` (column `BOOLEAN NOT NULL DEFAULT false`,
+  added to existing tables at startup; old rows start unmarked and the first
+  recovery pass syncs and marks them). New operator command
+  `MarkPosted { payment, captured, refunds }`: marks the payment only if it
+  is `CAPTURED` for exactly `captured` and its refund rows are exactly
+  `refunds` (both directions, by id: same payment, amount, status);
+  otherwise `Stale`, nothing written. Every other write of a payment row
+  sets `ledger_done = false`.
+- `Orchestrator::sync_ledger` sends `MarkPosted` with the `View` it synced
+  from after every batch was accepted; it skips marked payments (recovery
+  forces). A refund refused for the merchant's balance is now recorded and
+  synced, so the payment is marked again.
+- `recovery_work`'s ledger part is `status = CAPTURED AND NOT ledger_done`
+  on the partial index `payments_unposted` (the index on every captured
+  payment is dropped). `POST /v1/recover` (`find_work`) also still checks
+  the journal (`needs_ledger_sync`), so postings lost after marking are
+  found there and by reconciliation, not by the scheduled pass.
+- Proven (payments 271 theorems / 8 modules): `marked_only_as_seen` (only
+  an operator's `MarkPosted` writes a marked row, and only for the captured
+  amount and exactly the current refund rows it names) and
+  `changes_clear_ledger_done` (every other command writes each payment row
+  unmarked, and writes a refund row only with its payment's row). What the
+  marker guarantees, precisely: a marked payment's captured amount and
+  refund rows are those the orchestrator confirmed in the ledger; that the
+  ledger then holds them is the orchestrator's part
+  (`docs/proof-assumptions.md` item 7). Frame theorem extended to the new
+  command (plan: the payment and its refunds).
+- Mutants: 14/14 caught (new `mark_ignores_refunds`, `refund_keeps_mark`,
+  `mark_plan_misses_refunds`; two older plan mutants re-anchored because
+  their text became ambiguous).
+- Measured at 100k payments (same harness as B4, one run, host otherwise
+  idle): recovery pass with nothing to fix 852 → 7.8 ms, with 5 payments to
+  fix 1,002 → 69.6 ms (51 kernel transactions). A payment now takes 8
+  kernel transactions instead of 7 (the mark); `POST /v1/payments` p50
+  18.7 ms; 8 clients 145.5 payments/s with 252 serialization retries per 200
+  payments (F4 looks at those).
+- Tests: 83 pass; the PG differential test of plans now sends `MarkPosted`
+  (true, short and wrong refund lists); recovery test checks the mark.
+
 ### F1: operators distinct inside the kernels (SEC-02 finished)
 
 - Both kernels' `Principal` is `{org, actor}` with `Actor::User(id)` or
