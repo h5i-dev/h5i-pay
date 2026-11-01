@@ -2,7 +2,7 @@
 #   h5i app prove crates/payment-domain
 [extract]
 crate = "."
-start-from = ["transition", "policy::check"]
+start-from = ["transition", "reads", "policy::check"]
 schema = true
 include = ["h5i_app_sql"]
 
@@ -20,6 +20,11 @@ theorems = [
   "payment_domain.Theorems.event_dedup",
   "payment_domain.Theorems.reachable_inv",
   "payment_domain.Policies.check_sound",
+  # Read plans (`reads`, `PaymentsStore::load_for`).
+  "payment_domain.Plan.reads_abs",
+  "payment_domain.Schema.decode_load",
+  "payment_domain.Frame.frame",
+  "payment_domain.Frame.load_for_sound",
 ]
 
 # Bugs the proofs must reject (`h5i app mutate crates/payment-domain`).
@@ -53,3 +58,13 @@ new = "if false && contains_linear(blocked, n_blocked, r.recipient) {"
 name = "refund_success_without_release"
 old = "let p2 = with_refunds(p, p.refunded + r.amount, p.refund_pending - r.amount);"
 new = "let p2 = with_refunds(p, p.refunded + r.amount, p.refund_pending);"
+
+[[mutant]]
+name = "record_plan_misses_refund"
+old = "PspResult::RefundSucceeded { refund } => out.push(rd_where(T_REFUNDS, p_eq(REFUND_ID, v_int(*refund)))),"
+new = "PspResult::RefundSucceeded { refund: _ } => {}"
+
+[[mutant]]
+name = "refunds_plan_reads_by_refund_id"
+old = "out.push(rd_where(T_REFUNDS, p_eq(REFUND_PAYMENT, v_int(*payment))));"
+new = "out.push(rd_where(T_REFUNDS, p_eq(REFUND_ID, v_int(*payment))));"

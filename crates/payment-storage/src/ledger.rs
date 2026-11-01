@@ -6,7 +6,7 @@
 use axum::http::StatusCode;
 use h5i_app_core::{Kernel, TenantId};
 use h5i_app_json::Value as Out;
-use h5i_app_pg::{DbError, ReplyCodec, Store, Tx};
+use h5i_app_pg::{DbError, Lock, ReplyCodec, Store, Tx};
 use payment_ledger as k;
 use serde::{Deserialize, Serialize};
 
@@ -45,8 +45,12 @@ payment_ledger::ledger_tables!(LedgerApp);
 pub struct LedgerStore;
 
 impl Store<LedgerApp> for LedgerStore {
+    /// The kernel's tables, and an index for the per-owner read plan
+    /// (`Accounts` for a user).
     fn ddl() -> Vec<String> {
-        schema_ddl()
+        let mut ddl = schema_ddl();
+        ddl.push("CREATE INDEX IF NOT EXISTS accounts_owner ON accounts (tenant_id, owner)".into());
+        ddl
     }
 
     fn tables() -> Vec<&'static str> {
@@ -61,10 +65,46 @@ impl Store<LedgerApp> for LedgerStore {
         schema_store(tx, t, ws).await
     }
 
-    // `lock_for` keeps its default, `Lock::Tenant`: every command loads the
-    // whole tenant, so under SERIALIZABLE any two writes of a tenant
-    // conflict anyway, and queueing them is cheaper than retrying them.
-    // The advisory lock is only a hint; SERIALIZABLE makes the result serial.
+    /// The rows `k::reads` names, one declarative read per table, or the
+    /// whole tenant for the commands it leaves out (batches over
+    /// `k::MAX_PLANNED_BATCH`). `proofs/ledger/Ledger/Frame.lean`
+    /// (`Frame.load_for_sound`): `transition` gives the same result on them
+    /// as on `load`.
+    async fn load_for(tx: &Tx<'_>, t: TenantId, actor: &k::Principal, cmd: &k::Command) -> Result<k::Snapshot, DbError> {
+        match k::reads(actor, cmd) {
+            None => schema_load(tx, t).await,
+            Some(plan) => schema_load_plan(tx, t, &plan).await,
+        }
+    }
+
+    /// Writes queue on the rows they change: a transfer on its two accounts
+    /// and its id, opening an account on the counter. Only a hint for fewer
+    /// retries; SERIALIZABLE makes any interleaving serial.
+    fn lock_for(_actor: &k::Principal, cmd: &k::Command) -> Lock {
+        fn transfer_keys(t: &k::TransferReq, out: &mut Vec<u64>) {
+            out.push(Lock::key("account", &t.debit.to_be_bytes()));
+            out.push(Lock::key("account", &t.credit.to_be_bytes()));
+            out.push(Lock::key("transfer", &t.id.to_be_bytes()));
+        }
+        match cmd {
+            k::Command::Open { .. } => Lock::Keys(vec![Lock::key("ledger", &[])]),
+            k::Command::Transfer { t } => {
+                let mut keys = Vec::new();
+                transfer_keys(t, &mut keys);
+                Lock::Keys(keys)
+            }
+            k::Command::Batch { transfers } if transfers.len() <= k::MAX_PLANNED_BATCH => {
+                let mut keys = Vec::new();
+                transfers.iter().for_each(|t| transfer_keys(t, &mut keys));
+                keys.sort_unstable();
+                keys.dedup();
+                Lock::Keys(keys)
+            }
+            k::Command::Batch { .. } => Lock::Tenant,
+            // Reads write nothing; they need no queue.
+            k::Command::Account { .. } | k::Command::Accounts | k::Command::Transfers => Lock::None,
+        }
+    }
 }
 
 /// The JSON a client sends to `POST /v1/ledger`.
@@ -127,6 +167,17 @@ impl CommandJson {
 /// Client transfer ids must leave the top bit clear: ids with it set are
 /// derived by the orchestrator from payment and refund ids.
 pub const SYSTEM_TRANSFER_BIT: u64 = 1 << 63;
+
+/// Ledger transfer kinds the orchestrator posts.
+pub const POST_CAPTURE: u32 = 1;
+pub const POST_REFUND_RESERVE: u32 = 2;
+pub const POST_REFUND_SETTLE: u32 = 3;
+pub const POST_REFUND_RELEASE: u32 = 4;
+
+/// The ledger transfer id of posting `kind` for payment or refund `id`.
+pub fn system_transfer_id(kind: u32, id: u64) -> u64 {
+    SYSTEM_TRANSFER_BIT | (u64::from(kind & 0x7f) << 56) | (id & ((1 << 56) - 1))
+}
 
 /// Account codes from here up are the orchestrator's (PSP clearing,
 /// merchant payable, refund holding); only operators may open them.

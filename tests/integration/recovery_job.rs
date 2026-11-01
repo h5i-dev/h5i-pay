@@ -84,19 +84,36 @@ async fn scheduled_recovery_covers_every_tenant() {
     let (st, p) = pay(h5i_pay_tests::user_token(c, 7), 300).await;
     assert_eq!((st, p["status"].as_str()), (200, Some("captured")), "{p}");
 
-    let mut tenants = vec![a, b, c];
+    // A fourth tenant whose capture was recorded but whose ledger posting
+    // was lost (a crash between the two): the kernel says CAPTURED, the
+    // ledger has nothing.
+    let d_t = fresh_tenant();
+    let m = payment_domain::Principal { org: d_t, user: 7, operator: false };
+    let opd = payment_domain::Principal { org: d_t, user: 0, operator: true };
+    use payment_domain::{Command as C, PspResult as R, Reply};
+    assert_eq!(payments.execute(&m, &C::Create { amount: 500, currency: 392, manual_capture: false }).await.unwrap(), Ok(Reply::Created(0)));
+    payments.execute(&opd, &C::BeginAuthorize { id: 0 }).await.unwrap().unwrap();
+    payments.execute(&opd, &C::Record { payment: 0, result: R::Captured { amount: 500 } }).await.unwrap().unwrap();
+
+    // Only unfinished work is selected: the healthy tenant has none.
+    let mut tenants = vec![a, b, d_t];
     tenants.sort_unstable();
     assert_eq!(payment_storage::tenants_to_recover(&db.url, &DbTls::Off).await.unwrap(), tenants);
+    let work = payment_storage::recovery_work(&db.url, &DbTls::Off).await.unwrap();
+    let wd = work.iter().find(|w| w.tenant == d_t).unwrap();
+    assert_eq!((wd.psp.as_slice(), wd.refunds.as_slice(), wd.ledger.as_slice()), (&[][..], &[][..], &[0u64][..]));
+    let wa = work.iter().find(|w| w.tenant == a).unwrap();
+    assert_eq!((wa.psp.as_slice(), wa.ledger.as_slice()), (&[0u64][..], &[][..]));
 
     // One pass, as the scheduled task runs it, with its own orchestrator.
     let o = payment_api::orchestrator::Orchestrator::new(ledger.clone(), payments.clone(), mock.clone());
     let r = payment_api::jobs::recover_all(&o, &db.url, &DbTls::Off).await.unwrap();
     assert!(r.failed.is_empty(), "{:?}", r.failed);
-    assert_eq!((r.tenants, r.total.payments_resolved, r.total.payments_unresolved), (3, 2, 0), "{r:?}");
+    assert_eq!((r.tenants, r.total.payments_resolved, r.total.payments_unresolved, r.total.ledger_synced), (3, 2, 0, 1), "{r:?}");
     let s = r.summary_json();
     assert_eq!((s["event"].as_str(), s["payments_resolved"].as_u64()), (Some("recovery"), Some(2)), "{s}");
 
-    for t in [a, b] {
+    for t in [a, b, d_t] {
         let tok = h5i_pay_tests::user_token(t, 7);
         let v: Value = http.get(format!("{base_url}/v1/payments/0")).bearer_auth(tok).send().await.unwrap().json().await.unwrap();
         assert_eq!(v["status"], "captured", "tenant {t}: {v}");
@@ -105,7 +122,11 @@ async fn scheduled_recovery_covers_every_tenant() {
         assert_eq!(audit["ok"], json!(true), "tenant {t}: {audit}");
     }
 
-    // A second pass changes nothing.
+    // The kernel's view of the same work agrees with the query's.
+    assert!(o.find_work(c).await.unwrap().is_empty());
+
+    // Nothing is left: the next pass selects no tenant and calls nothing.
+    assert!(payment_storage::recovery_work(&db.url, &DbTls::Off).await.unwrap().is_empty());
     let r = payment_api::jobs::recover_all(&o, &db.url, &DbTls::Off).await.unwrap();
-    assert_eq!((r.total.payments_resolved, r.total.refunds_resolved, r.failed.len()), (0, 0, 0), "{r:?}");
+    assert_eq!((r.tenants, r.total.payments_resolved, r.total.refunds_resolved, r.total.ledger_synced, r.failed.len()), (0, 0, 0, 0, 0), "{r:?}");
 }

@@ -671,6 +671,102 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
     }
 }
 
+// ---------------------------------------------------------------- read plans
+
+/// Table numbers, in `schema!` declaration order (`Payment::TABLE`, ...).
+pub const T_PAYMENTS: u32 = 0;
+pub const T_REFUNDS: u32 = 1;
+pub const T_EVENTS: u32 = 2;
+pub const T_REFS: u32 = 3;
+pub const T_COUNTER: u32 = 4;
+/// Column numbers: key columns first, then fields in declaration order.
+pub const PAYMENT_ID: u32 = 0;
+pub const PAYMENT_MERCHANT: u32 = 1;
+pub const REFUND_ID: u32 = 0;
+pub const REFUND_PAYMENT: u32 = 1;
+pub const EVENT_ID: u32 = 0;
+pub const REF_PAYMENT: u32 = 0;
+
+fn v_int(x: u64) -> h5i_app_sql::Val {
+    h5i_app_sql::Column::to_val(&x)
+}
+
+fn p_eq(col: u32, v: h5i_app_sql::Val) -> h5i_app_sql::Pred {
+    h5i_app_sql::Pred::Eq { col, val: v }
+}
+
+fn rd_where(table: u32, pred: h5i_app_sql::Pred) -> h5i_app_sql::Read {
+    h5i_app_sql::Read { table, pred, window: h5i_app_sql::whole() }
+}
+
+/// What `record` reads besides the payment: the refund a refund result names.
+fn result_reads(result: &PspResult, out: &mut Vec<h5i_app_sql::Read>) {
+    match result {
+        PspResult::RefundSucceeded { refund } => out.push(rd_where(T_REFUNDS, p_eq(REFUND_ID, v_int(*refund)))),
+        PspResult::RefundFailed { refund } => out.push(rd_where(T_REFUNDS, p_eq(REFUND_ID, v_int(*refund)))),
+        _ => {}
+    }
+}
+
+/// The rows `transition(actor, _, cmd)` reads, one declarative read per
+/// table (`Store::load_for`); a table without a read loads empty.
+/// `proofs/payments/Payments/Frame.lean` proves that `transition` gives the
+/// same result on what the plan loads as on the whole tenant.
+pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>> {
+    let mut out = Vec::new();
+    match cmd {
+        Command::Create { .. } => out.push(rd_where(T_COUNTER, h5i_app_sql::Pred::All)),
+        Command::BeginAuthorize { id } => out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*id)))),
+        Command::Cancel { id } => out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*id)))),
+        Command::RequestRefund { payment, .. } => {
+            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));
+            out.push(rd_where(T_COUNTER, h5i_app_sql::Pred::All));
+        }
+        Command::Record { payment, result } => {
+            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));
+            result_reads(result, &mut out);
+        }
+        Command::Event { event: ev, payment, result } => {
+            out.push(rd_where(T_EVENTS, p_eq(EVENT_ID, v_int(*ev))));
+            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));
+            result_reads(result, &mut out);
+        }
+        Command::AttachRef { payment, .. } => {
+            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));
+            out.push(rd_where(T_REFS, p_eq(REF_PAYMENT, v_int(*payment))));
+        }
+        Command::Get { id } => out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*id)))),
+        Command::List => {
+            if actor.operator {
+                out.push(rd_where(T_PAYMENTS, h5i_app_sql::Pred::All));
+            } else {
+                out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_MERCHANT, v_int(actor.user))));
+            }
+        }
+        Command::GetRefund { id } => {
+            out.push(rd_where(T_REFUNDS, p_eq(REFUND_ID, v_int(*id))));
+            // The payment of that refund.
+            let of_refund = h5i_app_sql::Pred::In {
+                col: PAYMENT_ID,
+                table: T_REFUNDS,
+                pred: Box::new(p_eq(REFUND_ID, v_int(*id))),
+                of: REFUND_PAYMENT,
+                window: h5i_app_sql::whole(),
+            };
+            out.push(rd_where(T_PAYMENTS, of_refund));
+        }
+        Command::Refunds { payment } => {
+            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));
+            out.push(rd_where(T_REFUNDS, p_eq(REFUND_PAYMENT, v_int(*payment))));
+        }
+        Command::GetRef { payment } => {
+            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));
+            out.push(rd_where(T_REFS, p_eq(REF_PAYMENT, v_int(*payment))));
+        }
+    }
+    Some(out)
+}
+
 /// What one write does to the state; `schema!` builds `apply` from it.
 fn apply_write(s: &mut Snapshot, w: Write) {
     match w {

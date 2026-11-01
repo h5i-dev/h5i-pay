@@ -394,6 +394,110 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
     }
 }
 
+// ---------------------------------------------------------------- read plans
+
+/// Table numbers, in `schema!` declaration order (`Account::TABLE`, ...).
+pub const T_ACCOUNTS: u32 = 0;
+pub const T_TRANSFERS: u32 = 1;
+pub const T_LEDGER: u32 = 2;
+/// Column numbers: key columns first, then fields in declaration order.
+pub const ACCOUNT_ID: u32 = 0;
+pub const ACCOUNT_OWNER: u32 = 1;
+pub const TRANSFER_ID: u32 = 0;
+
+/// Batches up to this many transfers load only their accounts and transfer
+/// ids; longer ones load the whole tenant (their predicate would be a chain
+/// of thousands of `OR`s).
+pub const MAX_PLANNED_BATCH: usize = 64;
+
+fn v_int(x: u64) -> h5i_app_sql::Val {
+    h5i_app_sql::Column::to_val(&x)
+}
+
+fn p_eq(col: u32, v: h5i_app_sql::Val) -> h5i_app_sql::Pred {
+    h5i_app_sql::Pred::Eq { col, val: v }
+}
+
+fn p_or(a: h5i_app_sql::Pred, b: h5i_app_sql::Pred) -> h5i_app_sql::Pred {
+    h5i_app_sql::Pred::Or(Box::new(a), Box::new(b))
+}
+
+fn rd_where(table: u32, pred: h5i_app_sql::Pred) -> h5i_app_sql::Read {
+    h5i_app_sql::Read { table, pred, window: h5i_app_sql::whole() }
+}
+
+/// The two accounts of a transfer.
+fn accounts_of(t: &TransferReq) -> h5i_app_sql::Pred {
+    p_or(p_eq(ACCOUNT_ID, v_int(t.debit)), p_eq(ACCOUNT_ID, v_int(t.credit)))
+}
+
+/// The plan of a non-empty batch: every account and transfer id it names.
+fn batch_reads(ts: &Vec<TransferReq>) -> Vec<h5i_app_sql::Read> {
+    let mut accts = accounts_of(&ts[0]);
+    let mut trs = p_eq(TRANSFER_ID, v_int(ts[0].id));
+    let mut i = 1;
+    while i < ts.len() {
+        accts = p_or(accts, accounts_of(&ts[i]));
+        trs = p_or(trs, p_eq(TRANSFER_ID, v_int(ts[i].id)));
+        i += 1;
+    }
+    let mut out = Vec::new();
+    out.push(rd_where(T_ACCOUNTS, accts));
+    out.push(rd_where(T_TRANSFERS, trs));
+    out
+}
+
+/// The rows `transition(actor, _, cmd)` reads, one declarative read per
+/// table (`Store::load_for`); `None` for the whole tenant. A table without
+/// a read loads empty. `proofs/ledger/Ledger/Frame.lean` proves that
+/// `transition` gives the same result on what the plan loads as on the
+/// whole tenant.
+pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>> {
+    match cmd {
+        Command::Open { .. } => {
+            let mut out = Vec::new();
+            out.push(rd_where(T_LEDGER, h5i_app_sql::Pred::All));
+            Some(out)
+        }
+        Command::Transfer { t } => {
+            let mut out = Vec::new();
+            out.push(rd_where(T_ACCOUNTS, accounts_of(t)));
+            out.push(rd_where(T_TRANSFERS, p_eq(TRANSFER_ID, v_int(t.id))));
+            Some(out)
+        }
+        Command::Batch { transfers } => {
+            if transfers.len() == 0 {
+                Some(Vec::new())
+            } else if transfers.len() > MAX_PLANNED_BATCH {
+                None
+            } else {
+                Some(batch_reads(transfers))
+            }
+        }
+        Command::Account { id } => {
+            let mut out = Vec::new();
+            out.push(rd_where(T_ACCOUNTS, p_eq(ACCOUNT_ID, v_int(*id))));
+            Some(out)
+        }
+        Command::Accounts => {
+            let mut out = Vec::new();
+            if actor.operator {
+                out.push(rd_where(T_ACCOUNTS, h5i_app_sql::Pred::All));
+            } else {
+                out.push(rd_where(T_ACCOUNTS, p_eq(ACCOUNT_OWNER, v_int(actor.user))));
+            }
+            Some(out)
+        }
+        Command::Transfers => {
+            let mut out = Vec::new();
+            if actor.operator {
+                out.push(rd_where(T_TRANSFERS, h5i_app_sql::Pred::All));
+            }
+            Some(out)
+        }
+    }
+}
+
 /// What one write does to the state; `schema!` builds `apply` from it.
 fn apply_write(s: &mut Snapshot, w: Write) {
     match w {

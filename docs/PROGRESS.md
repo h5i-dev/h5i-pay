@@ -180,6 +180,74 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### B2: recovery selects only unfinished work
+
+- `payment_storage::recovery_work` (one read-only query over every
+  tenant, outside the kernels like `tenants_to_recover` before it) returns,
+  per tenant, the payments to ask the PSP about (`PROCESSING`, `AUTHORIZED`
+  with automatic capture), those with a pending refund, and `CAPTURED`
+  payments with a ledger posting missing: an anti-join on the ledger's
+  deterministic transfer ids by the rule `sync_ledger` follows
+  (`payment_storage::needs_ledger_sync`, the same rule in Rust). Settled
+  payments are no longer re-synced on every pass. Partial indexes on the
+  unfinished and captured payments; `payments_merchant`,
+  `refunds_payment` and `accounts_owner` indexes back the B1 plans.
+- `Orchestrator::recover_work` handles one tenant's work with at most
+  `PSP_CONCURRENCY` (8) PSP calls or ledger syncs at once, re-reading each
+  payment through the kernel first (work finished meanwhile is skipped);
+  `jobs::recover_all` runs `TENANT_CONCURRENCY` (4) tenants at once.
+  `POST /v1/recover` finds its tenant's work from the two kernels'
+  snapshots (`find_work`, same rule) and runs the same executor.
+- The posting kinds and `system_transfer_id` moved to
+  `payment_storage::ledger` (the orchestrator re-exports them) so the query
+  and the orchestrator share one definition.
+- Test `recovery_job`: four tenants (two lost PSP answers, one healthy,
+  one `CAPTURED` with its capture posting lost); the query selects exactly
+  the three with work and the right payment per category, one pass fixes
+  all (2 resolved, 1 ledger sync), audits pass, `find_work` agrees with the
+  query on the healthy tenant, and the next pass selects no tenant. Timings
+  are in B4.
+
+### B1: per-command reads with frame theorems (SEC-06)
+
+- Both kernels have an extracted `reads(actor, cmd) -> Option<Vec<h5i_app_sql::Read>>`
+  (one declarative read per table); `LedgerStore::load_for` and
+  `PaymentsStore::load_for` run it with `schema_load_plan`. Ledger: `Open`
+  reads the counter row; `Transfer` its transfer id and two accounts;
+  `Batch` (≤ 64 transfers, `MAX_PLANNED_BATCH`) every id and account it
+  names, longer batches the whole tenant; `Account` its row; `Accounts` all
+  rows for an operator, the caller's own otherwise; `Transfers` the journal
+  for an operator, nothing otherwise. Payments: every command by key, `List`
+  by merchant (all for an operator), `Refunds` the payment and its refunds,
+  `GetRefund` the refund and, with `IN (SELECT payment ...)`, its payment.
+- Proofs (`proofs/ledger/Ledger/{Plan,Frame}.lean`,
+  `proofs/payments/Payments/{Plan,Frame}.lean`): `Plan.reads_abs` (the
+  extracted `reads` computes the plan `readsA` written in Lean),
+  `Frame.frame` (on `Snapshot.load plan s`, what loading the plan decodes to
+  by the generated `decode_load`, `transition` gives exactly its result on
+  `s`) and `Frame.load_for_sound` (the two together). The ledger batch case
+  carries the slice through the batch loop: each transfer's writes touch
+  only rows the slice keeps, so the slice stays a slice
+  (`keeps_applyAll`, `batch_loop_congr`); it assumes `HasRoom s`. The
+  payments frame needs no assumption.
+- Writes take per-key advisory locks (`lock_for`: accounts and transfer id
+  of a transfer, the counter for `Open`/`Create`, the payment for payment
+  commands) instead of the tenant lock; reads take none.
+- Gates: `h5i app check crates/payment-ledger` 224 theorems in 13 modules,
+  `crates/payment-domain` 222 in 8, standard axioms only.
+  `h5i app mutate`: ledger 7/7, payments 8/8 (new mutants: a plan that
+  misses the credit account, a plan on the wrong column, a `Record` plan
+  that misses the refund, a `Refunds` plan by refund id; each is caught by
+  `Plan.reads_abs`, i.e. the Rust plan no longer matches the plan the
+  frame theorem is proved for).
+- Tests against PostgreSQL (`tests/concurrency`):
+  `load_for_matches_the_whole_tenant` (400 random ledger commands, batches
+  up to 70 legs) and `payments_load_for_matches_the_whole_tenant` (500
+  random payment commands): at every step `transition` on the rows
+  `snapshot_for` returns equals `transition` on the whole tenant. The
+  existing `postgres_agrees_with_the_reference_engine` now also runs
+  through `load_for`.
+
 ### SEC-02: separate user and operator token keys
 
 - `crates/payment-api/src/auth.rs`: user tokens are signed with
@@ -379,6 +447,5 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 - u32 columns broke the Lean that `h5i-app-schema` 0.1.4 rendered, so M1–M5
   used `u64` everywhere. Fixed upstream (#769); see "u32 columns" above.
-- Every command loads the whole tenant snapshot (h5i-app's default
-  `Store::load`). Correct, but O(rows) per request; a `load_for` with a frame
-  theorem is the scaling path (see `docs/proof-assumptions.md`).
+- Every command but ledger batches over 64 transfers now reads only its
+  plan's rows (B1). Listings (`List`, `Accounts`) are not paginated.

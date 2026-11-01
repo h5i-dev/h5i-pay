@@ -226,6 +226,52 @@ inductive h5i_app_sql.Write where
 | Del : Std.U32 → alloc.vec.Vec h5i_app_sql.Val → h5i_app_sql.Write
 | DelWhere : Std.U32 → Std.U32 → h5i_app_sql.Val → h5i_app_sql.Write
 
+/-- [h5i_app_sql::Window]
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-sql-0.5.2/src/lib.rs', lines 237:0-237:17
+    Name pattern: [h5i_app_sql::Window]
+    Visibility: public -/
+@[rust_type "h5i_app_sql::Window"]
+structure h5i_app_sql.Window where
+  desc : Bool
+  offset : Std.U64
+  limit : Option Std.U64
+
+/-- [h5i_app_sql::whole]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-sql-0.5.2/src/lib.rs', lines 244:0-244:24
+    Name pattern: [h5i_app_sql::whole]
+    Visibility: public -/
+@[rust_fun "h5i_app_sql::whole"]
+def h5i_app_sql.whole : Result h5i_app_sql.Window := do
+  ok { desc := false, offset := 0#u64, limit := none }
+
+/-- [h5i_app_sql::Pred]
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-sql-0.5.2/src/lib.rs', lines 250:0-250:13
+    Name pattern: [h5i_app_sql::Pred]
+    Visibility: public -/
+@[discriminant isize, rust_type "h5i_app_sql::Pred"]
+inductive h5i_app_sql.Pred where
+| All : h5i_app_sql.Pred
+| Eq : Std.U32 → h5i_app_sql.Val → h5i_app_sql.Pred
+| In :
+  Std.U32 →
+  Std.U32 →
+  h5i_app_sql.Pred →
+  Std.U32 →
+  h5i_app_sql.Window →
+  h5i_app_sql.Pred
+| And : h5i_app_sql.Pred → h5i_app_sql.Pred → h5i_app_sql.Pred
+| Or : h5i_app_sql.Pred → h5i_app_sql.Pred → h5i_app_sql.Pred
+
+/-- [h5i_app_sql::Read]
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-sql-0.5.2/src/lib.rs', lines 265:0-265:15
+    Name pattern: [h5i_app_sql::Read]
+    Visibility: public -/
+@[rust_type "h5i_app_sql::Read"]
+structure h5i_app_sql.Read where
+  table : Std.U32
+  pred : h5i_app_sql.Pred
+  window : h5i_app_sql.Window
+
 /-- [payment_domain::Payment]
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
@@ -1686,7 +1732,7 @@ inductive Write where
 | SetCounter : Counter → Write
 
 /-- [payment_domain::apply_write]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 675:0-683:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 771:0-779:1 -/
 def apply_write (s : Snapshot) (w : Write) : Result Snapshot := do
   match w with
   | Write.PutPayment p =>
@@ -1808,7 +1854,7 @@ def apply (snap : Snapshot) (ws : alloc.vec.Vec Write) : Result Snapshot := do
   apply_loop ws s 0#usize
 
 /-- [payment_domain::sql_write]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 686:0-694:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 782:0-790:1 -/
 def sql_write
   (w : Write) (out : alloc.vec.Vec h5i_app_sql.Write) :
   Result (alloc.vec.Vec h5i_app_sql.Write)
@@ -2817,6 +2863,208 @@ def transition
   | Command.GetRefund id => get_refund actor s id
   | Command.Refunds payment => refunds_of actor s payment
   | Command.GetRef payment => get_ref actor s payment
+
+/-- [payment_domain::T_PAYMENTS]
+    Source: 'crates/payment-domain/src/lib.rs', lines 677:0-677:30
+    Visibility: public -/
+@[global_simps, irreducible] def T_PAYMENTS : Std.U32 := 0#u32
+
+/-- [payment_domain::T_REFUNDS]
+    Source: 'crates/payment-domain/src/lib.rs', lines 678:0-678:29
+    Visibility: public -/
+@[global_simps, irreducible] def T_REFUNDS : Std.U32 := 1#u32
+
+/-- [payment_domain::T_EVENTS]
+    Source: 'crates/payment-domain/src/lib.rs', lines 679:0-679:28
+    Visibility: public -/
+@[global_simps, irreducible] def T_EVENTS : Std.U32 := 2#u32
+
+/-- [payment_domain::T_REFS]
+    Source: 'crates/payment-domain/src/lib.rs', lines 680:0-680:26
+    Visibility: public -/
+@[global_simps, irreducible] def T_REFS : Std.U32 := 3#u32
+
+/-- [payment_domain::T_COUNTER]
+    Source: 'crates/payment-domain/src/lib.rs', lines 681:0-681:29
+    Visibility: public -/
+@[global_simps, irreducible] def T_COUNTER : Std.U32 := 4#u32
+
+/-- [payment_domain::PAYMENT_ID]
+    Source: 'crates/payment-domain/src/lib.rs', lines 683:0-683:30
+    Visibility: public -/
+@[global_simps, irreducible] def PAYMENT_ID : Std.U32 := 0#u32
+
+/-- [payment_domain::PAYMENT_MERCHANT]
+    Source: 'crates/payment-domain/src/lib.rs', lines 684:0-684:36
+    Visibility: public -/
+@[global_simps, irreducible] def PAYMENT_MERCHANT : Std.U32 := 1#u32
+
+/-- [payment_domain::REFUND_ID]
+    Source: 'crates/payment-domain/src/lib.rs', lines 685:0-685:29
+    Visibility: public -/
+@[global_simps, irreducible] def REFUND_ID : Std.U32 := 0#u32
+
+/-- [payment_domain::REFUND_PAYMENT]
+    Source: 'crates/payment-domain/src/lib.rs', lines 686:0-686:34
+    Visibility: public -/
+@[global_simps, irreducible] def REFUND_PAYMENT : Std.U32 := 1#u32
+
+/-- [payment_domain::EVENT_ID]
+    Source: 'crates/payment-domain/src/lib.rs', lines 687:0-687:28
+    Visibility: public -/
+@[global_simps, irreducible] def EVENT_ID : Std.U32 := 0#u32
+
+/-- [payment_domain::REF_PAYMENT]
+    Source: 'crates/payment-domain/src/lib.rs', lines 688:0-688:31
+    Visibility: public -/
+@[global_simps, irreducible] def REF_PAYMENT : Std.U32 := 0#u32
+
+/-- [payment_domain::v_int]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 690:0-692:1 -/
+def v_int (x : Std.U64) : Result h5i_app_sql.Val := do
+  U64.Insts.H5i_app_sqlColumn.to_val x
+
+/-- [payment_domain::p_eq]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 694:0-696:1 -/
+def p_eq (col : Std.U32) (v : h5i_app_sql.Val) : Result h5i_app_sql.Pred := do
+  ok (h5i_app_sql.Pred.Eq col v)
+
+/-- [payment_domain::rd_where]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 698:0-700:1 -/
+def rd_where
+  (table : Std.U32) (pred : h5i_app_sql.Pred) : Result h5i_app_sql.Read := do
+  let w ← h5i_app_sql.whole
+  ok { table, pred, window := w }
+
+/-- [payment_domain::result_reads]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 703:0-709:1 -/
+def result_reads
+  (result : PspResult) (out : alloc.vec.Vec h5i_app_sql.Read) :
+  Result (alloc.vec.Vec h5i_app_sql.Read)
+  := do
+  match result with
+  | PspResult.Authorized _ => ok out
+  | PspResult.Declined => ok out
+  | PspResult.Captured _ => ok out
+  | PspResult.Canceled => ok out
+  | PspResult.RefundSucceeded refund =>
+    let v ← v_int refund
+    let p ← p_eq REFUND_ID v
+    let r ← rd_where T_REFUNDS p
+    alloc.vec.Vec.push out r
+  | PspResult.RefundFailed refund =>
+    let v ← v_int refund
+    let p ← p_eq REFUND_ID v
+    let r ← rd_where T_REFUNDS p
+    alloc.vec.Vec.push out r
+
+/-- [payment_domain::reads]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 715:0-768:1
+    Visibility: public -/
+def reads
+  (actor : Principal) (cmd : Command) :
+  Result (Option (alloc.vec.Vec h5i_app_sql.Read))
+  := do
+  match cmd with
+  | Command.Create _ _ _ =>
+    let r ← rd_where T_COUNTER h5i_app_sql.Pred.All
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    ok (some out)
+  | Command.BeginAuthorize id =>
+    let v ← v_int id
+    let p ← p_eq PAYMENT_ID v
+    let r ← rd_where T_PAYMENTS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    ok (some out)
+  | Command.Cancel id =>
+    let v ← v_int id
+    let p ← p_eq PAYMENT_ID v
+    let r ← rd_where T_PAYMENTS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    ok (some out)
+  | Command.RequestRefund payment _ =>
+    let v ← v_int payment
+    let p ← p_eq PAYMENT_ID v
+    let r ← rd_where T_PAYMENTS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    let r1 ← rd_where T_COUNTER h5i_app_sql.Pred.All
+    let out1 ← alloc.vec.Vec.push out r1
+    ok (some out1)
+  | Command.Record payment result =>
+    let v ← v_int payment
+    let p ← p_eq PAYMENT_ID v
+    let r ← rd_where T_PAYMENTS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    let out1 ← result_reads result out
+    ok (some out1)
+  | Command.Event ev payment result =>
+    let v ← v_int ev
+    let p ← p_eq EVENT_ID v
+    let r ← rd_where T_EVENTS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    let v1 ← v_int payment
+    let p1 ← p_eq PAYMENT_ID v1
+    let r1 ← rd_where T_PAYMENTS p1
+    let out1 ← alloc.vec.Vec.push out r1
+    let out2 ← result_reads result out1
+    ok (some out2)
+  | Command.AttachRef payment _ =>
+    let v ← v_int payment
+    let p ← p_eq PAYMENT_ID v
+    let r ← rd_where T_PAYMENTS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    let p1 ← p_eq REF_PAYMENT v
+    let r1 ← rd_where T_REFS p1
+    let out1 ← alloc.vec.Vec.push out r1
+    ok (some out1)
+  | Command.Get id =>
+    let v ← v_int id
+    let p ← p_eq PAYMENT_ID v
+    let r ← rd_where T_PAYMENTS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    ok (some out)
+  | Command.List =>
+    if actor.operator
+    then
+      let r ← rd_where T_PAYMENTS h5i_app_sql.Pred.All
+      let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+      ok (some out)
+    else
+      let v ← v_int actor.user
+      let p ← p_eq PAYMENT_MERCHANT v
+      let r ← rd_where T_PAYMENTS p
+      let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+      ok (some out)
+  | Command.GetRefund id =>
+    let v ← v_int id
+    let p ← p_eq REFUND_ID v
+    let r ← rd_where T_REFUNDS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    let p1 ← p_eq REFUND_ID v
+    let w ← h5i_app_sql.whole
+    let r1 ←
+      rd_where T_PAYMENTS (h5i_app_sql.Pred.In PAYMENT_ID T_REFUNDS p1
+        REFUND_PAYMENT w)
+    let out1 ← alloc.vec.Vec.push out r1
+    ok (some out1)
+  | Command.Refunds payment =>
+    let v ← v_int payment
+    let p ← p_eq PAYMENT_ID v
+    let r ← rd_where T_PAYMENTS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    let p1 ← p_eq REFUND_PAYMENT v
+    let r1 ← rd_where T_REFUNDS p1
+    let out1 ← alloc.vec.Vec.push out r1
+    ok (some out1)
+  | Command.GetRef payment =>
+    let v ← v_int payment
+    let p ← p_eq PAYMENT_ID v
+    let r ← rd_where T_PAYMENTS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    let p1 ← p_eq REF_PAYMENT v
+    let r1 ← rd_where T_REFS p1
+    let out1 ← alloc.vec.Vec.push out r1
+    ok (some out1)
 
 /-- [payment_domain::policy::KINDS]
     Source: 'crates/payment-domain/src/policy.rs', lines 14:0-14:27

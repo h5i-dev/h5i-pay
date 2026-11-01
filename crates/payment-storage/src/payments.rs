@@ -6,7 +6,7 @@
 use axum::http::StatusCode;
 use h5i_app_core::{Kernel, TenantId};
 use h5i_app_json::Value as Out;
-use h5i_app_pg::{DbError, ReplyCodec, Store, Tx};
+use h5i_app_pg::{DbError, Lock, ReplyCodec, Store, Tx};
 use payment_domain as k;
 use serde::{Deserialize, Serialize};
 
@@ -43,8 +43,21 @@ payment_domain::payment_tables!(PaymentsApp);
 pub struct PaymentsStore;
 
 impl Store<PaymentsApp> for PaymentsStore {
+    /// The kernel's tables, and indexes for the read plans that are not by
+    /// key (`List` for a merchant, `Refunds` of a payment) and for the
+    /// scheduled recovery's search for unfinished payments.
     fn ddl() -> Vec<String> {
-        schema_ddl()
+        let mut ddl = schema_ddl();
+        ddl.push("CREATE INDEX IF NOT EXISTS payments_merchant ON payments (tenant_id, merchant)".into());
+        ddl.push("CREATE INDEX IF NOT EXISTS refunds_payment ON refunds (tenant_id, payment)".into());
+        ddl.push(format!(
+            "CREATE INDEX IF NOT EXISTS payments_unfinished ON payments (tenant_id, id) \
+             WHERE status = {} OR status = {} OR refund_pending > 0",
+            k::PROCESSING,
+            k::AUTHORIZED
+        ));
+        ddl.push(format!("CREATE INDEX IF NOT EXISTS payments_captured ON payments (tenant_id, id) WHERE status = {}", k::CAPTURED));
+        ddl
     }
 
     fn tables() -> Vec<&'static str> {
@@ -57,6 +70,35 @@ impl Store<PaymentsApp> for PaymentsStore {
 
     async fn write(tx: &Tx<'_>, t: TenantId, ws: &Vec<k::Write>) -> Result<(), DbError> {
         schema_store(tx, t, ws).await
+    }
+
+    /// The rows `k::reads` names, one declarative read per table.
+    /// `proofs/payments/Payments/Frame.lean` (`Frame.load_for_sound`):
+    /// `transition` gives the same result on them as on `load`.
+    async fn load_for(tx: &Tx<'_>, t: TenantId, actor: &k::Principal, cmd: &k::Command) -> Result<k::Snapshot, DbError> {
+        match k::reads(actor, cmd) {
+            None => schema_load(tx, t).await,
+            Some(plan) => schema_load_plan(tx, t, &plan).await,
+        }
+    }
+
+    /// Writes queue on the payment they change (and the id counter when
+    /// they allocate an id). Only a hint for fewer retries; SERIALIZABLE
+    /// makes any interleaving serial.
+    fn lock_for(_actor: &k::Principal, cmd: &k::Command) -> Lock {
+        let pay = |id: &u64| Lock::key("payment", &id.to_be_bytes());
+        let counter = || Lock::key("counter", &[]);
+        match cmd {
+            k::Command::Create { .. } => Lock::Keys(vec![counter()]),
+            k::Command::RequestRefund { payment, .. } => Lock::Keys(vec![pay(payment), counter()]),
+            k::Command::BeginAuthorize { id } | k::Command::Cancel { id } => Lock::Keys(vec![pay(id)]),
+            k::Command::Record { payment, .. } | k::Command::Event { payment, .. } | k::Command::AttachRef { payment, .. } => {
+                Lock::Keys(vec![pay(payment)])
+            }
+            k::Command::Get { .. } | k::Command::List | k::Command::GetRefund { .. } | k::Command::Refunds { .. } | k::Command::GetRef { .. } => {
+                Lock::None
+            }
+        }
     }
 }
 

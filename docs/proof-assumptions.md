@@ -15,11 +15,12 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Engine model | `Models.isolation`, `noninterference`, `others_commute`, `keyed_replay`, `keyed_conflict`, `ledger_isolation` | a hand-written Lean model of the engine (`proofs/ledger/Models/Engine.lean`) |
 | Payments | `payment_domain.Theorems.status_steps_allowed`, `terminal_final`, `captured_final`, `refund_safety`, `refunded_le_captured`, `event_dedup`, `reachable_inv` | the extracted `crates/payment-domain/src/lib.rs` (`proofs/payments/generated/PaymentDomain.lean`) |
 | Policies | `payment_domain.Policies.check_sound` | the extracted `crates/payment-domain/src/policy.rs` |
+| Read plans | `payment_ledger.Plan.reads_abs`, `payment_ledger.Frame.frame`, `load_for_sound`; `payment_domain.Plan.reads_abs`, `payment_domain.Frame.frame`, `load_for_sound`; `*.Schema.decode_load` (generated) | the extracted `reads` of each kernel (`Store::load_for` runs it) and the extracted `transition`: on what each command's plan loads, `transition` gives its whole-tenant result |
 
-Gate results (h5i-app 0.5.2, u32 currency/code/status
-columns): `h5i app check crates/payment-ledger` — 145 theorems in 11
-modules; `h5i app check crates/payment-domain` — 122 theorems in 6 modules
-(121 at M5, plus `u32_val_eq`); both on the three standard axioms only.
+Gate results (h5i-app 0.5.2, with the read plans): `h5i app check
+crates/payment-ledger` — 224 theorems in 13 modules; `h5i app check
+crates/payment-domain` — 222 theorems in 8 modules; both on the three
+standard axioms only. (Before the read plans: 145 and 122.)
 
 Ledger `currency` and `code`, and payment `currency` and `status`, are
 `u32` columns. They are stored as `BIGINT` like `u64` columns; on load,
@@ -48,6 +49,14 @@ the failing step lemma and cannot be proved without it.
 | payments | `webhook_not_deduplicated` | `Commands.event_spec` |
 | payments | `refund_success_without_release` | `Commands.record_refund_spec` |
 | policy | `blocked_recipient_approved` | `Policies.check_sound` |
+| ledger plan | `transfer_plan_misses_credit_account` | `Plan.accounts_of_eq` |
+| ledger plan | `user_accounts_plan_wrong_column` | `Plan.reads_abs` |
+| payments plan | `record_plan_misses_refund` | `Plan.result_reads_abs` |
+| payments plan | `refunds_plan_reads_by_refund_id` | `Plan.reads_abs` |
+
+The plan mutants are caught where the extracted `reads` stops computing
+the plan `readsA` that `Frame.frame` is proved for; a wrong `readsA`
+itself would fail `Frame.frame`.
 
 "Reachable" (`Spec.Reachable`) means: reached from the empty ledger by any
 sequence of commands that the kernel accepted, from any callers, in any
@@ -72,7 +81,20 @@ committed history is such a sequence.
    upserts and selects) and provides SERIALIZABLE isolation.
 4. **Room in memory.** `Spec.HasRoom`: a loaded snapshot has fewer than
    `usize::MAX − 3·8192` rows. Needed so that `Vec::push` in a maximal batch
-   cannot overflow; true on any 64-bit host.
+   cannot overflow; true on any 64-bit host. The ledger's frame theorem uses
+   it for batches (so `apply` between a batch's transfers cannot overflow on
+   the whole tenant either).
+4a. **Declarative reads.** `Store::load_for` loads each table by one
+   `h5i_app_sql::Read` of the extracted plan (`schema_load_plan`). Trusted:
+   h5i-app-pgsql's `compile_read` turns a read into SQL that returns
+   `H5iAppLib.Query.Read.rows` of the tenant's tables in key order (h5i
+   differential-tests it against PostgreSQL and the Lean definitions; it is
+   not proven), and `Plan.Read.abs` is a faithful reading of the extracted
+   `h5i_app_sql::Read` (a structural map, five lines per kernel). Here,
+   `tests/concurrency` (`load_for_matches_the_whole_tenant`,
+   `payments_load_for_matches_the_whole_tenant`) runs `transition` on the
+   rows PostgreSQL returns for each plan and on the whole tenant, for 400 and
+   500 random commands, and compares the results.
 5. **The shell.** JSON decoding, HMAC token checking (`h5i-app-http`), the
    orchestrator in `payment-api` and the PSP connectors are trusted. The
    kernel's theorems hold for every command, so a decoding bug can do no more
@@ -127,6 +149,13 @@ committed history is such a sequence.
 - **Account counters are u64.** A transfer that would overflow an account's
   posted debits or credits is refused (`Overflow`), not wrapped; the proofs
   rely on the refusal, not on a bound.
-- **Whole-tenant loads.** Every command reads the tenant's full snapshot. A
-  smaller `Store::load_for` would need a frame theorem that `transition`
-  decides the same on the smaller snapshot; none is written yet.
+- **Whole-tenant loads remain** for ledger batches of more than 64
+  transfers (`MAX_PLANNED_BATCH`; their plan would be a chain of thousands
+  of `OR`s) and for the read snapshots `reconcile_inputs`, `audit` and
+  `find_work` take on purpose. Every other command reads only its keys
+  (frame theorems above).
+- **The frame theorems are about one command's read.** They say the
+  partial load gives the whole-tenant result; that the server then commits
+  that result rests, as before, on SERIALIZABLE: a concurrent write to a row
+  outside the plan cannot change the decision, and one inside it makes
+  PostgreSQL abort and the engine retry.

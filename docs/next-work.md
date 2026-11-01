@@ -40,13 +40,13 @@ on user tokens) and edits in `payment-api/src/{lib,main,routes}.rs` and
 
 ## B. Data path and efficiency (the real bottleneck)
 
-1. Whole-tenant load per command. `PaymentsStore`/`LedgerStore`
+1. [x] **Done** (PROGRESS.md "B1"). Whole-tenant load per command. `PaymentsStore`/`LedgerStore`
    (`payment-storage/src/{payments,ledger}.rs`) implement only `load`; the
    h5i-app-pg default `load_for` loads every row of the tenant, so every
    command is O(tenant rows) (SEC-06). Implement `load_for` per command
    with the frame theorem h5i-app requires (see h5i-app-pg `Store::load_for`
    docs and upstream examples), proofs included.
-2. Recovery (`orchestrator.rs::recover`, `jobs.rs::recover_all`): one
+2. [x] **Done** (PROGRESS.md "B2"). Recovery (`orchestrator.rs::recover`, `jobs.rs::recover_all`): one
    `List` (whole tenant), then sequentially for every payment GetRef + a PSP
    call, and `sync_ledger` for every CAPTURED payment on every pass even if
    nothing changed — O(payments × tenant rows) per pass plus up to one PSP

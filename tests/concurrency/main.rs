@@ -224,3 +224,97 @@ async fn postgres_agrees_with_the_reference_engine() {
     audit(&a).unwrap();
     assert!(!a.transfers.is_empty());
 }
+
+/// `LedgerStore::load_for` (the read plans of `payment_ledger::reads`) gives
+/// every command what it needs: `transition` on the rows PostgreSQL returns
+/// for the plan equals `transition` on the whole tenant, for random commands
+/// and callers on a growing ledger (what `Ledger/Frame.lean` proves, here
+/// checked against the real SQL of the reads).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn load_for_matches_the_whole_tenant() {
+    let Some(url) = database_url() else { return };
+    let pg = engine(&url, true, 4).await;
+    let org = fresh_tenant();
+    let mut rng = Rng(7);
+    let mut planned = 0;
+    for i in 0..400u64 {
+        let u = rng.below(4);
+        let actor = if u == 0 { op(org) } else { user(org, u) };
+        let acct = |r: &mut Rng| r.below(9);
+        let req = |r: &mut Rng| k::TransferReq { id: 1 + r.below(80), debit: acct(r), credit: acct(r), amount: r.below(300), code: 1 };
+        let cmd = match rng.below(9) {
+            0 | 1 => open(if u == 0 { rng.below(4) } else { u }, if rng.below(3) == 0 { 840 } else { JPY }, rng.below(2) == 0),
+            2..=4 => k::Command::Transfer { t: req(&mut rng) },
+            // Up to 70 legs: past `MAX_PLANNED_BATCH` the whole tenant loads.
+            5 => k::Command::Batch { transfers: (0..rng.below(71)).map(|_| req(&mut rng)).collect() },
+            6 => k::Command::Accounts,
+            7 => k::Command::Transfers,
+            _ => k::Command::Account { id: acct(&mut rng) },
+        };
+        if k::reads(&actor, &cmd).is_some() {
+            planned += 1;
+        }
+        let whole = pg.snapshot(TenantId(org)).await.unwrap();
+        let part = pg.snapshot_for(&actor, &cmd).await.unwrap();
+        assert_eq!(k::transition(&actor, &part, &cmd), k::transition(&actor, &whole, &cmd), "step {i}: {cmd:?}");
+        pg.execute(&actor, &cmd).await.unwrap().ok();
+    }
+    assert!(planned > 300, "{planned} planned commands");
+    let snap = pg.snapshot(TenantId(org)).await.unwrap();
+    audit(&snap).unwrap();
+    assert!(snap.transfers.len() > 10, "{} transfers", snap.transfers.len());
+}
+
+/// The payment kernel's read plans (`payment_domain::reads`, used by
+/// `PaymentsStore::load_for`) against the real SQL: for random commands,
+/// `transition` on what the plan loads equals `transition` on the whole
+/// tenant (`Payments/Frame.lean`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn payments_load_for_matches_the_whole_tenant() {
+    use payment_domain as d;
+    let Some(url) = database_url() else { return };
+    let (_, pg) = payment_storage::engines(&url, 4, EngineConfig::default()).await.unwrap();
+    let org = fresh_tenant();
+    let op = d::Principal { org, user: 0, operator: true };
+    let mut rng = Rng(11);
+    for i in 0..500u64 {
+        let u = rng.below(4);
+        let actor = if u == 0 { op } else { d::Principal { org, user: u, operator: false } };
+        let id = |r: &mut Rng| r.below(8);
+        // Few amounts, so PSP results often match and payments get captured.
+        let amount = |r: &mut Rng| 100 * (1 + r.below(2));
+        let result = |r: &mut Rng| match r.below(6) {
+            0 => d::PspResult::Authorized { amount: amount(r) },
+            1 => d::PspResult::Declined,
+            2 => d::PspResult::Captured { amount: amount(r) },
+            3 => d::PspResult::Canceled,
+            4 => d::PspResult::RefundSucceeded { refund: id(r) },
+            _ => d::PspResult::RefundFailed { refund: id(r) },
+        };
+        let cmd = match rng.below(13) {
+            0 | 1 => d::Command::Create { amount: amount(&mut rng), currency: 392, manual_capture: rng.below(2) == 0 },
+            2 => d::Command::BeginAuthorize { id: id(&mut rng) },
+            3 => d::Command::Cancel { id: id(&mut rng) },
+            4 => d::Command::RequestRefund { payment: id(&mut rng), amount: 1 + rng.below(60) },
+            5 | 6 => d::Command::Record { payment: id(&mut rng), result: result(&mut rng) },
+            7 => d::Command::Event { event: rng.below(20), payment: id(&mut rng), result: result(&mut rng) },
+            8 => d::Command::AttachRef { payment: id(&mut rng), reference: vec![b'p', rng.below(3) as u8] },
+            9 => d::Command::Get { id: id(&mut rng) },
+            10 => d::Command::List,
+            11 => d::Command::GetRefund { id: id(&mut rng) },
+            _ => {
+                if rng.below(2) == 0 {
+                    d::Command::Refunds { payment: id(&mut rng) }
+                } else {
+                    d::Command::GetRef { payment: id(&mut rng) }
+                }
+            }
+        };
+        let whole = pg.snapshot(TenantId(org)).await.unwrap();
+        let part = pg.snapshot_for(&actor, &cmd).await.unwrap();
+        assert_eq!(d::transition(&actor, &part, &cmd), d::transition(&actor, &whole, &cmd), "step {i}: {cmd:?}");
+        pg.execute(&actor, &cmd).await.unwrap().ok();
+    }
+    let snap = pg.snapshot(TenantId(org)).await.unwrap();
+    assert!(snap.payments.len() > 20 && !snap.refunds.is_empty(), "{} payments, {} refunds", snap.payments.len(), snap.refunds.len());
+}

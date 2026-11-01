@@ -200,6 +200,52 @@ inductive h5i_app_sql.Write where
 | Del : Std.U32 → alloc.vec.Vec h5i_app_sql.Val → h5i_app_sql.Write
 | DelWhere : Std.U32 → Std.U32 → h5i_app_sql.Val → h5i_app_sql.Write
 
+/-- [h5i_app_sql::Window]
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-sql-0.5.2/src/lib.rs', lines 237:0-237:17
+    Name pattern: [h5i_app_sql::Window]
+    Visibility: public -/
+@[rust_type "h5i_app_sql::Window"]
+structure h5i_app_sql.Window where
+  desc : Bool
+  offset : Std.U64
+  limit : Option Std.U64
+
+/-- [h5i_app_sql::whole]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-sql-0.5.2/src/lib.rs', lines 244:0-244:24
+    Name pattern: [h5i_app_sql::whole]
+    Visibility: public -/
+@[rust_fun "h5i_app_sql::whole"]
+def h5i_app_sql.whole : Result h5i_app_sql.Window := do
+  ok { desc := false, offset := 0#u64, limit := none }
+
+/-- [h5i_app_sql::Pred]
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-sql-0.5.2/src/lib.rs', lines 250:0-250:13
+    Name pattern: [h5i_app_sql::Pred]
+    Visibility: public -/
+@[discriminant isize, rust_type "h5i_app_sql::Pred"]
+inductive h5i_app_sql.Pred where
+| All : h5i_app_sql.Pred
+| Eq : Std.U32 → h5i_app_sql.Val → h5i_app_sql.Pred
+| In :
+  Std.U32 →
+  Std.U32 →
+  h5i_app_sql.Pred →
+  Std.U32 →
+  h5i_app_sql.Window →
+  h5i_app_sql.Pred
+| And : h5i_app_sql.Pred → h5i_app_sql.Pred → h5i_app_sql.Pred
+| Or : h5i_app_sql.Pred → h5i_app_sql.Pred → h5i_app_sql.Pred
+
+/-- [h5i_app_sql::Read]
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-sql-0.5.2/src/lib.rs', lines 265:0-265:15
+    Name pattern: [h5i_app_sql::Read]
+    Visibility: public -/
+@[rust_type "h5i_app_sql::Read"]
+structure h5i_app_sql.Read where
+  table : Std.U32
+  pred : h5i_app_sql.Pred
+  window : h5i_app_sql.Window
+
 /-- [payment_ledger::Account]
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
@@ -1072,7 +1118,7 @@ inductive Write where
 | SetLedger : Ledger → Write
 
 /-- [payment_ledger::apply_write]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 398:0-404:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 502:0-508:1 -/
 def apply_write (s : Snapshot) (w : Write) : Result Snapshot := do
   match w with
   | Write.PutAccount a =>
@@ -1159,7 +1205,7 @@ def apply (snap : Snapshot) (ws : alloc.vec.Vec Write) : Result Snapshot := do
   apply_loop ws s 0#usize
 
 /-- [payment_ledger::sql_write]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 407:0-413:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 511:0-517:1 -/
 def sql_write
   (w : Write) (out : alloc.vec.Vec h5i_app_sql.Write) :
   Result (alloc.vec.Vec h5i_app_sql.Write)
@@ -1798,5 +1844,183 @@ def transition
         alloc.vec.CloneVec.clone Transfer.Insts.CoreCloneClone s.transfers
       ok (core.result.Result.Ok (alloc.vec.Vec.new Write, Reply.Transfers v))
     else ok (core.result.Result.Err Error.Forbidden)
+
+/-- [payment_ledger::T_ACCOUNTS]
+    Source: 'crates/payment-ledger/src/lib.rs', lines 400:0-400:30
+    Visibility: public -/
+@[global_simps, irreducible] def T_ACCOUNTS : Std.U32 := 0#u32
+
+/-- [payment_ledger::T_TRANSFERS]
+    Source: 'crates/payment-ledger/src/lib.rs', lines 401:0-401:31
+    Visibility: public -/
+@[global_simps, irreducible] def T_TRANSFERS : Std.U32 := 1#u32
+
+/-- [payment_ledger::T_LEDGER]
+    Source: 'crates/payment-ledger/src/lib.rs', lines 402:0-402:28
+    Visibility: public -/
+@[global_simps, irreducible] def T_LEDGER : Std.U32 := 2#u32
+
+/-- [payment_ledger::ACCOUNT_ID]
+    Source: 'crates/payment-ledger/src/lib.rs', lines 404:0-404:30
+    Visibility: public -/
+@[global_simps, irreducible] def ACCOUNT_ID : Std.U32 := 0#u32
+
+/-- [payment_ledger::ACCOUNT_OWNER]
+    Source: 'crates/payment-ledger/src/lib.rs', lines 405:0-405:33
+    Visibility: public -/
+@[global_simps, irreducible] def ACCOUNT_OWNER : Std.U32 := 1#u32
+
+/-- [payment_ledger::TRANSFER_ID]
+    Source: 'crates/payment-ledger/src/lib.rs', lines 406:0-406:31
+    Visibility: public -/
+@[global_simps, irreducible] def TRANSFER_ID : Std.U32 := 0#u32
+
+/-- [payment_ledger::MAX_PLANNED_BATCH]
+    Source: 'crates/payment-ledger/src/lib.rs', lines 411:0-411:40
+    Visibility: public -/
+@[global_simps, irreducible] def MAX_PLANNED_BATCH : Std.Usize := 64#usize
+
+/-- [payment_ledger::v_int]:
+    Source: 'crates/payment-ledger/src/lib.rs', lines 413:0-415:1 -/
+def v_int (x : Std.U64) : Result h5i_app_sql.Val := do
+  U64.Insts.H5i_app_sqlColumn.to_val x
+
+/-- [payment_ledger::p_eq]:
+    Source: 'crates/payment-ledger/src/lib.rs', lines 417:0-419:1 -/
+def p_eq (col : Std.U32) (v : h5i_app_sql.Val) : Result h5i_app_sql.Pred := do
+  ok (h5i_app_sql.Pred.Eq col v)
+
+/-- [payment_ledger::p_or]:
+    Source: 'crates/payment-ledger/src/lib.rs', lines 421:0-423:1 -/
+def p_or
+  (a : h5i_app_sql.Pred) (b : h5i_app_sql.Pred) : Result h5i_app_sql.Pred := do
+  ok (h5i_app_sql.Pred.Or a b)
+
+/-- [payment_ledger::rd_where]:
+    Source: 'crates/payment-ledger/src/lib.rs', lines 425:0-427:1 -/
+def rd_where
+  (table : Std.U32) (pred : h5i_app_sql.Pred) : Result h5i_app_sql.Read := do
+  let w ← h5i_app_sql.whole
+  ok { table, pred, window := w }
+
+/-- [payment_ledger::accounts_of]:
+    Source: 'crates/payment-ledger/src/lib.rs', lines 430:0-432:1 -/
+def accounts_of (t : TransferReq) : Result h5i_app_sql.Pred := do
+  let v ← v_int t.debit
+  let p ← p_eq ACCOUNT_ID v
+  let v1 ← v_int t.credit
+  let p1 ← p_eq ACCOUNT_ID v1
+  p_or p p1
+
+/-- [payment_ledger::batch_reads]: loop body 0:
+    Source: 'crates/payment-ledger/src/lib.rs', lines 439:4-443:5 -/
+@[rust_loop_body]
+def batch_reads_loop.body
+  (ts : alloc.vec.Vec TransferReq) (accts : h5i_app_sql.Pred)
+  (trs : h5i_app_sql.Pred) (i : Std.Usize) :
+  Result (ControlFlow (h5i_app_sql.Pred × h5i_app_sql.Pred × Std.Usize)
+    (h5i_app_sql.Pred × h5i_app_sql.Pred))
+  := do
+  let i1 := alloc.vec.Vec.len ts
+  if i < i1
+  then
+    let tr ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice TransferReq)
+        ts i
+    let p ← accounts_of tr
+    let accts1 ← p_or accts p
+    let v ← v_int tr.id
+    let p1 ← p_eq TRANSFER_ID v
+    let trs1 ← p_or trs p1
+    let i2 ← i + 1#usize
+    ok (cont (accts1, trs1, i2))
+  else ok (done (accts, trs))
+
+/-- [payment_ledger::batch_reads]: loop 0:
+    Source: 'crates/payment-ledger/src/lib.rs', lines 439:4-443:5 -/
+@[rust_loop]
+def batch_reads_loop
+  (ts : alloc.vec.Vec TransferReq) (accts : h5i_app_sql.Pred)
+  (trs : h5i_app_sql.Pred) (i : Std.Usize) :
+  Result (h5i_app_sql.Pred × h5i_app_sql.Pred)
+  := do
+  loop
+    (fun (accts1, trs1, i1) => batch_reads_loop.body ts accts1 trs1 i1)
+    (accts, trs, i)
+
+/-- [payment_ledger::batch_reads]:
+    Source: 'crates/payment-ledger/src/lib.rs', lines 435:0-448:1 -/
+def batch_reads
+  (ts : alloc.vec.Vec TransferReq) :
+  Result (alloc.vec.Vec h5i_app_sql.Read)
+  := do
+  let tr ←
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice TransferReq) ts
+      0#usize
+  let accts ← accounts_of tr
+  let v ← v_int tr.id
+  let trs ← p_eq TRANSFER_ID v
+  let (accts1, trs1) ← batch_reads_loop ts accts trs 1#usize
+  let r ← rd_where T_ACCOUNTS accts1
+  let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+  let r1 ← rd_where T_TRANSFERS trs1
+  alloc.vec.Vec.push out r1
+
+/-- [payment_ledger::reads]:
+    Source: 'crates/payment-ledger/src/lib.rs', lines 455:0-499:1
+    Visibility: public -/
+def reads
+  (actor : Principal) (cmd : Command) :
+  Result (Option (alloc.vec.Vec h5i_app_sql.Read))
+  := do
+  match cmd with
+  | Command.Open _ _ _ _ _ =>
+    let r ← rd_where T_LEDGER h5i_app_sql.Pred.All
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    ok (some out)
+  | Command.Transfer t =>
+    let p ← accounts_of t
+    let r ← rd_where T_ACCOUNTS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    let v ← v_int t.id
+    let p1 ← p_eq TRANSFER_ID v
+    let r1 ← rd_where T_TRANSFERS p1
+    let out1 ← alloc.vec.Vec.push out r1
+    ok (some out1)
+  | Command.Batch transfers =>
+    let i := alloc.vec.Vec.len transfers
+    if i = 0#usize
+    then ok (some (alloc.vec.Vec.new h5i_app_sql.Read))
+    else
+      let i1 := alloc.vec.Vec.len transfers
+      if i1 > MAX_PLANNED_BATCH
+      then ok none
+      else let v ← batch_reads transfers
+           ok (some v)
+  | Command.Account id =>
+    let v ← v_int id
+    let p ← p_eq ACCOUNT_ID v
+    let r ← rd_where T_ACCOUNTS p
+    let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+    ok (some out)
+  | Command.Accounts =>
+    if actor.operator
+    then
+      let r ← rd_where T_ACCOUNTS h5i_app_sql.Pred.All
+      let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+      ok (some out)
+    else
+      let v ← v_int actor.user
+      let p ← p_eq ACCOUNT_OWNER v
+      let r ← rd_where T_ACCOUNTS p
+      let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+      ok (some out)
+  | Command.Transfers =>
+    if actor.operator
+    then
+      let r ← rd_where T_TRANSFERS h5i_app_sql.Pred.All
+      let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+      ok (some out)
+    else ok (some (alloc.vec.Vec.new h5i_app_sql.Read))
 
 end payment_ledger

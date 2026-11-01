@@ -39,16 +39,9 @@ pub const MERCHANT_PAYABLE: u32 = 1002;
 /// Refunds reserved but not settled by the PSP yet.
 pub const REFUND_HOLDING: u32 = 1003;
 
-/// Ledger transfer kinds the orchestrator posts.
-pub const POST_CAPTURE: u32 = 1;
-pub const POST_REFUND_RESERVE: u32 = 2;
-pub const POST_REFUND_SETTLE: u32 = 3;
-pub const POST_REFUND_RELEASE: u32 = 4;
-
-/// The ledger transfer id of posting `kind` for payment or refund `id`.
-pub fn system_transfer_id(kind: u32, id: u64) -> u64 {
-    SYSTEM_TRANSFER_BIT | (u64::from(kind & 0x7f) << 56) | (id & ((1 << 56) - 1))
-}
+/// Ledger transfer kinds the orchestrator posts, and their transfer ids
+/// (`payment_storage::ledger`, shared with the recovery query).
+pub use payment_storage::ledger::{system_transfer_id, POST_CAPTURE, POST_REFUND_RELEASE, POST_REFUND_RESERVE, POST_REFUND_SETTLE};
 
 #[derive(Debug)]
 pub enum OrchError {
@@ -463,55 +456,129 @@ impl Orchestrator {
         Ok(())
     }
 
-    /// Finish what crashes and timeouts left half done, for one tenant.
+    /// Finish what crashes and timeouts left half done, for one tenant
+    /// (`POST /v1/recover`). Finds the work from the kernels' state
+    /// ([`Orchestrator::find_work`]), then [`Orchestrator::recover_work`].
     pub async fn recover(&self, tenant: u64, fail_unsubmitted: bool) -> Result<RecoveryReport> {
-        let mut rep = RecoveryReport::default();
-        let all = match self.pay_ok(&op_p(tenant), d::Command::List).await? {
-            d::Reply::Payments(ps) => ps,
-            r => unreachable!("list replied {r:?}"),
-        };
-        for p in all {
+        let work = self.find_work(tenant).await?;
+        self.recover_work(&work, fail_unsubmitted).await
+    }
+
+    /// One tenant's unfinished work, read from both kernels (one snapshot
+    /// each), by the rule the scheduled job's query applies in SQL
+    /// (`payment_storage::recovery_work`).
+    pub async fn find_work(&self, tenant: u64) -> Result<payment_storage::RecoveryWork> {
+        let pay = self.payments.snapshot(TenantId(tenant)).await?;
+        let journal = self.ledger.snapshot(TenantId(tenant)).await?;
+        let ids: std::collections::HashSet<u64> = journal.transfers.iter().map(|t| t.id).collect();
+        let mut w = payment_storage::RecoveryWork { tenant, ..Default::default() };
+        let mut ps = pay.payments.clone();
+        ps.sort_by_key(|p| p.id);
+        for p in &ps {
             if p.status == d::PROCESSING || (p.status == d::AUTHORIZED && !p.manual_capture) {
-                let reference = self.reference(tenant, p.id).await?;
-                let found = match &reference {
-                    Some(r) => Some(self.psp.retrieve(r).await.map_err(OrchError::Psp)?),
-                    None => self.psp.find(PaymentKey { tenant, payment: p.id }).await.map_err(OrchError::Psp)?,
-                };
-                match found {
-                    Some(f) => {
-                        if reference.is_none() {
-                            self.attach(tenant, p.id, &f.reference).await?;
-                        }
-                        self.apply_outcome(tenant, p.id, &f.outcome).await?;
-                        rep.payments_resolved += 1;
-                    }
-                    None if fail_unsubmitted && p.status == d::PROCESSING => {
-                        // The PSP never received it: no money moved.
-                        self.record(tenant, p.id, d::PspResult::Declined).await?;
-                        rep.payments_failed += 1;
-                    }
-                    None => rep.payments_unresolved += 1,
-                }
+                w.psp.push(p.id);
             }
-            if p.status == d::CAPTURED || p.refund_pending > 0 {
-                if let Some(reference) = self.reference(tenant, p.id).await? {
-                    for r in self.refunds(tenant, p.id).await? {
-                        if r.status != d::REFUND_PENDING {
-                            continue;
-                        }
-                        match self.psp.retrieve_refund(&reference, r.id).await.map_err(OrchError::Psp)? {
-                            Some(RefundOutcome::Succeeded) => self.record_refund(tenant, p.id, r.id, true).await?,
-                            Some(RefundOutcome::Failed) => self.record_refund(tenant, p.id, r.id, false).await?,
-                            _ => continue,
-                        }
-                        rep.refunds_resolved += 1;
-                    }
-                }
-                self.sync_ledger(tenant, p.id).await?;
-                rep.ledger_synced += 1;
+            if p.refund_pending > 0 {
+                w.refunds.push(p.id);
+            }
+            if payment_storage::needs_ledger_sync(p, &pay.refunds, |id| ids.contains(&id)) {
+                w.ledger.push(p.id);
             }
         }
+        Ok(w)
+    }
+
+    /// Finish one tenant's unfinished work: ask the PSP about each payment in
+    /// `work.psp` and each pending refund of `work.refunds` (at most
+    /// [`PSP_CONCURRENCY`] calls at once), then post the missing ledger
+    /// transfers of `work.ledger`. Every step re-reads the payment through
+    /// the kernel, so work that finished meanwhile is skipped.
+    pub async fn recover_work(&self, work: &payment_storage::RecoveryWork, fail_unsubmitted: bool) -> Result<RecoveryReport> {
+        use futures_util::stream::{self, StreamExt};
+        let tenant = work.tenant;
+        let mut rep = RecoveryReport::default();
+        let mut synced = std::collections::HashSet::new();
+        let psp: Vec<_> = stream::iter(work.psp.iter().copied())
+            .map(|id| async move { (id, self.recover_payment(tenant, id, fail_unsubmitted).await) })
+            .buffer_unordered(PSP_CONCURRENCY)
+            .collect()
+            .await;
+        for (id, r) in psp {
+            match r? {
+                PaymentRecovery::Resolved => {
+                    rep.payments_resolved += 1;
+                    synced.insert(id);
+                }
+                PaymentRecovery::Failed => rep.payments_failed += 1,
+                PaymentRecovery::Unresolved => rep.payments_unresolved += 1,
+                PaymentRecovery::Done => {}
+            }
+        }
+        let refunds: Vec<_> = stream::iter(work.refunds.iter().copied())
+            .map(|id| async move { (id, self.recover_refunds(tenant, id).await) })
+            .buffer_unordered(PSP_CONCURRENCY)
+            .collect()
+            .await;
+        for (id, r) in refunds {
+            let n = r?;
+            rep.refunds_resolved += n;
+            if n > 0 {
+                synced.insert(id);
+            }
+        }
+        let todo: Vec<u64> = work.ledger.iter().copied().filter(|id| !synced.contains(id)).collect();
+        let ledger: Vec<_> = stream::iter(todo).map(|id| self.sync_ledger(tenant, id)).buffer_unordered(PSP_CONCURRENCY).collect().await;
+        for r in ledger {
+            r?;
+            rep.ledger_synced += 1;
+        }
         Ok(rep)
+    }
+
+    /// Ask the PSP what became of a payment it may have seen.
+    async fn recover_payment(&self, tenant: u64, id: u64, fail_unsubmitted: bool) -> Result<PaymentRecovery> {
+        let p = self.payment(tenant, id).await?;
+        if !(p.status == d::PROCESSING || (p.status == d::AUTHORIZED && !p.manual_capture)) {
+            return Ok(PaymentRecovery::Done);
+        }
+        let reference = self.reference(tenant, id).await?;
+        let found = match &reference {
+            Some(r) => Some(self.psp.retrieve(r).await.map_err(OrchError::Psp)?),
+            None => self.psp.find(PaymentKey { tenant, payment: id }).await.map_err(OrchError::Psp)?,
+        };
+        match found {
+            Some(f) => {
+                if reference.is_none() {
+                    self.attach(tenant, id, &f.reference).await?;
+                }
+                self.apply_outcome(tenant, id, &f.outcome).await?;
+                Ok(PaymentRecovery::Resolved)
+            }
+            None if fail_unsubmitted && p.status == d::PROCESSING => {
+                // The PSP never received it: no money moved.
+                self.record(tenant, id, d::PspResult::Declined).await?;
+                Ok(PaymentRecovery::Failed)
+            }
+            None => Ok(PaymentRecovery::Unresolved),
+        }
+    }
+
+    /// Ask the PSP about a payment's pending refunds; how many it settled.
+    async fn recover_refunds(&self, tenant: u64, id: u64) -> Result<u64> {
+        let Some(reference) = self.reference(tenant, id).await? else { return Ok(0) };
+        let mut n = 0;
+        for r in self.refunds(tenant, id).await? {
+            if r.status != d::REFUND_PENDING {
+                continue;
+            }
+            match self.psp.retrieve_refund(&reference, r.id).await.map_err(OrchError::Psp)? {
+                Some(RefundOutcome::Succeeded) => self.record_refund(tenant, id, r.id, true).await?,
+                Some(RefundOutcome::Failed) => self.record_refund(tenant, id, r.id, false).await?,
+                _ => continue,
+            }
+            n += 1;
+        }
+        Ok(n)
     }
 
     /// Internal records from the payment kernel and from the ledger journal,
@@ -566,6 +633,17 @@ pub struct CheckoutParams {
     pub description: String,
     pub success_url: String,
     pub cancel_url: String,
+}
+
+/// PSP calls (and ledger syncs) one tenant's recovery makes at once.
+pub const PSP_CONCURRENCY: usize = 8;
+
+enum PaymentRecovery {
+    /// Finished meanwhile; nothing to do.
+    Done,
+    Resolved,
+    Failed,
+    Unresolved,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

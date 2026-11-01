@@ -13,16 +13,27 @@ pub struct RecoverAll {
     pub failed: Vec<(u64, String)>,
 }
 
-/// Run [`Orchestrator::recover`] for every tenant that has something to
-/// recover ([`payment_storage::tenants_to_recover`]). A failing tenant does
-/// not stop the others. `fail_unsubmitted` is always false here: deciding
-/// that a payment never reached the PSP stays an operator's call
-/// (`POST /v1/recover?fail_unsubmitted=true`).
+/// Tenants recovered at once by one pass.
+pub const TENANT_CONCURRENCY: usize = 4;
+
+/// One pass: find every tenant's unfinished work with one read-only query
+/// ([`payment_storage::recovery_work`]: only payments still waiting on the
+/// PSP, with a pending refund, or with a ledger posting missing) and run
+/// [`Orchestrator::recover_work`] for up to [`TENANT_CONCURRENCY`] tenants
+/// at once. A failing tenant does not stop the others. `fail_unsubmitted`
+/// is always false here: deciding that a payment never reached the PSP
+/// stays an operator's call (`POST /v1/recover?fail_unsubmitted=true`).
 pub async fn recover_all(o: &Orchestrator, url: &str, tls: &DbTls) -> Result<RecoverAll, h5i_app_pg::DbError> {
-    let tenants = payment_storage::tenants_to_recover(url, tls).await?;
-    let mut out = RecoverAll { tenants: tenants.len() as u64, ..Default::default() };
-    for t in tenants {
-        match o.recover(t, false).await {
+    use futures_util::stream::{self, StreamExt};
+    let work = payment_storage::recovery_work(url, tls).await?;
+    let mut out = RecoverAll { tenants: work.len() as u64, ..Default::default() };
+    let results: Vec<_> = stream::iter(work.iter())
+        .map(|w| async move { (w.tenant, o.recover_work(w, false).await) })
+        .buffer_unordered(TENANT_CONCURRENCY)
+        .collect()
+        .await;
+    for (t, r) in results {
+        match r {
             Ok(r) => {
                 tracing::info!(tenant = t, ?r, "recovered");
                 out.total.payments_resolved += r.payments_resolved;
@@ -37,6 +48,7 @@ pub async fn recover_all(o: &Orchestrator, url: &str, tls: &DbTls) -> Result<Rec
             }
         }
     }
+    out.failed.sort();
     Ok(out)
 }
 

@@ -2,7 +2,7 @@
 #   h5i app prove crates/payment-ledger
 [extract]
 crate = "."
-start-from = ["transition"]
+start-from = ["transition", "reads"]
 schema = true
 include = ["h5i_app_sql"]
 
@@ -18,6 +18,13 @@ theorems = [
   "payment_ledger.Theorems.replay_is_noop",
   "payment_ledger.Theorems.only_owner_or_operator_debits",
   "payment_ledger.Storage.db_inv",
+  # Read plans (`reads`, `LedgerStore::load_for`): the extracted plans are
+  # `readsA`, a plan's rows decode to `Snapshot.load`, and `transition` on
+  # that gives its whole-tenant result.
+  "payment_ledger.Plan.reads_abs",
+  "payment_ledger.Schema.decode_load",
+  "payment_ledger.Frame.frame",
+  "payment_ledger.Frame.load_for_sound",
 ]
 
 # Bugs the proofs must reject (`h5i app mutate crates/payment-ledger`).
@@ -45,3 +52,13 @@ new = "let credits = b.credits + t.amount - 1;"
 name = "replay_ignores_amount"
 old = "old.debit == t.debit && old.credit == t.credit && old.amount == t.amount && old.code == t.code"
 new = "old.debit == t.debit && old.credit == t.credit && old.code == t.code"
+
+[[mutant]]
+name = "transfer_plan_misses_credit_account"
+old = "p_or(p_eq(ACCOUNT_ID, v_int(t.debit)), p_eq(ACCOUNT_ID, v_int(t.credit)))"
+new = "p_or(p_eq(ACCOUNT_ID, v_int(t.debit)), p_eq(ACCOUNT_ID, v_int(t.debit)))"
+
+[[mutant]]
+name = "user_accounts_plan_wrong_column"
+old = "pub const ACCOUNT_OWNER: u32 = 1;"
+new = "pub const ACCOUNT_OWNER: u32 = 2;"
