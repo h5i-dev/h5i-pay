@@ -126,7 +126,17 @@ data "aws_iam_policy_document" "batch_job" {
   }
   statement {
     actions   = ["s3:PutObject"]
-    resources = ["${aws_s3_bucket.b["batch"].arn}/reports/*", "${aws_s3_bucket.b["audit"].arn}/reconciliation/*"]
+    resources = ["${aws_s3_bucket.b["batch"].arn}/reports/*", "${aws_s3_bucket.b["batch"].arn}/runs/*", "${aws_s3_bucket.b["audit"].arn}/reconciliation/*"]
+  }
+  # reconcile-run lists a run's inputs (`aws s3 cp --recursive`).
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.b["settlements"].arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["runs/*"]
+    }
   }
   statement {
     actions   = ["kms:Decrypt", "kms:GenerateDataKey"]

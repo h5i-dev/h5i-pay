@@ -723,13 +723,22 @@ checksum = "be5722001cfc5867571cbfb13c044ef1323fa76ef2ba3f55b9bf9b8cf0a1d385"
 name = "h5i-pay-benchmarks"
 version = "0.1.0"
 dependencies = [
+ "axum",
+ "h5i-app-core",
  "h5i-app-gpu",
+ "h5i-app-pg",
+ "payment-api",
  "payment-batch",
+ "payment-connectors",
  "payment-domain",
  "payment-gpu",
  "payment-reconcile",
+ "payment-storage",
  "rayon",
+ "reqwest",
  "serde_json",
+ "tokio",
+ "tokio-postgres",
 ]
 
 [[package]]
@@ -1358,6 +1367,7 @@ dependencies = [
  "h5i-app-http",
  "h5i-app-json",
  "h5i-app-pg",
+ "payment-batch",
  "payment-connectors",
  "payment-domain",
  "payment-ledger",
@@ -1382,6 +1392,7 @@ dependencies = [
  "payment-domain",
  "payment-reconcile",
  "rayon",
+ "serde_json",
 ]
 
 [[package]]

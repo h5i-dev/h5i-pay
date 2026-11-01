@@ -40,11 +40,19 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
-    let recover = match std::env::args().nth(1).as_deref() {
-        None => false,
-        Some("recover") => true,
-        Some(other) => return Err(format!("unknown command {other:?}; expected none or `recover`").into()),
+    let args: Vec<String> = std::env::args().collect();
+    // `recover`, `export <dir>` and `ingest <run> <dir>` are one-shot jobs
+    // (scheduled ECS tasks); without a command the binary serves the API.
+    let job = match args.get(1).map(String::as_str) {
+        None => None,
+        Some("recover") => Some(Job::Recover),
+        Some("export") if args.len() == 3 => Some(Job::Export(args[2].clone())),
+        Some("ingest") if args.len() == 4 => Some(Job::Ingest(args[2].clone(), args[3].clone())),
+        Some(other) => {
+            return Err(format!("unknown command {other:?}; expected none, `recover`, `export <dir>` or `ingest <run> <dir>`").into());
+        }
     };
+    let recover = job.is_some();
     let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
     let required = |k: &'static str| env(k).ok_or(format!("{k} is required"));
     if let Some(spec) = env("H5I_APP_ISSUE") {
@@ -61,7 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let (url, from_rds_secret) = database_url()?;
-    // The recovery job acts in-process and verifies no tokens.
+    // The jobs act in-process and verify no tokens.
     let keys = if recover {
         None
     } else {
@@ -81,14 +89,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let psp = select_psp(std::env::var("H5I_PAY_PSP").ok().as_deref())?;
     let (ledger_engine, payments_engine) = payment_storage::engines_with(&url, 16, EngineConfig::default(), &tls).await?;
     tracing::info!(psp = psp.name(), db_tls = matches!(tls, payment_storage::DbTls::Verified(_)), "payment provider and database");
-    if recover {
+    if let Some(job) = job {
         let o = payment_api::orchestrator::Orchestrator::new(ledger_engine, payments_engine, psp);
-        let r = payment_api::jobs::recover_all(&o, &url, &tls).await?;
-        println!("{}", r.summary_json());
-        std::process::exit(if r.failed.is_empty() { 0 } else { 1 });
+        match job {
+            Job::Recover => {
+                let r = payment_api::jobs::recover_all(&o, &url, &tls).await?;
+                println!("{}", r.summary_json());
+                std::process::exit(if r.failed.is_empty() { 0 } else { 1 });
+            }
+            Job::Export(dir) => {
+                let m = payment_api::batch::export(&o, &url, &tls, std::path::Path::new(&dir)).await?;
+                let failed = m["failed"].as_array().map_or(0, Vec::len);
+                println!("{}", serde_json::json!({"event": "reconcile_export", "tenants": m["tenants"].as_array().map_or(0, Vec::len), "tenants_failed": failed}));
+                std::process::exit(if failed == 0 { 0 } else { 1 });
+            }
+            Job::Ingest(run, dir) => {
+                println!("{}", payment_api::batch::ingest(&url, &tls, &run, std::path::Path::new(&dir)).await?);
+                return Ok(());
+            }
+        }
     }
-    let keys = keys.expect("keys are loaded unless recovering");
-    let state = AppState::with_payments(ledger_engine, payments_engine, psp, &keys);
+    let keys = keys.expect("keys are loaded unless running a job");
+    payment_storage::ops::install(&url, &tls).await?;
+    let state = AppState::with_payments(ledger_engine, payments_engine, psp, &keys).with_ops(&url, &tls);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!(%addr, "h5i-pay listening");
     axum::serve(listener, router(state)).with_graceful_shutdown(async {
@@ -96,6 +119,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     })
     .await?;
     Ok(())
+}
+
+enum Job {
+    Recover,
+    Export(String),
+    Ingest(String, String),
 }
 
 /// The PSP named by `H5I_PAY_PSP`. The Mock PSP exists only in builds with

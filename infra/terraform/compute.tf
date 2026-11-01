@@ -1,7 +1,7 @@
 # ECR, the ALB with WAF, and the API on ECS Fargate.
 
 resource "aws_ecr_repository" "repo" {
-  for_each             = toset(["api", "worker"])
+  for_each             = toset(["api", "worker", "ops"])
   name                 = "h5i-pay/${each.key}"
   image_tag_mutability = "IMMUTABLE"
   image_scanning_configuration {

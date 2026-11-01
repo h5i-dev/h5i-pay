@@ -145,6 +145,9 @@ pub enum Command {
     Refunds { payment: u64 },
     /// A payment's PSP reference.
     GetRef { payment: u64 },
+    /// A payment with its refunds and PSP reference: what `Get`, `Refunds`
+    /// and `GetRef` return, in one command.
+    View { id: u64 },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -172,6 +175,8 @@ pub enum Reply {
     Refund(Refund),
     Refunds(Vec<Refund>),
     Ref(Vec<u8>),
+    /// A payment, its refunds, and its PSP reference if it has one.
+    View(Payment, Vec<Refund>, Option<Vec<u8>>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -335,7 +340,7 @@ fn begin_authorize(actor: &Principal, s: &Snapshot, id: u64) -> Outcome {
                     refunded: p.refunded,
                     refund_pending: p.refund_pending,
                 };
-                Ok((one(Write::PutPayment(p2)), Reply::Status(PROCESSING)))
+                Ok((one(Write::PutPayment(p2)), Reply::Payment(p2)))
             }
         }
     }
@@ -619,6 +624,19 @@ fn get_ref(actor: &Principal, s: &Snapshot, payment: u64) -> Outcome {
     }
 }
 
+/// The refunds of `payment`, in table order.
+pub fn refunds_for(rs: &Vec<Refund>, payment: u64) -> Vec<Refund> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < rs.len() {
+        if rs[i].payment == payment {
+            out.push(rs[i]);
+        }
+        i += 1;
+    }
+    out
+}
+
 fn refunds_of(actor: &Principal, s: &Snapshot, payment: u64) -> Outcome {
     match find_payment(&s.payments, payment) {
         None => Err(Error::NotFound),
@@ -626,15 +644,24 @@ fn refunds_of(actor: &Principal, s: &Snapshot, payment: u64) -> Outcome {
             if !may_manage(actor, &p) {
                 Err(Error::NotFound)
             } else {
-                let mut out = Vec::new();
-                let mut i = 0;
-                while i < s.refunds.len() {
-                    if s.refunds[i].payment == payment {
-                        out.push(s.refunds[i]);
-                    }
-                    i += 1;
-                }
-                Ok((Vec::new(), Reply::Refunds(out)))
+                Ok((Vec::new(), Reply::Refunds(refunds_for(&s.refunds, payment))))
+            }
+        }
+    }
+}
+
+fn view(actor: &Principal, s: &Snapshot, id: u64) -> Outcome {
+    match find_payment(&s.payments, id) {
+        None => Err(Error::NotFound),
+        Some(p) => {
+            if !may_manage(actor, &p) {
+                Err(Error::NotFound)
+            } else {
+                let reference = match find_ref(&s.refs, id) {
+                    None => None,
+                    Some(r) => Some(r.reference),
+                };
+                Ok((Vec::new(), Reply::View(p, refunds_for(&s.refunds, id), reference)))
             }
         }
     }
@@ -668,6 +695,7 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
         Command::GetRefund { id } => get_refund(actor, s, *id),
         Command::Refunds { payment } => refunds_of(actor, s, *payment),
         Command::GetRef { payment } => get_ref(actor, s, *payment),
+        Command::View { id } => view(actor, s, *id),
     }
 }
 
@@ -762,6 +790,11 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
         Command::GetRef { payment } => {
             out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));
             out.push(rd_where(T_REFS, p_eq(REF_PAYMENT, v_int(*payment))));
+        }
+        Command::View { id } => {
+            out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*id))));
+            out.push(rd_where(T_REFUNDS, p_eq(REFUND_PAYMENT, v_int(*id))));
+            out.push(rd_where(T_REFS, p_eq(REF_PAYMENT, v_int(*id))));
         }
     }
     Some(out)

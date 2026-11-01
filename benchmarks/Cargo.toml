@@ -10,6 +10,11 @@ publish.workspace = true
 name = "bench"
 path = "src/main.rs"
 
+# End-to-end through PostgreSQL (API, recovery, reconciliation): src/bin/e2e.rs.
+[[bin]]
+name = "e2e"
+path = "src/bin/e2e.rs"
+
 [features]
 gpu = ["payment-gpu/cuda"]
 
@@ -21,3 +26,12 @@ payment-reconcile.workspace = true
 payment-domain.workspace = true
 serde_json.workspace = true
 rayon.workspace = true
+h5i-app-core.workspace = true
+h5i-app-pg.workspace = true
+payment-api.workspace = true
+payment-storage.workspace = true
+payment-connectors = { workspace = true, features = ["mock"] }
+tokio.workspace = true
+axum.workspace = true
+reqwest.workspace = true
+tokio-postgres = "0.7"

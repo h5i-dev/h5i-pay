@@ -20,6 +20,7 @@
 //! at most once.
 
 pub mod auth;
+pub mod batch;
 pub mod jobs;
 pub mod orchestrator;
 pub mod routes;

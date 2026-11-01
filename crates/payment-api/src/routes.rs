@@ -29,6 +29,9 @@ pub struct AppState {
     pub payments: H5iApp<PaymentsApp, PaymentsStore>,
     pub ledger_engine: Arc<LedgerEngine>,
     pub orchestrator: Option<Arc<Orchestrator>>,
+    /// Where ingested batch reports live (`payment_storage::ops`); `None`:
+    /// `GET /v1/reconcile/reports` answers 503.
+    pub ops: Option<Arc<(String, payment_storage::DbTls)>>,
 }
 
 impl FromRef<AppState> for Auth<LedgerApp> {
@@ -66,7 +69,13 @@ impl AppState {
             ))
         });
         let payments = H5iApp::new(payments_engine, crate::auth::payments_auth(keys));
-        AppState { ledger, payments, ledger_engine, orchestrator }
+        AppState { ledger, payments, ledger_engine, orchestrator, ops: None }
+    }
+
+    /// Serve ingested batch reconciliation reports from this database.
+    pub fn with_ops(mut self, url: &str, tls: &payment_storage::DbTls) -> Self {
+        self.ops = Some(Arc::new((url.to_string(), tls.clone())));
+        self
     }
 }
 
@@ -85,6 +94,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/webhooks/{psp}", post(webhook))
         .route("/v1/recover", post(recover))
         .route("/v1/reconcile", post(reconcile))
+        .route("/v1/reconcile/reports", get(reconcile_reports))
         .with_state(state)
 }
 
@@ -418,7 +428,11 @@ async fn recover(State(st): State<AppState>, actor: Actor<PaymentsApp>, Query(q)
 
 #[derive(Deserialize, Default)]
 struct ReconcileQuery {
-    /// `single` (default), `parallel`, `simd` or `reference`.
+    /// `single` (default), `parallel`, `simd` or `reference`. CPU only, by
+    /// decision: this is one tenant on demand (milliseconds at 10k
+    /// payments, `docs/benchmarks.md`), the API image has no CUDA, and a
+    /// per-request GPU context would cost more than the join. Large runs
+    /// go to the nightly batch worker, which picks the GPU itself.
     engine: Option<String>,
 }
 
@@ -495,5 +509,69 @@ async fn reconcile(State(st): State<AppState>, actor: Actor<PaymentsApp>, Query(
     match (run(&inputs.psp), run(&inputs.ledger)) {
         (Ok(a), Ok(b)) => reply(StatusCode::OK, Out::obj([("psp", a), ("ledger", b)])),
         (Err(e), _) | (_, Err(e)) => reply(StatusCode::UNPROCESSABLE_ENTITY, error_body(&e.to_string())),
+    }
+}
+
+#[derive(Deserialize, Default)]
+struct ReportsQuery {
+    /// A run id (the nightly job uses the date); default: the latest.
+    run: Option<String>,
+    /// Exceptions to return, at most 10 000 (default 1 000).
+    limit: Option<i64>,
+}
+
+/// The tenant's latest (or `run`'s) ingested batch reconciliation report,
+/// with its exceptions (operators only). Read-only; it moves no money.
+async fn reconcile_reports(State(st): State<AppState>, actor: Actor<PaymentsApp>, Query(q): Query<ReportsQuery>) -> Response {
+    let p = actor.principal();
+    if !p.operator {
+        return reply(StatusCode::FORBIDDEN, error_body("forbidden"));
+    }
+    let Some(ops) = st.ops.clone() else {
+        return reply(StatusCode::SERVICE_UNAVAILABLE, error_body("reports not configured"));
+    };
+    let limit = q.limit.unwrap_or(1000).clamp(0, 10_000);
+    match payment_storage::ops::report(&ops.0, &ops.1, p.org, q.run.as_deref(), limit).await {
+        Ok(None) => reply(StatusCode::NOT_FOUND, error_body("no report")),
+        Ok(Some(r)) => {
+            let counts = serde_json::from_str::<serde_json::Value>(&r.counts).map_or(Out::Null, |v| json_out(&v));
+            let ex = r
+                .exceptions
+                .iter()
+                .map(|e| {
+                    Out::obj([
+                        ("side", Out::str(e.side.as_bytes())),
+                        ("code", Out::str(e.code.as_bytes())),
+                        ("object", describe(e.key)),
+                        ("amount", e.amount.into()),
+                    ])
+                })
+                .collect();
+            reply(
+                StatusCode::OK,
+                Out::obj([
+                    ("run", Out::str(r.run.as_bytes())),
+                    ("engine", Out::str(r.engine.as_bytes())),
+                    ("internal_rows", r.internal_rows.into()),
+                    ("external_rows", r.external_rows.into()),
+                    ("counts", counts),
+                    ("exceptions_total", r.exceptions_total.into()),
+                    ("exceptions", Out::Arr(ex)),
+                ]),
+            )
+        }
+        Err(e) => reply(StatusCode::SERVICE_UNAVAILABLE, error_body(&e.to_string())),
+    }
+}
+
+/// A stored JSON document (counts only: objects of numbers) as a reply value.
+fn json_out(v: &serde_json::Value) -> Out {
+    match v {
+        serde_json::Value::Object(m) => Out::Obj(m.iter().map(|(k, v)| (k.as_bytes().to_vec(), json_out(v))).collect()),
+        serde_json::Value::Array(a) => Out::Arr(a.iter().map(json_out).collect()),
+        serde_json::Value::Number(n) => n.as_u64().map_or(Out::Null, Out::from),
+        serde_json::Value::String(s) => Out::str(s.as_bytes()),
+        serde_json::Value::Bool(b) => Out::Bool(*b),
+        serde_json::Value::Null => Out::Null,
     }
 }

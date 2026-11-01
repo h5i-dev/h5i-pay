@@ -95,9 +95,12 @@ impl Store<PaymentsApp> for PaymentsStore {
             k::Command::Record { payment, .. } | k::Command::Event { payment, .. } | k::Command::AttachRef { payment, .. } => {
                 Lock::Keys(vec![pay(payment)])
             }
-            k::Command::Get { .. } | k::Command::List | k::Command::GetRefund { .. } | k::Command::Refunds { .. } | k::Command::GetRef { .. } => {
-                Lock::None
-            }
+            k::Command::Get { .. }
+            | k::Command::List
+            | k::Command::GetRefund { .. }
+            | k::Command::Refunds { .. }
+            | k::Command::GetRef { .. }
+            | k::Command::View { .. } => Lock::None,
         }
     }
 }
@@ -171,6 +174,7 @@ enum CommandJson {
     List,
     GetRefund { id: u64 },
     Refunds { payment: u64 },
+    View { id: u64 },
 }
 
 impl h5i_app_http::Api<PaymentsApp> for PaymentsStore {
@@ -180,6 +184,7 @@ impl h5i_app_http::Api<PaymentsApp> for PaymentsStore {
             CommandJson::List => k::Command::List,
             CommandJson::GetRefund { id } => k::Command::GetRefund { id },
             CommandJson::Refunds { payment } => k::Command::Refunds { payment },
+            CommandJson::View { id } => k::Command::View { id },
         })
     }
 
@@ -195,6 +200,11 @@ impl h5i_app_http::Api<PaymentsApp> for PaymentsStore {
             k::Reply::Refund(r) => refund_json(r),
             k::Reply::Refunds(rs) => Out::Arr(rs.iter().map(refund_json).collect()),
             k::Reply::Ref(b) => Out::obj([("psp_reference", Out::str(b))]),
+            k::Reply::View(p, rs, r) => Out::obj([
+                ("payment", payment_json(p)),
+                ("refunds", Out::Arr(rs.iter().map(refund_json).collect())),
+                ("psp_reference", r.as_ref().map_or(Out::Null, Out::str)),
+            ]),
         }
     }
 
@@ -228,6 +238,7 @@ enum StoredReply {
     Refund((u64, u64, u64, u32)),
     Refunds(Vec<(u64, u64, u64, u32)>),
     Ref(Vec<u8>),
+    View(StoredPayment, Vec<(u64, u64, u64, u32)>, Option<Vec<u8>>),
 }
 
 impl ReplyCodec<PaymentsApp> for PaymentsStore {
@@ -251,6 +262,9 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
             k::Reply::Refund(r) => StoredReply::Refund((r.id, r.payment, r.amount, r.status)),
             k::Reply::Refunds(rs) => StoredReply::Refunds(rs.iter().map(|r| (r.id, r.payment, r.amount, r.status)).collect()),
             k::Reply::Ref(b) => StoredReply::Ref(b.clone()),
+            k::Reply::View(p, rs, r) => {
+                StoredReply::View(store_payment(p), rs.iter().map(|r| (r.id, r.payment, r.amount, r.status)).collect(), r.clone())
+            }
         };
         serde_json::to_vec(&stored).expect("stored replies serialize")
     }
@@ -269,6 +283,11 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
                 rs.into_iter().map(|(id, payment, amount, status)| k::Refund { id, payment, amount, status }).collect(),
             ),
             StoredReply::Ref(b) => k::Reply::Ref(b),
+            StoredReply::View(p, rs, r) => k::Reply::View(
+                load_payment(p),
+                rs.into_iter().map(|(id, payment, amount, status)| k::Refund { id, payment, amount, status }).collect(),
+                r,
+            ),
         })
     }
 }

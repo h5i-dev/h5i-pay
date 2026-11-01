@@ -13,40 +13,7 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 
-/// A new empty database next to the test database; dropped by `Drop`.
-struct ScratchDb {
-    admin: String,
-    name: String,
-    url: String,
-}
-
-impl ScratchDb {
-    async fn create(base: &str) -> ScratchDb {
-        let (prefix, _) = base.rsplit_once('/').expect("database URL with a path");
-        let name = format!("h5i_pay_recover_{}_{}", std::process::id(), fresh_tenant());
-        let (c, conn) = tokio_postgres::connect(base, tokio_postgres::NoTls).await.unwrap();
-        tokio::spawn(conn);
-        c.batch_execute(&format!("CREATE DATABASE {name}")).await.unwrap();
-        ScratchDb { admin: base.to_string(), url: format!("{prefix}/{name}"), name }
-    }
-}
-
-impl Drop for ScratchDb {
-    fn drop(&mut self) {
-        let (admin, name) = (self.admin.clone(), self.name.clone());
-        // Best effort, on a thread of its own (Drop cannot await).
-        let _ = std::thread::spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
-            rt.block_on(async {
-                if let Ok((c, conn)) = tokio_postgres::connect(&admin, tokio_postgres::NoTls).await {
-                    tokio::spawn(conn);
-                    let _ = c.batch_execute(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)")).await;
-                }
-            })
-        })
-        .join();
-    }
-}
+use h5i_pay_tests::ScratchDb;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn scheduled_recovery_covers_every_tenant() {

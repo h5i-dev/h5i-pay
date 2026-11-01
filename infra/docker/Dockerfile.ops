@@ -1,0 +1,37 @@
+# syntax=docker/dockerfile:1.7
+# The nightly reconciliation's database steps (export, ingest): the
+# production h5i-pay binary (no Mock PSP) plus the AWS CLI for S3, as
+# scheduled ECS tasks (infra/terraform/reconcile.tf). Not the API service:
+# that image stays shell-less. Build from the repository root:
+#   docker build -f infra/docker/Dockerfile.ops -t h5i-pay/ops .
+FROM rust:1.99-bookworm AS build
+WORKDIR /src
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/src/target \
+    cargo build --release --locked -p payment-api --bin h5i-pay \
+ && cp target/release/h5i-pay /h5i-pay
+
+# AWS CLI v2, pinned as in Dockerfile.worker (version, SHA-256 after a PGP
+# check against the AWS CLI Team key FB5D B77F D5C1 18B8 0511 ADA8 A631 0ACC 4672 475C).
+FROM debian:bookworm-slim AS awscli
+ARG AWSCLI_VERSION=2.39.0
+ARG AWSCLI_SHA256=6c89ce7ed7bc0a2520e2bc3eeedfea4e2eb2e7da2836860c9471871408404036
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip && rm -rf /var/lib/apt/lists/* \
+ && curl -sSfL --proto '=https' "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip" -o /tmp/awscli.zip \
+ && echo "${AWSCLI_SHA256}  /tmp/awscli.zip" | sha256sum -c - \
+ && unzip -q /tmp/awscli.zip -d /tmp \
+ && /tmp/aws/install --install-dir /opt/aws-cli --bin-dir /opt/aws-cli-bin
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* \
+ && useradd --uid 10002 --create-home ops
+COPY --from=awscli /opt/aws-cli /opt/aws-cli
+RUN ln -s /opt/aws-cli/v2/current/bin/aws /usr/local/bin/aws && aws --version
+COPY --from=build /h5i-pay /usr/local/bin/h5i-pay
+COPY infra/docker/rds-global-bundle.pem /etc/h5i-pay/rds-global-bundle.pem
+COPY infra/docker/ops-entrypoint.sh /usr/local/bin/ops-entrypoint.sh
+USER 10002
+WORKDIR /home/ops
+ENTRYPOINT ["/usr/local/bin/ops-entrypoint.sh"]

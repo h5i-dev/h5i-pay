@@ -25,6 +25,7 @@ theorems = [
   "payment_domain.Schema.decode_load",
   "payment_domain.Frame.frame",
   "payment_domain.Frame.load_for_sound",
+  "payment_domain.Commands.view_writes",
 ]
 
 # Bugs the proofs must reject (`h5i app mutate crates/payment-domain`).
@@ -68,3 +69,8 @@ new = "PspResult::RefundSucceeded { refund: _ } => {}"
 name = "refunds_plan_reads_by_refund_id"
 old = "out.push(rd_where(T_REFUNDS, p_eq(REFUND_PAYMENT, v_int(*payment))));"
 new = "out.push(rd_where(T_REFUNDS, p_eq(REFUND_ID, v_int(*payment))));"
+
+[[mutant]]
+name = "view_plan_misses_reference"
+old = "            out.push(rd_where(T_REFS, p_eq(REF_PAYMENT, v_int(*id))));\n        }\n    }\n    Some(out)"
+new = "        }\n    }\n    Some(out)"

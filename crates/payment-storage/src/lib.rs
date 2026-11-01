@@ -131,8 +131,8 @@ pub fn needs_ledger_sync(p: &payment_domain::Payment, refunds: &[payment_domain:
     })
 }
 
-/// A read-only connection outside the engines (cross-tenant queries).
-async fn connect_ro(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Client, tokio::task::JoinHandle<()>), DbError> {
+/// A connection outside the engines (cross-tenant reads, the `ops` schema).
+async fn connect_direct(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Client, tokio::task::JoinHandle<()>), DbError> {
     let mut cfg: tokio_postgres::Config = url.parse()?;
     match tls {
         DbTls::Off => {
@@ -192,7 +192,7 @@ pub async fn recovery_work(url: &str, tls: &DbTls) -> Result<Vec<RecoveryWork>, 
         release = has(POST_REFUND_RELEASE, "r.id", "r.tenant_id"),
     );
     let _ = REFUND_PENDING;
-    let (mut client, conn) = connect_ro(url, tls).await?;
+    let (mut client, conn) = connect_direct(url, tls).await?;
     let tx = client.build_transaction().read_only(true).start().await?;
     let rows = match tx.query(sql.as_str(), &[]).await {
         Ok(r) => r,
@@ -224,4 +224,181 @@ pub async fn recovery_work(url: &str, tls: &DbTls) -> Result<Vec<RecoveryWork>, 
 /// Tenants with unfinished work ([`recovery_work`]).
 pub async fn tenants_to_recover(url: &str, tls: &DbTls) -> Result<Vec<u64>, DbError> {
     Ok(recovery_work(url, tls).await?.into_iter().map(|w| w.tenant).collect())
+}
+
+/// Tenants with at least one payment (the nightly export's tenants). Like
+/// [`recovery_work`], a read-only cross-tenant query outside the kernels.
+pub async fn tenants_with_payments(url: &str, tls: &DbTls) -> Result<Vec<u64>, DbError> {
+    let sql = format!("SELECT DISTINCT tenant_id FROM {PAYMENTS_SCHEMA}.payments ORDER BY 1");
+    let (mut client, conn) = connect_direct(url, tls).await?;
+    let tx = client.build_transaction().read_only(true).start().await?;
+    let rows = match tx.query(sql.as_str(), &[]).await {
+        Ok(r) => r,
+        Err(e) if e.code() == Some(&tokio_postgres::error::SqlState::UNDEFINED_TABLE) => Vec::new(),
+        Err(e) => return Err(e.into()),
+    };
+    drop(tx);
+    drop(client);
+    let _ = conn.await;
+    rows.iter()
+        .map(|r| {
+            let t: i64 = r.get(0);
+            u64::try_from(t).map_err(|_| DbError::Decode(format!("tenant id {t} out of range")))
+        })
+        .collect()
+}
+
+/// Operator-facing records that are not kernel state: ingested batch
+/// reconciliation reports (schema `ops`). Nothing here moves money or is
+/// read by a kernel; corrections are still ledger transfers by an operator.
+pub mod ops {
+    use super::{connect_direct, DbTls};
+    use h5i_app_pg::DbError;
+
+    pub const SCHEMA: &str = "ops";
+
+    const DDL: &str = "CREATE SCHEMA IF NOT EXISTS ops;
+CREATE TABLE IF NOT EXISTS ops.reconciliation_reports (
+  tenant_id BIGINT NOT NULL,
+  run TEXT NOT NULL,
+  engine TEXT NOT NULL,
+  ingested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  internal_rows BIGINT NOT NULL,
+  external_rows BIGINT NOT NULL,
+  exceptions BIGINT NOT NULL,
+  counts TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, run)
+);
+CREATE TABLE IF NOT EXISTS ops.reconciliation_exceptions (
+  tenant_id BIGINT NOT NULL,
+  run TEXT NOT NULL,
+  n INTEGER NOT NULL,
+  side TEXT NOT NULL,
+  code TEXT NOT NULL,
+  key BIGINT NOT NULL,
+  amount BIGINT NOT NULL,
+  PRIMARY KEY (tenant_id, run, n)
+)";
+
+    /// One exception row of a worker report.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Exception {
+        pub side: String,
+        pub code: String,
+        pub key: u64,
+        pub amount: u64,
+    }
+
+    /// A worker report (`h5i-pay-batch reconcile`'s JSON), as ingested.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Report {
+        pub tenant: u64,
+        pub run: String,
+        pub engine: String,
+        pub internal_rows: u64,
+        pub external_rows: u64,
+        /// The two per-code count objects, as the worker wrote them.
+        pub counts: String,
+        /// Every exception the report lists.
+        pub exceptions_total: u64,
+        /// The exceptions (on read, at most the requested number).
+        pub exceptions: Vec<Exception>,
+    }
+
+    async fn connect(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Client, tokio::task::JoinHandle<()>), DbError> {
+        connect_direct(url, tls).await
+    }
+
+    pub async fn install(url: &str, tls: &DbTls) -> Result<(), DbError> {
+        let (c, conn) = connect(url, tls).await?;
+        c.batch_execute(DDL).await?;
+        drop(c);
+        let _ = conn.await;
+        Ok(())
+    }
+
+    /// Store a report once: ingesting the same `(tenant, run)` again changes
+    /// nothing (`false`).
+    pub async fn ingest(url: &str, tls: &DbTls, r: &Report) -> Result<bool, DbError> {
+        let (mut c, conn) = connect(url, tls).await?;
+        let tx = c.transaction().await?;
+        let tenant = i64::try_from(r.tenant).map_err(|_| DbError::Decode("tenant id out of range".into()))?;
+        let n = tx
+            .execute(
+                "INSERT INTO ops.reconciliation_reports (tenant_id, run, engine, internal_rows, external_rows, exceptions, counts) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (tenant_id, run) DO NOTHING",
+                &[&tenant, &r.run, &r.engine, &(r.internal_rows as i64), &(r.external_rows as i64), &(r.exceptions_total as i64), &r.counts],
+            )
+            .await?;
+        if n == 1 {
+            let stmt = tx
+                .prepare("INSERT INTO ops.reconciliation_exceptions (tenant_id, run, n, side, code, key, amount) VALUES ($1, $2, $3, $4, $5, $6, $7)")
+                .await?;
+            for (i, e) in r.exceptions.iter().enumerate() {
+                tx.execute(&stmt, &[&tenant, &r.run, &(i as i32), &e.side, &e.code, &(e.key as i64), &(e.amount as i64)]).await?;
+            }
+        }
+        tx.commit().await?;
+        drop(c);
+        let _ = conn.await;
+        Ok(n == 1)
+    }
+
+    /// The tenant's report for `run`, or its latest; with at most `limit`
+    /// exceptions.
+    pub async fn report(url: &str, tls: &DbTls, tenant: u64, run: Option<&str>, limit: i64) -> Result<Option<Report>, DbError> {
+        let (c, conn) = connect(url, tls).await?;
+        let t = tenant as i64;
+        let row = match run {
+            Some(run) => {
+                c.query_opt(
+                    "SELECT run, engine, internal_rows, external_rows, counts, exceptions FROM ops.reconciliation_reports WHERE tenant_id = $1 AND run = $2",
+                    &[&t, &run],
+                )
+                .await
+            }
+            None => {
+                c.query_opt(
+                    "SELECT run, engine, internal_rows, external_rows, counts, exceptions FROM ops.reconciliation_reports WHERE tenant_id = $1 \
+                     ORDER BY ingested_at DESC, run DESC LIMIT 1",
+                    &[&t],
+                )
+                .await
+            }
+        };
+        let row = match row {
+            Ok(r) => r,
+            Err(e) if e.code() == Some(&tokio_postgres::error::SqlState::UNDEFINED_TABLE) => None,
+            Err(e) => return Err(e.into()),
+        };
+        let Some(row) = row else {
+            drop(c);
+            let _ = conn.await;
+            return Ok(None);
+        };
+        let run: String = row.get(0);
+        let ex = c
+            .query(
+                "SELECT side, code, key, amount FROM ops.reconciliation_exceptions WHERE tenant_id = $1 AND run = $2 ORDER BY n LIMIT $3",
+                &[&t, &run, &limit],
+            )
+            .await?;
+        let exceptions = ex
+            .iter()
+            .map(|e| Exception { side: e.get(0), code: e.get(1), key: e.get::<_, i64>(2) as u64, amount: e.get::<_, i64>(3) as u64 })
+            .collect();
+        let out = Report {
+            tenant,
+            run,
+            engine: row.get(1),
+            internal_rows: row.get::<_, i64>(2) as u64,
+            external_rows: row.get::<_, i64>(3) as u64,
+            counts: row.get(4),
+            exceptions_total: row.get::<_, i64>(5) as u64,
+            exceptions,
+        };
+        drop(c);
+        let _ = conn.await;
+        Ok(Some(out))
+    }
 }

@@ -27,6 +27,8 @@ payment-domain.workspace = true
 payment-storage.workspace = true
 payment-connectors.workspace = true
 payment-reconcile.workspace = true
+# File formats of the batch worker (export / ingest).
+payment-batch.workspace = true
 axum.workspace = true
 tokio.workspace = true
 serde.workspace = true

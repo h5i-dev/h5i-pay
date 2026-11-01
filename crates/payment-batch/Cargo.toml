@@ -11,3 +11,4 @@ h5i-app-gpu.workspace = true
 payment-domain.workspace = true
 payment-reconcile.workspace = true
 rayon.workspace = true
+serde_json.workspace = true

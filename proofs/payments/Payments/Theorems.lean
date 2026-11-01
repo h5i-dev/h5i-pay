@@ -219,6 +219,7 @@ theorem effect (a : Principal) (s : Snapshot) (c : Command) ws r
   | GetRefund id => exact nothing (get_refund_writes a s id ws r h)
   | Refunds id => exact nothing (refunds_of_writes a s id ws r h)
   | GetRef id => exact nothing (get_ref_writes a s id ws r h)
+  | View id => exact nothing (view_writes a s id ws r h)
 
 theorem init_inv : Inv init := ⟨by simp [init], by simp [init], by simp [init]⟩
 

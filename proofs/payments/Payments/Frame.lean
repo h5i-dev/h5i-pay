@@ -161,15 +161,15 @@ theorem foldl_refundsStep (id : U64) (l acc : List Refund) :
     split <;> simp_all
 
 theorem refunds_loop_spec (v : alloc.vec.Vec Refund) (id : U64) :
-    refunds_of_loop v id (alloc.vec.Vec.new Refund) 0#usize ⦃ out => out.val = v.val.filter (fun x => decide (x.payment = id)) ⦄ := by
-  unfold refunds_of_loop
+    refunds_for v id ⦃ out => out.val = v.val.filter (fun x => decide (x.payment = id)) ⦄ := by
+  unfold refunds_for refunds_for_loop
   have h := loop_fold v.val (fun w : alloc.vec.Vec Refund => w.val) (refundsStep id)
     (fun w k => w.length + (v.length - k) ≤ Usize.max)
-    (fun x => refunds_of_loop.body v id x.1 x.2) ?_ (alloc.vec.Vec.new Refund) 0#usize (by simp)
+    (fun x => refunds_for_loop.body v id x.1 x.2) ?_ (alloc.vec.Vec.new Refund) 0#usize (by simp)
     (by simp [alloc.vec.Vec.length])
   · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_refundsStep]; simp)
   · intro w j hj hw
-    unfold refunds_of_loop.body
+    unfold refunds_for_loop.body
     simp only [alloc.vec.Vec.length] at hj hw
     simp only [alloc.vec.Vec.len]
     split
@@ -195,24 +195,29 @@ theorem refunds_loop_spec (v : alloc.vec.Vec Refund) (id : U64) :
       simp only [WP.spec_ok, FoldStep, and_true]
       scalar_tac
 
+theorem refunds_for_congr (v v' : alloc.vec.Vec Refund) (id : U64)
+    (hr : v'.val.filter (fun x => decide (x.payment = id)) = v.val.filter (fun x => decide (x.payment = id))) :
+    refunds_for v' id = refunds_for v id := by
+  obtain ⟨o, ho⟩ := ok_of (refunds_loop_spec v id)
+  obtain ⟨o', ho'⟩ := ok_of (refunds_loop_spec v' id)
+  have e := post_of_ok (refunds_loop_spec v id) ho
+  have e' := post_of_ok (refunds_loop_spec v' id) ho'
+  have : o' = o := alloc.vec.Vec.ext _ _ (by rw [e, e', hr])
+  rw [ho, ho', this]
+
 theorem refunds_of_congr (a : Principal) (s s' : Snapshot) (id : U64) (h : AgreeP s s' id)
     (hr : s'.refunds.val.filter (fun x => decide (x.payment = id)) = s.refunds.val.filter (fun x => decide (x.payment = id))) :
     refunds_of a s' id = refunds_of a s id := by
   simp only [AgreeP] at h
   unfold refunds_of
-  simp only [find_payment_eq, h]
-  congr 1; funext o
-  split
-  · rfl
-  · simp only [may_manage_eq, bind_ok]
-    split
-    · obtain ⟨v, hv⟩ := ok_of (refunds_loop_spec s.refunds id)
-      obtain ⟨v', hv'⟩ := ok_of (refunds_loop_spec s'.refunds id)
-      have e := post_of_ok (refunds_loop_spec s.refunds id) hv
-      have e' := post_of_ok (refunds_loop_spec s'.refunds id) hv'
-      have : v' = v := alloc.vec.Vec.ext _ _ (by rw [e, e', hr])
-      rw [hv, hv', this]
-    · rfl
+  simp only [find_payment_eq, h, refunds_for_congr s.refunds s'.refunds id hr]
+
+theorem view_congr (a : Principal) (s s' : Snapshot) (id : U64) (h : AgreeP s s' id) (hf : AgreeF s s' id)
+    (hr : s'.refunds.val.filter (fun x => decide (x.payment = id)) = s.refunds.val.filter (fun x => decide (x.payment = id))) :
+    view a s' id = view a s id := by
+  simp only [AgreeP, AgreeF] at h hf
+  unfold view
+  simp only [find_payment_eq, find_ref_eq, h, hf, refunds_for_congr s.refunds s'.refunds id hr]
 
 def visibleP (actor : Principal) (x : Payment) : Bool := actor.operator || decide (x.merchant = actor.user)
 
@@ -420,6 +425,14 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
   | GetRef id =>
     simp only [readsA, Option.some.injEq] at hp; subst hp
     exact get_ref_congr a s _ id (agreeP_load _ s id (by simp)) (agreeF_load _ s id (by simp))
+  | View id =>
+    simp only [readsA, Option.some.injEq] at hp; subst hp
+    simp only [transition]
+    apply view_congr a s _ id (agreeP_load _ s id (by simp)) (agreeF_load _ s id (by simp))
+    rw [Snapshot.load_refunds, pickRows_filter _ _ _ _ _ ⟨1, eqU 1 id, {}⟩ (by simp) rfl]
+    apply filter_slice
+    intro x _ hx
+    simp_all [eqU, Pred.holds, Refund.row]
 
 /-- **The plan the server runs.** For every command, `transition` on what
 loading the extracted `reads` plan decodes to equals `transition` on the

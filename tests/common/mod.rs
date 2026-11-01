@@ -77,3 +77,39 @@ pub mod ledger {
         i128::from(a.credits) - i128::from(a.debits)
     }
 }
+
+/// A new empty database next to the test database; dropped by `Drop`.
+pub struct ScratchDb {
+    admin: String,
+    name: String,
+    pub url: String,
+}
+
+impl ScratchDb {
+    pub async fn create(base: &str) -> ScratchDb {
+        let (prefix, _) = base.rsplit_once('/').expect("database URL with a path");
+        let name = format!("h5i_pay_scratch_{}_{}", std::process::id(), fresh_tenant());
+        let (c, conn) = tokio_postgres::connect(base, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(conn);
+        c.batch_execute(&format!("CREATE DATABASE {name}")).await.unwrap();
+        ScratchDb { admin: base.to_string(), url: format!("{prefix}/{name}"), name }
+    }
+}
+
+impl Drop for ScratchDb {
+    fn drop(&mut self) {
+        let (admin, name) = (self.admin.clone(), self.name.clone());
+        // Best effort, on a thread of its own (Drop cannot await).
+        let _ = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            rt.block_on(async {
+                if let Ok((c, conn)) = tokio_postgres::connect(&admin, tokio_postgres::NoTls).await {
+                    tokio::spawn(conn);
+                    let _ = c.batch_execute(&format!("DROP DATABASE IF EXISTS {name} WITH (FORCE)")).await;
+                }
+            })
+        })
+        .join();
+    }
+}
+

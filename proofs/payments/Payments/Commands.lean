@@ -354,4 +354,18 @@ theorem refunds_of_writes (a : Principal) (s : Snapshot) (id : U64) ws r
       simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
     · simp at h
 
+theorem view_writes (a : Principal) (s : Snapshot) (id : U64) ws r
+    (h : view a s id = ok (.Ok (ws, r))) : ws.val = [] := by
+  unfold view at h
+  obtain ⟨o, -, h⟩ := bind_tc_eq_ok.1 h
+  split at h
+  · simp at h
+  · obtain ⟨b, -, h⟩ := bind_tc_eq_ok.1 h
+    split at h
+    · obtain ⟨o1, -, h⟩ := bind_tc_eq_ok.1 h
+      obtain ⟨rf, -, h⟩ := bind_tc_eq_ok.1 h
+      obtain ⟨out, -, h⟩ := bind_tc_eq_ok.1 h
+      simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
+    · simp at h
+
 end payment_domain.Commands

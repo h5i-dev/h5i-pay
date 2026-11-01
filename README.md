@@ -134,4 +134,5 @@ pay $MERCHANT /v1/payments '{"amount":1200,"currency":"jpy","capture":"manual","
 pay $MERCHANT /v1/payments/0/capture '{"amount":1000}'
 pay $MERCHANT /v1/payments/0/refunds '{"amount":300}'
 pay $OP /v1/reconcile '{}'
+curl -s -H "Authorization: Bearer $OP" localhost:8080/v1/reconcile/reports   # latest nightly batch report (after h5i-pay export / worker / ingest)
 ```

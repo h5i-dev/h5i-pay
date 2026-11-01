@@ -303,10 +303,10 @@ async fn payments_load_for_matches_the_whole_tenant() {
             10 => d::Command::List,
             11 => d::Command::GetRefund { id: id(&mut rng) },
             _ => {
-                if rng.below(2) == 0 {
-                    d::Command::Refunds { payment: id(&mut rng) }
-                } else {
-                    d::Command::GetRef { payment: id(&mut rng) }
+                match rng.below(3) {
+                    0 => d::Command::Refunds { payment: id(&mut rng) },
+                    1 => d::Command::GetRef { payment: id(&mut rng) },
+                    _ => d::Command::View { id: id(&mut rng) },
                 }
             }
         };

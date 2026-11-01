@@ -234,6 +234,16 @@ jobs:
           tags: ${{ steps.ecr.outputs.registry }}/h5i-pay/worker:${{ github.sha }}
           provenance: true
           sbom: true
+      # Export/ingest of the nightly reconciliation (infra/terraform/reconcile.tf).
+      - name: Ops image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/Dockerfile.ops
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/h5i-pay/ops:${{ github.sha }}
+          provenance: true
+          sbom: true
 
   deploy-test:
     needs: images

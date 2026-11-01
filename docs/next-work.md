@@ -53,7 +53,7 @@ on user tokens) and edits in `payment-api/src/{lib,main,routes}.rs` and
    call per payment. Select only unfinished work (by status/index), bound
    PSP concurrency, stop re-syncing settled payments (or detect that
    quickly), and process tenants concurrently with a limit.
-3. Online flow: about ten kernel commands per payment (Create,
+3. [x] **Done** (PROGRESS.md "B3"). Online flow: about ten kernel commands per payment (Create,
    BeginAuthorize, Get, PSP, AttachRef, Record, sync_ledger, then Get /
    Refunds / GetRef for the view), each a SERIALIZABLE transaction with a
    whole-tenant load. Reduce round trips (combined commands/replies where
@@ -99,6 +99,10 @@ Aeneas extracts.
    base, and re-run the benchmarks.
 
 ## C. Connect the batch path to the system
+
+- [x] **Done** (PROGRESS.md "C"): export, nightly Step Functions run,
+  ingest into `ops` + `GET /v1/reconcile/reports`; bulk payout screening
+  through `run_policy`; `/v1/reconcile` stays CPU by decision.
 
 - Nothing produces the worker's `internal/*.csv`, nothing submits Batch
   jobs (runbook only), and nothing reads the JSON report back. Add the

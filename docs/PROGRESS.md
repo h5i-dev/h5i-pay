@@ -178,6 +178,63 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### C: the batch path connected to the system
+
+- `h5i-pay export <dir>` (`payment_api::batch::export`): for every tenant
+  with payments (`payment_storage::tenants_with_payments`, a read-only
+  cross-tenant query), `internal/<tenant>.csv` from the payment kernel's
+  snapshot (the records `POST /v1/reconcile` compares), `external/<tenant>.csv`
+  from the PSP settlement report, and `manifest.json`; a tenant whose PSP
+  report fails is listed and skipped (exit 1).
+- The worker: `batch-entrypoint.sh reconcile-run <run>` reconciles every
+  pair of a run; `h5i-pay-batch` file formats moved to
+  `payment_batch::files` (shared with export/ingest and the tests).
+- `h5i-pay ingest <run> <dir>`: reports and exceptions into a new `ops`
+  schema (`payment_storage::ops`; not kernel state, read by no kernel),
+  idempotent per (tenant, run). `GET /v1/reconcile/reports[?run=&limit=]`
+  shows a tenant's operators their latest (or a given) report, 403 for
+  users, 404 for another tenant. Corrections stay manual ledger transfers.
+- AWS (`infra/terraform/reconcile.tf`): ECR repo and image `ops`
+  (`Dockerfile.ops`: production `h5i-pay` + AWS CLI, `ops-entrypoint.sh`),
+  ECS task definition `ops` (database and PSP secrets, no token keys; task
+  role: write `settlements/runs/*`, read `batch/runs/*`), Batch job
+  definitions `reconcile-run-{gpu,cpu}`, a Step Functions state machine
+  Export → WorkerGpu (Catch → WorkerCpu) → Ingest with the execution name
+  as run id, a nightly EventBridge schedule, and an alarm on failed
+  executions. CI pushes the ops image. `terraform fmt`/`validate` pass; not
+  applied (no AWS credentials).
+- Bulk payout screening: `h5i-pay-batch policy <requests.csv> <policy.json>
+  <decisions.csv>` runs `run_policy` (the verified `policy::check`; GPU
+  through the nvvm PTX, or CPU) and is in the Batch entrypoint. 300k
+  requests: GPU, single and multithread decisions byte-identical.
+  Measured there: the GPU took 209 ms of which most is the CUDA context and
+  JIT that a one-shot job pays, the multithread CPU 2.5 ms. The worker's
+  default `--min-gpu-rows` is therefore 2,000,000 (was 200,000).
+- `POST /v1/reconcile` stays CPU, by decision (one tenant on demand; the
+  API image has no CUDA; a per-request context costs more than the join).
+- Test `integration::batch_job`: two tenants, a tampered settlement line;
+  export → worker code → ingest (twice: second is a no-op) → the API shows
+  tenant a one `amount_mismatch`, tenant b none, 403/404 as above.
+
+### B3: fewer kernel round trips per payment
+
+- Payment kernel: `Command::View` returns the payment, its refunds and its
+  PSP reference in one command (`Reply::View`), with its read plan
+  (payment by id, refunds by payment, reference by payment), and
+  `BeginAuthorize` replies with the payment it moved to `PROCESSING`
+  (`Reply::Payment`) instead of only the status. Proofs re-checked:
+  `Commands.view_writes`, `Frame.view_congr`, the `View` case of
+  `Frame.frame`, `Plan.reads_abs`; gate 228 theorems / 8 modules; mutate
+  9/9 (new: a `View` plan missing the reference).
+- Orchestrator: `view` is one command (was Get + Refunds + GetRef);
+  `authorize` uses BeginAuthorize's reply (was a second Get); `refund` and
+  `recover_refunds` read with one `View`; `sync_ledger` reads with one
+  `View` and posts the capture and refund legs as linked `Command::Batch`es
+  of at most 64 transfers (was one command per object), falling back to
+  per-object posts only when a batch with a possibly refused release fails.
+  Kernel transactions per automatic-capture `POST /v1/payments` with a
+  warm account cache: 7 (measured in B4, with the "before" numbers).
+
 ### A: GPU kernels compiled from the Rust the CPU and the proofs use
 
 - Toolchain (A1) works natively on this Amazon Linux 2023 host, no

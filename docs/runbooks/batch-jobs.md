@@ -3,9 +3,24 @@
 Queues: `h5i-pay-<env>-batch-gpu` (EC2 GPU, scales from zero) and
 `h5i-pay-<env>-batch-cpu` (Fargate). Same image; the worker picks the GPU
 only when one answers and the batch has at least `--min-gpu-rows`
-(default 200,000; `docs/benchmarks.md` explains the threshold).
+(default 2,000,000: each job pays the CUDA context and JIT once;
+`docs/benchmarks.md` explains the threshold).
 
-Submit:
+Nightly: the `h5i-pay-<env>-reconcile` Step Functions state machine
+(`infra/terraform/reconcile.tf`) runs export → `reconcile-run` on the GPU
+queue (CPU queue if that fails) → ingest. The execution's name is the
+run id. To re-run a night, start a new execution
+(`aws stepfunctions start-execution --state-machine-arn … --name <new-id>`);
+ingesting is idempotent per (tenant, run).
+Results: `GET $API/v1/reconcile/reports[?run=<id>]` (operator token).
+
+Bulk payout screening (the verified `policy::check`, GPU or CPU):
+`h5i-pay-batch policy <requests.csv> <policy.json> <decisions.csv>`, or on
+Batch the entrypoint's `policy <requests-key> <policy-key>`; decisions go
+to `s3://<batch-bucket>/payouts/<job>.csv`. Approved rows are candidates;
+the payouts are still posted as ledger transfers by an operator.
+
+Submit one pair by hand:
 
 ```sh
 aws batch submit-job --job-name recon-$(date +%F) \

@@ -107,18 +107,15 @@ impl Orchestrator {
         self.pay(actor, cmd).await?.map_err(OrchError::Payment)
     }
 
-    /// The payment as `actor` may see it.
+    /// The payment as `actor` may see it: one `View` command (payment,
+    /// refunds and PSP reference together).
     pub async fn view(&self, actor: &d::Principal, id: u64) -> Result<View> {
-        let payment = match self.pay_ok(actor, d::Command::Get { id }).await? {
-            d::Reply::Payment(p) => p,
-            r => unreachable!("get replied {r:?}"),
-        };
-        let refunds = match self.pay_ok(actor, d::Command::Refunds { payment: id }).await? {
-            d::Reply::Refunds(r) => r,
-            r => unreachable!("refunds replied {r:?}"),
-        };
-        let reference = self.reference(actor.org, id).await?;
-        Ok(View { payment, refunds, reference, pending_psp: false })
+        match self.pay_ok(actor, d::Command::View { id }).await? {
+            d::Reply::View(payment, refunds, reference) => {
+                Ok(View { payment, refunds, reference: reference.map(|b| String::from_utf8_lossy(&b).into_owned()), pending_psp: false })
+            }
+            r => unreachable!("view replied {r:?}"),
+        }
     }
 
     async fn reference(&self, tenant: u64, id: u64) -> Result<Option<String>> {
@@ -195,13 +192,15 @@ impl Orchestrator {
     /// Move a payment to `PROCESSING` and ask the PSP. Returns whether the
     /// outcome is still unknown.
     pub async fn authorize(&self, tenant: u64, id: u64, payment_method: &str) -> Result<bool> {
-        match self.pay(&op_p(tenant), d::Command::BeginAuthorize { id }).await? {
+        let p = match self.pay(&op_p(tenant), d::Command::BeginAuthorize { id }).await? {
+            // The kernel replies with the payment it moved to PROCESSING.
+            Ok(d::Reply::Payment(p)) => p,
+            Ok(r) => unreachable!("begin_authorize replied {r:?}"),
             // Already past CREATED: a retry of this request; ask the PSP again,
             // under the same idempotency key, only if still processing.
-            Ok(_) | Err(d::Error::InvalidTransition) => {}
+            Err(d::Error::InvalidTransition) => self.payment(tenant, id).await?,
             Err(e) => return Err(OrchError::Payment(e)),
-        }
-        let p = self.payment(tenant, id).await?;
+        };
         if p.status != d::PROCESSING {
             return Ok(false);
         }
@@ -231,13 +230,6 @@ impl Orchestrator {
         match self.pay_ok(&op_p(tenant), d::Command::Get { id }).await? {
             d::Reply::Payment(p) => Ok(p),
             r => unreachable!("get replied {r:?}"),
-        }
-    }
-
-    async fn refunds(&self, tenant: u64, id: u64) -> Result<Vec<d::Refund>> {
-        match self.pay_ok(&op_p(tenant), d::Command::Refunds { payment: id }).await? {
-            d::Reply::Refunds(r) => Ok(r),
-            r => unreachable!("refunds replied {r:?}"),
         }
     }
 
@@ -300,8 +292,9 @@ impl Orchestrator {
             d::Reply::Created(rid) => rid,
             r => unreachable!("refund replied {r:?}"),
         };
-        let p = self.payment(tenant, id).await?;
-        let refund = self.refunds(tenant, id).await?.into_iter().find(|r| r.id == rid).expect("the refund just created");
+        let v = self.view(&op_p(tenant), id).await?;
+        let p = v.payment;
+        let refund = *v.refunds.iter().find(|r| r.id == rid).expect("the refund just created");
         if refund.status == d::REFUND_PENDING {
             // The ledger reservation decides whether the merchant can pay it back.
             match self.reserve(tenant, &p, &refund).await? {
@@ -312,7 +305,7 @@ impl Orchestrator {
                 }
                 Err(e) => return Err(OrchError::Ledger(e)),
             }
-            let reference = self.reference(tenant, id).await?.ok_or(OrchError::Payment(d::Error::InvalidTransition))?;
+            let reference = v.reference.clone().ok_or(OrchError::Payment(d::Error::InvalidTransition))?;
             let key = PaymentKey { tenant, payment: id };
             match self.psp.refund(key, &reference, rid, amount, &psp::idempotency_key(tenant, "refund", rid, "refund")).await {
                 Ok(RefundOutcome::Succeeded) => self.record_refund(tenant, id, rid, true).await?,
@@ -418,9 +411,13 @@ impl Orchestrator {
     }
 
     /// Post every ledger transfer the payment's state implies. Idempotent:
-    /// postings that exist are replays.
+    /// postings that exist are replays. One `View` reads the payment and
+    /// its refunds; the legs go to the ledger as linked batches of at most
+    /// `MAX_PLANNED_BATCH` transfers (one command for a capture with up to
+    /// 31 refunds).
     pub async fn sync_ledger(&self, tenant: u64, id: u64) -> Result<()> {
-        let p = self.payment(tenant, id).await?;
+        let v = self.view(&op_p(tenant), id).await?;
+        let p = v.payment;
         if p.status != d::CAPTURED {
             return Ok(());
         }
@@ -428,8 +425,11 @@ impl Orchestrator {
         let payable = self.account(tenant, p.merchant, p.currency, MERCHANT_PAYABLE, true).await?;
         let holding = self.account(tenant, 0, p.currency, REFUND_HOLDING, true).await?;
         let capture = l::TransferReq { id: system_transfer_id(POST_CAPTURE, p.id), debit: clearing, credit: payable, amount: p.captured, code: POST_CAPTURE };
-        self.post(tenant, vec![capture]).await?.map_err(OrchError::Ledger)?;
-        for r in self.refunds(tenant, id).await? {
+        // Each group: the legs of one object (the capture, or one refund),
+        // and whether a refusal is expected (a failed refund whose
+        // reservation never happened has nothing to release).
+        let mut groups: Vec<(Vec<l::TransferReq>, Option<u64>)> = vec![(vec![capture], None)];
+        for r in &v.refunds {
             let reserve = l::TransferReq { id: system_transfer_id(POST_REFUND_RESERVE, r.id), debit: payable, credit: holding, amount: r.amount, code: POST_REFUND_RESERVE };
             let legs = match r.status {
                 d::REFUND_SUCCEEDED => vec![
@@ -443,13 +443,37 @@ impl Orchestrator {
                 ],
                 _ => vec![reserve],
             };
+            groups.push((legs, (r.status != d::REFUND_SUCCEEDED).then_some(r.id)));
+        }
+        // Whole groups per batch, so a batch never splits one object's legs.
+        let mut batches: Vec<Vec<(Vec<l::TransferReq>, Option<u64>)>> = vec![Vec::new()];
+        for g in groups {
+            let size: usize = batches.last().expect("one batch").iter().map(|(legs, _)| legs.len()).sum();
+            if size + g.0.len() > l::MAX_PLANNED_BATCH {
+                batches.push(Vec::new());
+            }
+            batches.last_mut().expect("one batch").push(g);
+        }
+        for batch in batches {
+            let legs: Vec<l::TransferReq> = batch.iter().flat_map(|(legs, _)| legs.iter().copied()).collect();
             match self.post(tenant, legs).await? {
-                Ok(()) => {}
-                // A failed refund whose reservation could never be made: nothing to release.
-                Err(l::Error::Insufficient) if r.status != d::REFUND_SUCCEEDED => {}
+                Ok(()) => continue,
+                // A batch is all or nothing: if a leg may be refused, post
+                // its groups one by one so the others still go in.
+                Err(l::Error::Insufficient) if batch.iter().any(|(_, may_fail)| may_fail.is_some()) => {}
                 Err(e) => {
-                    tracing::error!(tenant, payment = id, refund = r.id, error = ?e, "ledger posting refused");
+                    tracing::error!(tenant, payment = id, error = ?e, "ledger posting refused");
                     return Err(OrchError::Ledger(e));
+                }
+            }
+            for (legs, may_fail) in batch {
+                match self.post(tenant, legs).await? {
+                    Ok(()) => {}
+                    Err(l::Error::Insufficient) if may_fail.is_some() => {}
+                    Err(e) => {
+                        tracing::error!(tenant, payment = id, refund = ?may_fail, error = ?e, "ledger posting refused");
+                        return Err(OrchError::Ledger(e));
+                    }
                 }
             }
         }
@@ -565,9 +589,10 @@ impl Orchestrator {
 
     /// Ask the PSP about a payment's pending refunds; how many it settled.
     async fn recover_refunds(&self, tenant: u64, id: u64) -> Result<u64> {
-        let Some(reference) = self.reference(tenant, id).await? else { return Ok(0) };
+        let v = self.view(&op_p(tenant), id).await?;
+        let Some(reference) = v.reference else { return Ok(0) };
         let mut n = 0;
-        for r in self.refunds(tenant, id).await? {
+        for r in v.refunds {
             if r.status != d::REFUND_PENDING {
                 continue;
             }
