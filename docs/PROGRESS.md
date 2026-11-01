@@ -178,6 +178,34 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### B4: end-to-end measurements; GPU benchmarks re-run after A
+
+- `benchmarks/src/bin/e2e.rs` seeds a tenant through the orchestrator
+  (1k / 10k / 100k payments) and measures, on a copy, the API's payment,
+  view and refund latency, kernel transactions per request, 8-client
+  throughput, a recovery pass with 5 lost PSP answers and one with nothing
+  to do, and `POST /v1/reconcile`. Built at `e88c83f` for "before" and at
+  `685abb0` for "after". Results and the analysis: `docs/benchmarks.md`
+  "End to end"; raw: `benchmarks/results/e2e-g5.xlarge.json`.
+- Measured (p50): a payment 52.9 → 17.6 ms at 1k payments, 461 → 15.9 ms
+  at 10k, 19.4 ms at 100k (after only); 11 → 7 transactions; `GET` 3 → 1
+  transaction (13.2 → 0.83 ms at 1k, 113 → 0.83 ms at 10k); throughput
+  with 8 clients 18.3 → 164 payments/s at 1k, 2.2 → 158.5 at 10k; a
+  recovery pass 31.8 s → 65 ms at 1k and 29.5 min → 0.62 s at 10k. Not
+  measured: "before" at 100k (extrapolated ~4.6 s per payment).
+- Worker end to end (CSV in page cache): 10M rows per side 6.7 s (GPU) vs
+  9.0 s (CPU), of which ~6.2 s is parsing; at 1M the CPU job is faster, so
+  the default `--min-gpu-rows` became 2,000,000. Export: 0.51 s at 100k
+  payments. S3 transfer not measured.
+- Remaining O(tenant) work found: the recovery query is O(captured
+  payments) in SQL (852 ms at 100k with nothing to fix), and
+  `POST /v1/reconcile` (583 ms at 100k). Both documented, not changed.
+- Synthetic engines re-run after A (`g5.xlarge-nvvm.json`): GPU
+  reconciliation as fast as the old CUDA C, the policy kernel 2× slower
+  (5.0 vs 2.55 ms at 10M; end to end +7%). The host had 2 of 4 vCPUs busy
+  with another workload during this run and the e2e runs; CPU rows of that
+  file are not comparable with M3's, which stay in `g5.xlarge.json`.
+
 ### E (part): SEC-03, SEC-07, SEC-09, recovery interval
 
 - SEC-03 closed: `payment_ledger::transfer` checks `SameAccount`, the debit

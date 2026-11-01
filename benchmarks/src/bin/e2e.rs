@@ -287,7 +287,10 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
     }
     let o = payment_api::orchestrator::Orchestrator::new(api.ledger.clone(), api.payments.clone(), api.psp.clone());
     let mut passes = Vec::new();
-    for _ in 0..2 {
+    // E2E_RECOVERY_PASSES (default 2): a whole-tenant-load build needs about
+    // an hour per pass at 10k payments, so the "before" runs use fewer.
+    let n_passes: usize = std::env::var("E2E_RECOVERY_PASSES").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+    for _ in 0..n_passes {
         let (c0, a0) = (api.psp.1.load(Relaxed), api.attempts());
         let t = Instant::now();
         let r = payment_api::jobs::recover_all(&o, &api.url, &payment_storage::DbTls::Off).await.unwrap();

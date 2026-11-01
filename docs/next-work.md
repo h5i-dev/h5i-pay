@@ -59,7 +59,7 @@ on user tokens) and edits in `payment-api/src/{lib,main,routes}.rs` and
    whole-tenant load. Reduce round trips (combined commands/replies where
    the kernel can return what the view needs), and post ledger transfers
    with `Command::Batch` instead of one command per transfer/refund.
-4. End-to-end benchmarks. `benchmarks/` times only `Backend::run` on
+4. [x] **Done** (PROGRESS.md "B4", `docs/benchmarks.md`). End-to-end benchmarks. `benchmarks/` times only `Backend::run` on
    synthetic in-memory data; the worker's `elapsed_ms` starts after the CSV
    read. Add measurements that include PostgreSQL load, PSP report fetch,
    CSV/S3, compute and output, for the API reconcile path, the worker, and
