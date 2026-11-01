@@ -119,7 +119,9 @@ Aeneas extracts.
 ## E. Unverified or unexecuted
 
 - [x] Recovery interval agrees (5 minutes); SEC-03, SEC-07, SEC-09 closed
-  (PROGRESS.md "E"). What needs credentials: see the last bullet there.
+  (PROGRESS.md "E"). checkov clean (400 passed, 44 justified skips) and
+  in CI; the items needing AWS/Stripe credentials are listed in
+  PROGRESS.md "E (rest)" and remain undone.
 
 - Recovery interval: PROGRESS.md says every 5 minutes, `infra/terraform/recovery.tf`
   defaults to `rate(1 hour)`; make them agree.

@@ -29,6 +29,7 @@ resource "aws_ecr_lifecycle_policy" "repo" {
 # --- Load balancer -------------------------------------------------------
 
 resource "aws_lb" "api" {
+  #checkov:skip=CKV2_AWS_76:AWSManagedRulesKnownBadInputsRuleSet is in the WAF's dynamic rule block
   name                       = local.name
   load_balancer_type         = "application"
   internal                   = false
@@ -44,6 +45,12 @@ resource "aws_lb" "api" {
 
 # ALB access logs need an SSE-S3 bucket the regional ELB account may write.
 resource "aws_s3_bucket" "alb_logs" {
+  #checkov:skip=CKV2_AWS_62:no consumer of S3 events
+  #checkov:skip=CKV_AWS_18:this is the log bucket
+  #checkov:skip=CKV_AWS_144:single-region deployment
+  #checkov:skip=CKV2_AWS_61:ALB logs expire by bucket policy outside Terraform; add a lifecycle rule before production
+  #checkov:skip=CKV_AWS_21:ALB access logs need no versioning
+  #checkov:skip=CKV_AWS_145:ALB log delivery supports SSE-S3 only
   bucket = "${local.name}-alb-logs-${data.aws_caller_identity.current.account_id}"
 }
 
@@ -113,6 +120,7 @@ resource "aws_lb_listener" "http" {
 }
 
 resource "aws_wafv2_web_acl" "api" {
+  #checkov:skip=CKV_AWS_192:AWSManagedRulesKnownBadInputsRuleSet is in the dynamic rule block, which checkov does not expand
   name  = local.name
   scope = "REGIONAL"
   default_action {

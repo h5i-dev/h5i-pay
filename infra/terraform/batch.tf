@@ -17,8 +17,10 @@ resource "aws_launch_template" "gpu" {
   name_prefix = "${local.name}-gpu-"
   image_id    = data.aws_ssm_parameter.ecs_gpu_ami.value
   metadata_options {
-    http_tokens                 = "required"
-    http_put_response_hop_limit = 2
+    http_tokens = "required"
+    # 1: containers cannot reach IMDS (and the instance role); jobs get
+    # their own role from the ECS agent's credential endpoint.
+    http_put_response_hop_limit = 1
   }
   block_device_mappings {
     device_name = "/dev/xvda"

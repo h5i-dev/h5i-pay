@@ -9,6 +9,7 @@
 # (docs/runbooks/psp-incidents.md).
 
 resource "aws_scheduler_schedule" "recover" {
+  #checkov:skip=CKV_AWS_297:the schedule's input is a command override; nothing secret
   name        = "${local.name}-recover"
   group_name  = "default"
   description = "h5i-pay recover: finish payments and refunds left half done (docs/failure-recovery.md)"

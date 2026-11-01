@@ -190,6 +190,9 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false -input=false
       - run: terraform validate
+      # Static checks; accepted findings are `#checkov:skip=ID:reason` in
+      # the resource they concern.
+      - run: pipx run checkov==3.4.0 -d . --framework terraform --compact --quiet
 
   images:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'

@@ -18,6 +18,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_https" {
 }
 
 resource "aws_vpc_security_group_ingress_rule" "alb_http_redirect" {
+  #checkov:skip=CKV_AWS_260:port 80 only answers with a redirect to HTTPS
   security_group_id = aws_security_group.alb.id
   description       = "HTTP, redirected to HTTPS"
   cidr_ipv4         = "0.0.0.0/0"
@@ -28,6 +29,7 @@ resource "aws_vpc_security_group_ingress_rule" "alb_http_redirect" {
 
 resource "aws_vpc_security_group_egress_rule" "alb_to_api" {
   security_group_id            = aws_security_group.alb.id
+  description                  = "ALB to the API tasks"
   referenced_security_group_id = aws_security_group.api.id
   from_port                    = 8080
   to_port                      = 8080
@@ -42,6 +44,7 @@ resource "aws_security_group" "api" {
 
 resource "aws_vpc_security_group_ingress_rule" "api_from_alb" {
   security_group_id            = aws_security_group.api.id
+  description                  = "From the ALB only"
   referenced_security_group_id = aws_security_group.alb.id
   from_port                    = 8080
   to_port                      = 8080
@@ -50,6 +53,7 @@ resource "aws_vpc_security_group_ingress_rule" "api_from_alb" {
 
 resource "aws_vpc_security_group_egress_rule" "api_to_db" {
   security_group_id            = aws_security_group.api.id
+  description                  = "API to PostgreSQL"
   referenced_security_group_id = aws_security_group.db.id
   from_port                    = 5432
   to_port                      = 5432
@@ -59,6 +63,7 @@ resource "aws_vpc_security_group_egress_rule" "api_to_db" {
 # The PSP API and AWS endpoints, over HTTPS only.
 resource "aws_vpc_security_group_egress_rule" "api_https" {
   security_group_id = aws_security_group.api.id
+  description       = "PSP API and AWS endpoints over HTTPS"
   cidr_ipv4         = "0.0.0.0/0"
   from_port         = 443
   to_port           = 443
@@ -73,6 +78,7 @@ resource "aws_security_group" "db" {
 
 resource "aws_vpc_security_group_ingress_rule" "db_from_api" {
   security_group_id            = aws_security_group.db.id
+  description                  = "PostgreSQL from the API (and the ops tasks, same group) only"
   referenced_security_group_id = aws_security_group.api.id
   from_port                    = 5432
   to_port                      = 5432
@@ -87,6 +93,7 @@ resource "aws_security_group" "batch" {
 
 resource "aws_vpc_security_group_egress_rule" "batch_https" {
   security_group_id = aws_security_group.batch.id
+  description       = "Workers to S3 and AWS endpoints over HTTPS"
   cidr_ipv4         = "0.0.0.0/0"
   from_port         = 443
   to_port           = 443
@@ -101,8 +108,14 @@ resource "aws_security_group" "endpoints" {
 
 resource "aws_vpc_security_group_ingress_rule" "endpoints_https" {
   security_group_id = aws_security_group.endpoints.id
+  description       = "HTTPS from inside the VPC"
   cidr_ipv4         = var.vpc_cidr
   from_port         = 443
   to_port           = 443
   ip_protocol       = "tcp"
+}
+
+# The VPC's default security group allows nothing (nothing uses it).
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
 }

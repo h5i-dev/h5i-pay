@@ -1,4 +1,5 @@
 data "aws_availability_zones" "available" {
+  #checkov:skip=CKV_AWS_394:AZ names are only used to spread subnets; state pins them after the first apply
   state = "available"
 }
 

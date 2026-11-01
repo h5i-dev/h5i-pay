@@ -2,17 +2,18 @@
 
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/h5i-pay/${var.environment}/api"
-  retention_in_days = 90
+  retention_in_days = 365
   kms_key_id        = aws_kms_key.main.arn
 }
 
 resource "aws_cloudwatch_log_group" "batch" {
   name              = "/h5i-pay/${var.environment}/batch"
-  retention_in_days = 90
+  retention_in_days = 365
   kms_key_id        = aws_kms_key.main.arn
 }
 
 resource "aws_cloudwatch_log_group" "flow" {
+  #checkov:skip=CKV_AWS_338:flow logs are high-volume; 30 days by decision
   name              = "/h5i-pay/${var.environment}/vpc-flow"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main.arn
@@ -283,4 +284,28 @@ resource "aws_backup_restore_testing_selection" "db" {
     vpcsecuritygroupids = jsonencode([aws_security_group.db.id])
   }
   validation_window_hours = 4
+}
+
+# WAF request logs (the log group name must start with aws-waf-logs-).
+resource "aws_cloudwatch_log_group" "waf" {
+  #checkov:skip=CKV_AWS_338:WAF request logs; 90 days by decision
+  name              = "aws-waf-logs-${local.name}"
+  retention_in_days = 90
+  kms_key_id        = aws_kms_key.main.arn
+}
+
+resource "aws_wafv2_web_acl_logging_configuration" "api" {
+  resource_arn            = aws_wafv2_web_acl.api.arn
+  log_destination_configs = [aws_cloudwatch_log_group.waf.arn]
+  redacted_fields {
+    single_header {
+      name = "authorization"
+    }
+  }
+}
+
+resource "aws_cloudwatch_log_group" "sfn" {
+  name              = "/h5i-pay/${var.environment}/states"
+  retention_in_days = 365
+  kms_key_id        = aws_kms_key.main.arn
 }

@@ -49,6 +49,7 @@ resource "random_password" "app_secret" {
 }
 
 resource "aws_secretsmanager_secret" "app" {
+  #checkov:skip=CKV2_AWS_57:token keys rotate by the two-step runbook (current/previous), not a Lambda
   name        = "${local.name}/h5i-app-secret"
   description = "User-token HMAC key: JSON {current, previous}"
   kms_key_id  = aws_kms_key.main.arn
@@ -68,6 +69,7 @@ resource "random_password" "operator_secret" {
 }
 
 resource "aws_secretsmanager_secret" "operator" {
+  #checkov:skip=CKV2_AWS_57:token keys rotate by the two-step runbook (current/previous), not a Lambda
   name        = "${local.name}/h5i-pay-operator-secret"
   description = "Operator-token HMAC key: JSON {current, previous}. Only the API and whoever issues operator tokens may read it."
   kms_key_id  = aws_kms_key.main.arn
@@ -82,17 +84,20 @@ resource "aws_secretsmanager_secret_version" "operator" {
 }
 
 resource "aws_secretsmanager_secret" "stripe_secret_key" {
+  #checkov:skip=CKV2_AWS_57:issued by Stripe; rotated at Stripe (docs/runbooks/secret-rotation.md)
   name        = "${local.name}/stripe-secret-key"
   description = "Stripe TEST secret key (sk_test_...). Set out of band; the API refuses live keys."
   kms_key_id  = aws_kms_key.main.arn
 }
 
 resource "aws_secretsmanager_secret" "stripe_webhook_secret" {
+  #checkov:skip=CKV2_AWS_57:issued by Stripe; rotated at Stripe (docs/runbooks/secret-rotation.md)
   name       = "${local.name}/stripe-webhook-secret"
   kms_key_id = aws_kms_key.main.arn
 }
 
 resource "aws_secretsmanager_secret" "mock_webhook_secret" {
+  #checkov:skip=CKV2_AWS_57:test-only mock secret
   name       = "${local.name}/mock-webhook-secret"
   kms_key_id = aws_kms_key.main.arn
 }
@@ -188,6 +193,13 @@ locals {
 }
 
 resource "aws_s3_bucket" "b" {
+  #checkov:skip=CKV2_AWS_62:no consumer of S3 events; jobs are started by Step Functions
+  #checkov:skip=CKV_AWS_18:access logging not set up yet (needs a log bucket); CloudTrail data events are the alternative
+  #checkov:skip=CKV_AWS_144:single-region deployment; AWS Backup covers recovery
+  #checkov:skip=CKV2_AWS_61:lifecycle rules are separate resources (batch scratch expiry, audit retention via Object Lock)
+  #checkov:skip=CKV_AWS_21:versioning is aws_s3_bucket_versioning.b (for_each; not followed by checkov)
+  #checkov:skip=CKV_AWS_145:KMS encryption is aws_s3_bucket_server_side_encryption_configuration.b (for_each)
+  #checkov:skip=CKV2_AWS_6:public access block is aws_s3_bucket_public_access_block.b (for_each)
   for_each            = local.buckets
   bucket              = "${local.name}-${each.key}-${data.aws_caller_identity.current.account_id}"
   object_lock_enabled = each.key == "audit"
@@ -268,6 +280,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "batch" {
     }
     noncurrent_version_expiration {
       noncurrent_days = 7
+    }
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
     }
   }
 }

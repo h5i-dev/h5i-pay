@@ -178,6 +178,30 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### E (rest): static infrastructure checks; what still needs credentials
+
+- checkov 3.4.0 on `infra/terraform`: 54 findings at first. Fixed: rule
+  descriptions on every security-group rule, the VPC's default security
+  group closed (`aws_default_security_group`), the GPU launch template's
+  IMDS hop limit 2 → 1 (containers cannot reach the instance role), API
+  and batch logs kept 365 days, WAF request logging (authorization header
+  redacted), Step Functions logging and X-Ray tracing, multipart-upload
+  abort on the batch bucket, and the CI deploy role's `UpdateService`
+  scoped to the API service. The other 44 are inline
+  `#checkov:skip=ID:reason`: for_each resources checkov does not follow
+  (S3 versioning, encryption, public-access blocks; the WAF's dynamic
+  Log4j rule), APIs without resource ARNs, and decisions (manual token
+  rotation runbook, single region, no S3 access logging yet, 30-day flow
+  logs). Result: 400 passed, 0 failed, 44 skipped. CI's terraform job runs
+  it. tflint was not run (not installed; checkov covers the AWS rules
+  that matter here).
+- The ops image (`Dockerfile.ops`) was built here (424 MB) and starts;
+  the binary and the entrypoint refuse unknown commands and bad run ids.
+- Needs AWS or Stripe credentials, not done here: `terraform plan` /
+  `apply`; pushing images to ECR; the recovery schedule and the nightly
+  Step Functions run on AWS; S3 transfer times; the ECS JSON-key secret
+  injection; the Stripe test-mode round trip (`STRIPE_SECRET_KEY`).
+
 ### B4: end-to-end measurements; GPU benchmarks re-run after A
 
 - `benchmarks/src/bin/e2e.rs` seeds a tenant through the orchestrator
@@ -592,7 +616,8 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 - Not done or not verifiable here:
   - SEC-03, SEC-07, SEC-09 closed (E). SEC-02 is partly closed (separate operator key); the kernels still see
     every operator as user 0. See `docs/security-review.md`.
-  - The recovery schedule is written and validated but has not run on AWS.
+  - The recovery schedule and the nightly reconciliation are written and
+    validated (terraform validate, checkov) but have not run on AWS.
   - Docker images are built locally now. The worker image did not build
     before (Ubuntu 24.04 has no `awscli` package); fixed by installing AWS
     CLI v2.39.0 from its release zip, pinned by SHA-256 after a PGP check.

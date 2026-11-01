@@ -212,6 +212,8 @@ resource "aws_iam_role" "ci_deploy" {
 }
 
 data "aws_iam_policy_document" "ci_deploy" {
+  #checkov:skip=CKV_AWS_356:ecr:GetAuthorizationToken and ecs:RegisterTaskDefinition take no resource ARN
+  #checkov:skip=CKV_AWS_111:same
   statement {
     actions   = ["ecr:GetAuthorizationToken"]
     resources = ["*"]
@@ -220,9 +222,14 @@ data "aws_iam_policy_document" "ci_deploy" {
     actions   = ["ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage", "ecr:BatchGetImage"]
     resources = [for r in aws_ecr_repository.repo : r.arn]
   }
+  # RegisterTaskDefinition and DescribeTaskDefinition take no resource ARN.
   statement {
-    actions   = ["ecs:RegisterTaskDefinition", "ecs:DescribeTaskDefinition", "ecs:DescribeServices", "ecs:UpdateService"]
+    actions   = ["ecs:RegisterTaskDefinition", "ecs:DescribeTaskDefinition"]
     resources = ["*"]
+  }
+  statement {
+    actions   = ["ecs:DescribeServices", "ecs:UpdateService"]
+    resources = [aws_ecs_service.api.id]
   }
   statement {
     actions   = ["iam:PassRole"]

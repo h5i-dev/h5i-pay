@@ -175,6 +175,14 @@ locals {
 resource "aws_sfn_state_machine" "reconcile" {
   name     = "${local.name}-reconcile"
   role_arn = aws_iam_role.sfn_reconcile.arn
+  logging_configuration {
+    log_destination        = "${aws_cloudwatch_log_group.sfn.arn}:*"
+    include_execution_data = true # inputs are run ids; task outputs hold no secrets
+    level                  = "ALL"
+  }
+  tracing_configuration {
+    enabled = true
+  }
   definition = jsonencode({
     Comment = "Nightly reconciliation: export, worker, ingest"
     StartAt = "Export"
@@ -243,6 +251,8 @@ resource "aws_iam_role" "sfn_reconcile" {
 }
 
 resource "aws_iam_role_policy" "sfn_reconcile" {
+  #checkov:skip=CKV_AWS_355:the .sync integrations' Describe/Stop, log delivery and X-Ray APIs take no resource ARN
+  #checkov:skip=CKV_AWS_290:same: those write actions have no resource-level permissions
   role = aws_iam_role.sfn_reconcile.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -269,6 +279,14 @@ resource "aws_iam_role_policy" "sfn_reconcile" {
         ]
       },
       { Effect = "Allow", Action = ["batch:DescribeJobs", "batch:TerminateJob"], Resource = "*" },
+      # Execution logs and X-Ray traces (these APIs take no resource ARN).
+      {
+        Effect = "Allow"
+        Action = ["logs:CreateLogDelivery", "logs:GetLogDelivery", "logs:UpdateLogDelivery", "logs:DeleteLogDelivery", "logs:ListLogDeliveries",
+          "logs:PutResourcePolicy", "logs:DescribeResourcePolicies", "logs:DescribeLogGroups",
+        "xray:PutTraceSegments", "xray:PutTelemetryRecords", "xray:GetSamplingRules", "xray:GetSamplingTargets"]
+        Resource = "*"
+      },
       # The .sync integrations wait through EventBridge managed rules.
       {
         Effect   = "Allow"
@@ -280,6 +298,7 @@ resource "aws_iam_role_policy" "sfn_reconcile" {
 }
 
 resource "aws_scheduler_schedule" "reconcile" {
+  #checkov:skip=CKV_AWS_297:the schedule's input is an empty object; nothing to encrypt
   name        = "${local.name}-reconcile"
   group_name  = "default"
   description = "Nightly batch reconciliation (export, worker, ingest)"
