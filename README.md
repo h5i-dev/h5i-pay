@@ -44,13 +44,17 @@ test keys). It never handles raw card numbers.
 
 ## Dependencies
 
-Every h5i-app crate (`h5i-app`, `-core`, `-pg`, `-http`, `-json`, `-schema`,
-`-sql`, `-gpu`, `-gpu-backend-nvvm`) is a git dependency on
-<https://github.com/h5i-dev/h5i> at one commit, `a19667cbbb5a1be14c8d16579eb00e679910dc57`
-(main after #769, Lean lemmas for `u32` schema columns, and #770, verified
-TLS in h5i-app-pg). The crates there are version 0.1.4 and are not on
-crates.io. The Lean library `h5i_app_lib` in `proofs/*/lakefile.lean` is
-required from the same commit; keep the three pins identical.
+`h5i-app`, `-core`, `-pg`, `-http`, `-json`, `-schema` and `-sql` are
+version **0.5.2 from crates.io**, pinned exactly (`=0.5.2`). That release
+includes h5i #769 (Lean lemmas for `u32` schema columns) and #770 (verified
+TLS in h5i-app-pg). It was published from h5i commit `02ccdde4ccfc849f09f764ff7d02a31aa7ac9306`
+("bump h5i-app to 0.5.2", #771). That commit is not the git tag `v0.5.2`:
+the tag is the h5i CLI release and still carries h5i-app 0.1.4.
+
+`h5i-app-gpu` and `h5i-app-gpu-backend-nvvm` are not on crates.io. They are
+git dependencies on <https://github.com/h5i-dev/h5i> at that same commit,
+and so is the Lean library `h5i_app_lib` in `proofs/*/lakefile.lean`. Keep
+the crates.io version and the git commit in step.
 
 ## Build, test, prove
 

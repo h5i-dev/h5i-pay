@@ -21,7 +21,7 @@ env:
   # Keep in sync with proofs/*/lakefile.lean and Cargo.toml (the h5i rev
   # every h5i-app crate and the h5i_app_lib Lean library come from).
   AENEAS_REV: b86120db3183b0107eb5f2637b11c424cd06ef1c
-  H5I_REV: a19667cbbb5a1be14c8d16579eb00e679910dc57
+  H5I_REV: 02ccdde4ccfc849f09f764ff7d02a31aa7ac9306
 
 jobs:
   rust:

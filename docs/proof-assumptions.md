@@ -16,7 +16,7 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Payments | `payment_domain.Theorems.status_steps_allowed`, `terminal_final`, `captured_final`, `refund_safety`, `refunded_le_captured`, `event_dedup`, `reachable_inv` | the extracted `crates/payment-domain/src/lib.rs` (`proofs/payments/generated/PaymentDomain.lean`) |
 | Policies | `payment_domain.Policies.check_sound` | the extracted `crates/payment-domain/src/policy.rs` |
 
-Gate results (h5i-app at rev `a19667c`, u32 currency/code/status
+Gate results (h5i-app 0.5.2, u32 currency/code/status
 columns): `h5i app check crates/payment-ledger` — 145 theorems in 11
 modules; `h5i app check crates/payment-domain` — 122 theorems in 6 modules
 (121 at M5, plus `u32_val_eq`); both on the three standard axioms only.

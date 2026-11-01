@@ -9,7 +9,7 @@ after a disconnect. Newest entries first within each milestone.
 |---|---|---|
 | Rust | 1.99.1 | workspace edition 2024 |
 | h5i CLI | 0.5.2, `~/.local/bin/h5i` | built from `/root/h5i-upstream` with `H5I_SKIP_WEB_BUILD=1` (no Node on the host, so the `h5i ui` web bundle is not embedded) |
-| h5i-app | 0.1.4 from git, h5i rev `a19667cbbb5a1be14c8d16579eb00e679910dc57` | every h5i-app crate and the `h5i_app_lib` Lean library from that one commit (main after #769 and #770; not on crates.io). Until 2026-10-31 the crates came from crates.io `=0.1.4` and h5i tag `v0.5.2`. The h5i CLI is still the v0.5.2 build: the commits after the tag change only `crates/h5i-app-*`, `scripts/` and CI, not the CLI |
+| h5i-app | 0.5.2 from crates.io, pinned `=0.5.2` | published from h5i commit `02ccdde4ccfc` (#771; includes #769 and #770). `h5i-app-gpu`, `-gpu-backend-nvvm` and the `h5i_app_lib` Lean library come from git at that commit (not on crates.io). Earlier: crates.io 0.1.4 + tag `v0.5.2` (M1–M5), then git rev `a19667c`. The h5i CLI is still the tag-v0.5.2 build |
 | Charon / Aeneas | 4bd5a29f6e97 / b86120db3183 at `/opt/aeneas/{charon,aeneas}/bin` | built with `nix build github:AeneasVerif/aeneas/<rev>` (Determinate Nix installer); `h5i app doctor` is green when both are on `PATH` |
 | Lean | leanprover/lean4:v4.31.0 via elan (`~/.elan/bin`) | Mathlib cache from `lake exe cache get` |
 | PostgreSQL | 17 in docker (`scripts/dev-db.sh`, port 55432) | |
@@ -179,6 +179,19 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 - README updated with the full layout and commands.
 
 ## After M5 (newest first)
+
+### h5i-app 0.5.2 from crates.io
+
+- h5i-app 0.5.2 is on crates.io (published from h5i `02ccdde`, a
+  descendant of `a19667c` that only bumps versions). The seven published
+  crates are now `=0.5.2` from crates.io; `h5i-app-gpu`, the nvvm backend
+  and both `h5i_app_lib` requires are at git `02ccdde`. Cargo.lock has
+  one copy of each h5i-app crate. The crate's git tag `v0.5.2` is not used:
+  it is the CLI release and has h5i-app 0.1.4, without TLS or u32 support.
+- Re-extraction changed only `Source:` path comments. Verified:
+  extract --check, check (145 / 122 theorems), mutate (5/5, 6/6),
+  lake build, `cargo test --workspace` (67), clippy (default, mock-psp,
+  CUDA), GPU differential tests, `cargo build --locked`.
 
 ### The API process killed mid-request
 

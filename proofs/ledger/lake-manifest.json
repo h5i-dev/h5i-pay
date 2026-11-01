@@ -7,10 +7,10 @@
    "type": "git",
    "subDir": "crates/h5i-app-core/proofs",
    "scope": "",
-   "rev": "a19667cbbb5a1be14c8d16579eb00e679910dc57",
+   "rev": "02ccdde4ccfc849f09f764ff7d02a31aa7ac9306",
    "name": "h5i_app_lib",
    "manifestFile": "lake-manifest.json",
-   "inputRev": "a19667cbbb5a1be14c8d16579eb00e679910dc57",
+   "inputRev": "02ccdde4ccfc849f09f764ff7d02a31aa7ac9306",
    "inherited": false,
    "configFile": "lakefile.lean"
   },
