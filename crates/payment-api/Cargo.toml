@@ -34,3 +34,9 @@ serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 sha2.workspace = true
+
+[dev-dependencies]
+# tests/process_kill.rs: the h5i-pay binary against PostgreSQL and a fake Stripe.
+reqwest.workspace = true
+serde_urlencoded = "0.7"
+tokio-postgres = "0.7"

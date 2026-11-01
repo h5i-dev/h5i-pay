@@ -18,6 +18,7 @@ crate's unit tests.
 | Webhook delivered twice / concurrently | One effect | Kernel deduplicates on the event id (`Command::Event`) | test `pending_payment_completes_by_webhook_once` (10 concurrent: 1 processed, 9 duplicates); proof `event_dedup` |
 | Webhooks out of order | Later state wins; the stale event is recorded without effect | Status transitions only along `Allowed`; captured is final | test `webhooks_out_of_order`; proofs `status_steps_allowed`, `captured_final` |
 | Forged or replayed webhook | 400 | HMAC-SHA256 over `t.body`, constant-time compare, 300 s tolerance | tests in `payment-connectors::webhook`, `pending_payment_completes_by_webhook_once` |
+| API process killed (SIGKILL) while waiting for the PSP | The request dies with the process; the payment stays `PROCESSING` (or the refund `PENDING`, reserved), nothing half applied | Each kernel step commits alone; the PSP call carries a deterministic idempotency key; a client retry with the same `Idempotency-Key`, or the scheduled `h5i-pay recover`, finishes it. A payment the PSP never saw stays `PROCESSING` until an operator fails it | `payment-api/tests/process_kill.rs`: the real production binary against PostgreSQL and a fake Stripe that holds the request open, killed after the charge (retry: same payment, one charge, posted once), during a refund (scheduled job settles it; the reserved amount cannot be refunded again meanwhile), before the PSP acted (job leaves it; operator fails it; no money moved); ledger audit and both reconciliations clean afterwards |
 | Crash between recording a capture and posting the ledger | Payment `CAPTURED`, ledger behind | Postings are derived from the payment state with deterministic ids; `recover` and every later sync re-post; `POST /v1/reconcile` compares payments with the journal | test `automatic_capture_posts_the_ledger` (`ledger.exceptions = 0`), `reconciliation_finds_discrepancies` |
 | PSP settlement disagrees with us | Exceptions in the reconciliation report | A report only; corrections are separate, audited ledger transfers | test `reconciliation_finds_discrepancies` |
 | GPU absent, out of memory, or wrong | `Auto` uses the CPU when no GPU exists; a GPU error after selection is an error, never a silent CPU retry; output with the wrong shape is rejected | h5i-app-gpu `ExecutionPolicy`; outputs are reports and candidate decisions, never commits | tests `corrupted_output_is_rejected`, `gpu_*` in `tests/differential` |
@@ -26,9 +27,6 @@ crate's unit tests.
 
 ## Not covered yet
 
-- A crash of the API process between two orchestrator steps is covered by
-  recovery, but there is no automated test that kills the process itself
-  (the tests kill database connections and drop PSP responses instead).
 - No chaos test on a real Multi-AZ failover; the runbook describes the
   manual drill.
 - Scheduled recovery (`h5i-pay recover` every 5 minutes,

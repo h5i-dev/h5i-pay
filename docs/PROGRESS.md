@@ -180,6 +180,29 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### The API process killed mid-request
+
+- `crates/payment-api/tests/process_kill.rs` runs the `h5i-pay` binary as
+  the production image builds it (no Mock PSP; `H5I_PAY_PSP=stripe`)
+  against its own scratch PostgreSQL database and a fake Stripe API in the
+  test process (`STRIPE_API_BASE`), which implements PaymentIntents,
+  search, refunds and Stripe's idempotency-key replay, and can hold one
+  request open before or after acting. The test SIGKILLs the process
+  while it waits:
+  - after the charge: the payment is left `PROCESSING`, no reference, no
+    ledger entry; a client retry with the same `Idempotency-Key` on a new
+    process returns the same payment, captured, with the PSP's original
+    charge (one PSP effect) and one ledger posting; the recovery job then
+    has nothing to do;
+  - after the PSP made a refund: the refund stays pending and reserved
+    (a second refund past the remaining amount gets 409); `h5i-pay
+    recover`, with no API running, settles it;
+  - before the PSP acted: the job reports it unresolved and leaves it; the
+    operator's `fail_unsubmitted=true` fails it; no money moved.
+  Each ends with the ledger audit and both reconciliations clean. Passed
+  8 runs in a row. Making the PSP idempotency key non-deterministic makes
+  the first test fail, so it does check that money moves at most once.
+
 ### Scheduled recovery
 
 - `h5i-pay recover` (same binary and task definition as the API, command
@@ -298,8 +321,6 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 - Not done or not verifiable here:
   - SEC-02 (coarse identity, operator = user 0) is open; see
     `docs/security-review.md`.
-  - No test kills the API process itself mid-request; fault injection
-    kills the database backend and drops connections instead.
   - The recovery schedule is written and validated but has not run on AWS.
   - Docker images are built locally now. The worker image did not build
     before (Ubuntu 24.04 has no `awscli` package); fixed by installing AWS
