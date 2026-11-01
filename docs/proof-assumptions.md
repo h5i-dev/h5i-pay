@@ -77,8 +77,13 @@ committed history is such a sequence.
    orchestrator in `payment-api` and the PSP connectors are trusted. The
    kernel's theorems hold for every command, so a decoding bug can do no more
    than a client could ask for.
-6. **Identity.** User 0 of a tenant is its operator (`payment_storage::*::principal`);
-   whoever holds the HMAC secret can mint any principal.
+6. **Identity.** User 0 of a tenant is its operator (`payment_storage::*::principal`).
+   Since SEC-02 only a token signed with the operator key
+   (`H5I_PAY_OPERATOR_SECRET`) becomes user 0; user-key tokens for user 0 are
+   refused (`payment_api::auth`). Whoever holds the operator key can act as
+   any tenant's operator; whoever holds the user key can act as any user.
+   The kernels do not see which operator acted: that is in the API's
+   `operator request` log line only.
 
 ## Not proven (known limits)
 

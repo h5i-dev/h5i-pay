@@ -8,7 +8,6 @@
 //! `H5I_APP_TEST_TLS_CA` (the throwaway CA). The servers' `pg_hba.conf`
 //! rejects every non-TLS TCP connection. Tests skip when a variable is unset.
 
-use h5i_app_http::HmacAuth;
 use h5i_app_pg::EngineConfig;
 use h5i_pay_tests::fresh_tenant;
 use payment_connectors::mock::MockPsp;
@@ -17,7 +16,6 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-const SECRET: &str = "tls-secret";
 
 fn env(name: &str) -> Option<String> {
     match std::env::var(name) {
@@ -65,14 +63,14 @@ async fn payments_end_to_end(url_var: &str) {
     let (ledger, payments) = payment_storage::engines_with(&url, 4, EngineConfig::default(), &tls).await.unwrap();
     let mock = Arc::new(MockPsp::new("whsec_test"));
     mock.set_now(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
-    let state = payment_api::AppState::with_payments(ledger, payments, mock, SECRET);
+    let state = payment_api::AppState::with_payments(ledger, payments, mock, &h5i_pay_tests::keys());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, payment_api::router(state)).await.unwrap() });
 
     let org = fresh_tenant();
-    let merchant = HmacAuth::<payment_storage::payments::PaymentsApp>::new(SECRET, payment_storage::payments::principal).issue(org, 7, 600);
-    let op = HmacAuth::<payment_storage::ledger::LedgerApp>::new(SECRET, payment_storage::ledger::principal).issue(org, 0, 600);
+    let merchant = h5i_pay_tests::user_token(org, 7);
+    let op = h5i_pay_tests::operator_token(org);
     let http = reqwest::Client::new();
     let post = |path: &str, tok: &str, body: Value| {
         let req = http.post(format!("{base}{path}")).bearer_auth(tok).json(&body);

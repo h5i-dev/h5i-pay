@@ -2,12 +2,12 @@
 //! isolation and the audit endpoint.
 
 use h5i_app_http::HmacAuth;
+use h5i_pay_tests::{keys, operator_token, user_token, USER_SECRET};
 use h5i_app_pg::EngineConfig;
 use h5i_pay_tests::{database_url, fresh_tenant};
 use payment_storage::ledger::{principal, LedgerApp};
 use serde_json::{json, Value};
 
-const SECRET: &str = "integration-secret";
 
 pub struct Server {
     pub base: String,
@@ -16,7 +16,7 @@ pub struct Server {
 
 pub async fn start(url: &str) -> Server {
     let (ledger, _) = payment_storage::engines(url, 8, EngineConfig::default()).await.unwrap();
-    let state = payment_api::AppState::new(ledger, SECRET);
+    let state = payment_api::AppState::new(ledger, &keys());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, payment_api::router(state)).await.unwrap() });
@@ -24,7 +24,8 @@ pub async fn start(url: &str) -> Server {
 }
 
 pub fn token(org: u64, user: u64) -> String {
-    HmacAuth::<LedgerApp>::new(SECRET, principal).issue(org, user, 600)
+    // User 0 is the tenant's operator, which only an operator token is.
+    if user == 0 { operator_token(org) } else { user_token(org, user) }
 }
 
 impl Server {
@@ -119,4 +120,33 @@ async fn tenants_are_isolated() {
     assert_eq!(s.ledger(&forged, json!({"cmd": "accounts"}), None).await.0, 401);
     let (_, ts) = s.ledger(&op_a, json!({"cmd": "transfers"}), None).await;
     assert_eq!(ts.as_array().unwrap().len(), 1);
+}
+
+/// SEC-02: holding the user key does not make an operator.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_user_key_cannot_mint_an_operator() {
+    let Some(url) = database_url() else { return };
+    let s = start(&url).await;
+    let a = fresh_tenant();
+    let op = operator_token(a);
+    assert_eq!(s.ledger(&op, json!({"cmd": "open", "currency": 392}), None).await.0, 200);
+    // What anyone holding H5I_APP_SECRET could sign: tenant a, user 0.
+    let forged_op = HmacAuth::<LedgerApp>::new(USER_SECRET, principal).issue(a, 0, 600);
+    let (st, body) = s.ledger(&forged_op, json!({"cmd": "transfers"}), None).await;
+    assert_eq!(st, 401, "{body}");
+    let audit = s.http.get(format!("{}/v1/ledger/audit", s.base)).bearer_auth(&forged_op).send().await.unwrap();
+    assert_eq!(audit.status().as_u16(), 401);
+    // A user token is a user: it cannot read the journal or debit the
+    // operator's account into its own.
+    let user = user_token(a, 5);
+    assert_eq!(s.ledger(&user, json!({"cmd": "open", "currency": 392}), None).await, (200, json!({"id": 1})));
+    assert_eq!(s.ledger(&user, json!({"cmd": "transfers"}), None).await.0, 403);
+    let (st, body) = s.ledger(&user, json!({"cmd": "transfer", "id": 9, "debit": 0, "credit": 1, "amount": 1}), None).await;
+    assert_eq!((st, body["error"].as_str()), (403, Some("forbidden")), "{body}");
+    let audit = s.http.get(format!("{}/v1/ledger/audit", s.base)).bearer_auth(&user).send().await.unwrap();
+    assert_eq!(audit.status().as_u16(), 403);
+    // The operator token works for its own tenant only.
+    assert_eq!(s.ledger(&operator_token(fresh_tenant()), json!({"cmd": "accounts"}), None).await, (200, json!([])));
+    let (st, accts) = s.ledger(&op, json!({"cmd": "accounts"}), None).await;
+    assert_eq!((st, accts.as_array().map(Vec::len)), (200, Some(2)));
 }

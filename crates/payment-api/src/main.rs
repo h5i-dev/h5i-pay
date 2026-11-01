@@ -9,13 +9,22 @@
 //!   without TLS is refused. Required with `DB_CREDENTIALS`; the image ships
 //!   the Amazon RDS global bundle at `/etc/h5i-pay/rds-global-bundle.pem`.
 //!   Unset with `DATABASE_URL`: plain TCP (local development only);
-//! * `H5I_APP_SECRET` (required) — the HMAC key for bearer tokens;
+//! * `H5I_APP_SECRET` — the key user tokens are signed with;
+//! * `H5I_PAY_OPERATOR_SECRET` — the key operator tokens are signed with
+//!   (must differ from `H5I_APP_SECRET`); both are required to serve, and
+//!   with `DB_CREDENTIALS` (deployed) both must be at least 32 bytes.
+//!   `H5I_APP_SECRET_PREVIOUS` / `H5I_PAY_OPERATOR_SECRET_PREVIOUS`: an
+//!   old value still accepted during a rotation (see `payment_api::auth`);
 //! * `LISTEN` — default `127.0.0.1:8080`;
 //! * `H5I_PAY_PSP` — `stripe` (the default; test mode only: reads
 //!   `STRIPE_SECRET_KEY`, which must be `sk_test_…`, and `STRIPE_WEBHOOK_SECRET`)
 //!   or `mock`, only in builds with the `mock-psp` feature (then the default);
 //! * `H5I_PAY_MOCK_WEBHOOK_SECRET` — the Mock PSP's signing secret (`mock-psp` builds);
-//! * `H5I_APP_ISSUE=<tenant>:<user>` — print a one-day token and exit.
+//! * `H5I_APP_ISSUE=<tenant>:<user>` — print a one-day user token (user ≥ 1)
+//!   and exit; needs only `H5I_APP_SECRET`;
+//! * `H5I_PAY_ISSUE_OPERATOR=<tenant>:<operator-id>[:<ttl-secs>]` — print an
+//!   operator token (default one hour, at most twelve) and exit; needs only
+//!   `H5I_PAY_OPERATOR_SECRET`.
 //!
 //! `h5i-pay recover` runs one recovery pass over every tenant with work
 //! (the scheduled ECS task), prints a JSON summary line and exits: 0 when
@@ -23,11 +32,9 @@
 //! has no record of stay `PROCESSING` (`payments_unresolved`); failing them
 //! is left to an operator.
 
-use h5i_app_http::HmacAuth;
 use h5i_app_pg::EngineConfig;
-use payment_api::{router, AppState};
+use payment_api::{auth, router, AppState, Keys};
 use payment_connectors::{stripe::StripePsp, Psp};
-use payment_storage::ledger::{self, LedgerApp};
 use std::sync::Arc;
 
 #[tokio::main]
@@ -38,13 +45,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("recover") => true,
         Some(other) => return Err(format!("unknown command {other:?}; expected none or `recover`").into()),
     };
-    let secret = std::env::var("H5I_APP_SECRET").map_err(|_| "H5I_APP_SECRET is required")?;
-    if let Ok(spec) = std::env::var("H5I_APP_ISSUE") {
-        let (o, u) = spec.split_once(':').ok_or("H5I_APP_ISSUE=<tenant>:<user>")?;
-        println!("{}", HmacAuth::<LedgerApp>::new(secret, ledger::principal).issue(o.parse()?, u.parse()?, 86_400));
+    let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
+    let required = |k: &'static str| env(k).ok_or(format!("{k} is required"));
+    if let Some(spec) = env("H5I_APP_ISSUE") {
+        let (t, u) = spec.split_once(':').ok_or("H5I_APP_ISSUE=<tenant>:<user>")?;
+        println!("{}", auth::issue_user(required("H5I_APP_SECRET")?.as_bytes(), t.parse()?, u.parse()?, 86_400)?);
+        return Ok(());
+    }
+    if let Some(spec) = env("H5I_PAY_ISSUE_OPERATOR") {
+        let mut it = spec.split(':');
+        let usage = "H5I_PAY_ISSUE_OPERATOR=<tenant>:<operator-id>[:<ttl-secs>]";
+        let (t, o) = (it.next().ok_or(usage)?, it.next().ok_or(usage)?);
+        let ttl = it.next().map(str::parse).transpose()?.unwrap_or(auth::DEFAULT_OPERATOR_TTL);
+        println!("{}", auth::issue_operator(required("H5I_PAY_OPERATOR_SECRET")?.as_bytes(), t.parse()?, o.parse()?, ttl)?);
         return Ok(());
     }
     let (url, from_rds_secret) = database_url()?;
+    // The recovery job acts in-process and verifies no tokens.
+    let keys = if recover {
+        None
+    } else {
+        let k = Keys::new(&required("H5I_APP_SECRET")?, &required("H5I_PAY_OPERATOR_SECRET")?)?
+            .with_previous(env("H5I_APP_SECRET_PREVIOUS").as_deref(), env("H5I_PAY_OPERATOR_SECRET_PREVIOUS").as_deref())?;
+        if from_rds_secret {
+            k.require_len(auth::MIN_DEPLOYED_SECRET_LEN)?;
+        }
+        Some(k)
+    };
     let tls = payment_storage::DbTls::from_env()?;
     if from_rds_secret && tls == payment_storage::DbTls::Off {
         // The deployed path (ECS with an RDS-managed secret) never runs in the clear.
@@ -60,7 +87,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", r.summary_json());
         std::process::exit(if r.failed.is_empty() { 0 } else { 1 });
     }
-    let state = AppState::with_payments(ledger_engine, payments_engine, psp, &secret);
+    let keys = keys.expect("keys are loaded unless recovering");
+    let state = AppState::with_payments(ledger_engine, payments_engine, psp, &keys);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!(%addr, "h5i-pay listening");
     axum::serve(listener, router(state)).with_graceful_shutdown(async {

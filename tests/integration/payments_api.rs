@@ -2,16 +2,13 @@
 //! payment and ledger kernels on PostgreSQL, webhooks, recovery and
 //! reconciliation.
 
-use h5i_app_http::HmacAuth;
 use h5i_app_pg::EngineConfig;
 use h5i_pay_tests::{database_url, fresh_tenant};
 use payment_connectors::mock::MockPsp;
 use payment_connectors::Outcome;
-use payment_storage::payments::{principal, PaymentsApp};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-const SECRET: &str = "payments-secret";
 
 struct Env {
     base: String,
@@ -28,19 +25,18 @@ async fn start() -> Option<Env> {
     let mock = Arc::new(MockPsp::new("whsec_test"));
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
     mock.set_now(now);
-    let state = payment_api::AppState::with_payments(ledger, payments, mock.clone(), SECRET);
+    let state = payment_api::AppState::with_payments(ledger, payments, mock.clone(), &h5i_pay_tests::keys());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, payment_api::router(state)).await.unwrap() });
     let org = fresh_tenant();
-    let auth = HmacAuth::<PaymentsApp>::new(SECRET, principal);
     Some(Env {
         base: format!("http://{addr}"),
         http: reqwest::Client::new(),
         mock,
         org,
-        op: auth.issue(org, 0, 600),
-        merchant: auth.issue(org, 7, 600),
+        op: h5i_pay_tests::operator_token(org),
+        merchant: h5i_pay_tests::user_token(org, 7),
     })
 }
 
@@ -90,14 +86,14 @@ impl Env {
     }
 
     async fn audit_ledger(&self) {
-        let tok = HmacAuth::<payment_storage::ledger::LedgerApp>::new(SECRET, payment_storage::ledger::principal).issue(self.org, 0, 600);
+        let tok = h5i_pay_tests::operator_token(self.org);
         let (st, v) = self.get("/v1/ledger/audit", &tok).await;
         assert_eq!((st, &v["ok"]), (200, &json!(true)), "{v}");
     }
 
     /// The ledger's merchant payable balance (credits − debits) for merchant 7.
     async fn merchant_balance(&self) -> i64 {
-        let tok = HmacAuth::<payment_storage::ledger::LedgerApp>::new(SECRET, payment_storage::ledger::principal).issue(self.org, 0, 600);
+        let tok = h5i_pay_tests::operator_token(self.org);
         let resp = self.http.post(format!("{}/v1/ledger", self.base)).bearer_auth(tok).json(&json!({"cmd": "accounts"})).send().await.unwrap();
         let accts: Value = resp.json().await.unwrap();
         accts
@@ -159,7 +155,7 @@ async fn manual_capture_partial_refunds_and_limits() {
     e.audit_ledger().await;
 
     // Another merchant cannot see or refund it.
-    let other = HmacAuth::<PaymentsApp>::new(SECRET, principal).issue(e.org, 8, 600);
+    let other = h5i_pay_tests::user_token(e.org, 8);
     assert_eq!(e.get(&format!("/v1/payments/{id}"), &other).await.0, 404);
     assert_eq!(e.post(&format!("/v1/payments/{id}/refunds"), &other, json!({"amount": 1})).await.0, 404);
 
@@ -301,7 +297,7 @@ async fn refund_needs_merchant_funds_in_the_ledger() {
     let (_, p) = e.pay(700, "automatic", "tok_visa").await;
     let id = p["id"].as_u64().unwrap();
     // The operator pays the merchant out of the ledger (to an external account).
-    let lt = HmacAuth::<payment_storage::ledger::LedgerApp>::new(SECRET, payment_storage::ledger::principal).issue(e.org, 0, 600);
+    let lt = h5i_pay_tests::operator_token(e.org);
     let accts: Value = e.http.post(format!("{}/v1/ledger", e.base)).bearer_auth(&lt).json(&json!({"cmd": "accounts"})).send().await.unwrap().json().await.unwrap();
     let payable = accts.as_array().unwrap().iter().find(|a| a["code"] == json!(1002)).unwrap()["id"].as_u64().unwrap();
     let r = e.http.post(format!("{}/v1/ledger", e.base)).bearer_auth(&lt).json(&json!({"cmd": "open", "currency": 392, "code": 5})).send().await.unwrap();

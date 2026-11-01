@@ -5,16 +5,13 @@
 //! runs in a database of its own: recovering another test's tenants while
 //! that test runs would race with its assertions.
 
-use h5i_app_http::HmacAuth;
 use h5i_app_pg::EngineConfig;
 use h5i_pay_tests::{database_url, fresh_tenant};
 use payment_connectors::mock::MockPsp;
-use payment_storage::payments::{principal, PaymentsApp};
 use payment_storage::DbTls;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-const SECRET: &str = "recovery-job-secret";
 
 /// A new empty database next to the test database; dropped by `Drop`.
 struct ScratchDb {
@@ -62,12 +59,11 @@ async fn scheduled_recovery_covers_every_tenant() {
     let (ledger, payments) = payment_storage::engines(&db.url, 8, EngineConfig::default()).await.unwrap();
     let mock = Arc::new(MockPsp::new("whsec_test"));
     mock.set_now(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
-    let state = payment_api::AppState::with_payments(ledger.clone(), payments.clone(), mock.clone(), SECRET);
+    let state = payment_api::AppState::with_payments(ledger.clone(), payments.clone(), mock.clone(), &h5i_pay_tests::keys());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base_url = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, payment_api::router(state)).await.unwrap() });
     let http = reqwest::Client::new();
-    let auth = HmacAuth::<PaymentsApp>::new(SECRET, principal);
     let pay = |tok: String, amount: u64| {
         let req = http.post(format!("{base_url}/v1/payments")).bearer_auth(tok).json(&json!({
             "amount": amount, "currency": "jpy", "capture": "automatic", "payment_method": "tok_visa"
@@ -82,10 +78,10 @@ async fn scheduled_recovery_covers_every_tenant() {
     let (a, b, c) = (fresh_tenant(), fresh_tenant(), fresh_tenant());
     for t in [a, b] {
         mock.timeout_next(1);
-        let (st, p) = pay(auth.issue(t, 7, 600), 700).await;
+        let (st, p) = pay(h5i_pay_tests::user_token(t, 7), 700).await;
         assert_eq!((st, p["status"].as_str()), (202, Some("processing")), "{p}");
     }
-    let (st, p) = pay(auth.issue(c, 7, 600), 300).await;
+    let (st, p) = pay(h5i_pay_tests::user_token(c, 7), 300).await;
     assert_eq!((st, p["status"].as_str()), (200, Some("captured")), "{p}");
 
     let mut tenants = vec![a, b, c];
@@ -101,10 +97,10 @@ async fn scheduled_recovery_covers_every_tenant() {
     assert_eq!((s["event"].as_str(), s["payments_resolved"].as_u64()), (Some("recovery"), Some(2)), "{s}");
 
     for t in [a, b] {
-        let tok = auth.issue(t, 7, 600);
+        let tok = h5i_pay_tests::user_token(t, 7);
         let v: Value = http.get(format!("{base_url}/v1/payments/0")).bearer_auth(tok).send().await.unwrap().json().await.unwrap();
         assert_eq!(v["status"], "captured", "tenant {t}: {v}");
-        let op = HmacAuth::<payment_storage::ledger::LedgerApp>::new(SECRET, payment_storage::ledger::principal).issue(t, 0, 600);
+        let op = h5i_pay_tests::operator_token(t);
         let audit: Value = http.get(format!("{base_url}/v1/ledger/audit")).bearer_auth(op).send().await.unwrap().json().await.unwrap();
         assert_eq!(audit["ok"], json!(true), "tenant {t}: {audit}");
     }

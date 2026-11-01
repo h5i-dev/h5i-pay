@@ -13,7 +13,7 @@
 //! Each test uses its own database (the recovery job sees every tenant).
 //! Needs `H5I_APP_TEST_DATABASE_URL`; skipped without it.
 
-use h5i_app_http::HmacAuth;
+use payment_api::Keys;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::process::{Child, Command, Stdio};
@@ -21,7 +21,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::Notify;
 
-const SECRET: &str = "process-kill-secret";
+const USER_SECRET: &str = "process-kill-user-secret-0123456789";
+const OPERATOR_SECRET: &str = "process-kill-operator-secret-012345";
+
+fn keys() -> Keys {
+    Keys::new(USER_SECRET, OPERATOR_SECRET).unwrap()
+}
 
 // ---------------------------------------------------------------- fake Stripe
 
@@ -281,7 +286,8 @@ impl Env {
         let mut c = Command::new(env!("CARGO_BIN_EXE_h5i-pay"));
         c.env_clear()
             .env("DATABASE_URL", &self.db.url)
-            .env("H5I_APP_SECRET", SECRET)
+            .env("H5I_APP_SECRET", USER_SECRET)
+            .env("H5I_PAY_OPERATOR_SECRET", OPERATOR_SECRET)
             .env("H5I_PAY_PSP", "stripe")
             .env("STRIPE_SECRET_KEY", "sk_test_fake")
             .env("STRIPE_WEBHOOK_SECRET", "whsec_fake")
@@ -320,15 +326,15 @@ impl Env {
     }
 
     fn merchant(&self) -> String {
-        HmacAuth::<payment_storage::payments::PaymentsApp>::new(SECRET, payment_storage::payments::principal).issue(self.tenant, 7, 600)
+        keys().issue_user(self.tenant, 7, 600).unwrap()
     }
 
     fn operator_payments(&self) -> String {
-        HmacAuth::<payment_storage::payments::PaymentsApp>::new(SECRET, payment_storage::payments::principal).issue(self.tenant, 0, 600)
+        keys().issue_operator(self.tenant, 1, 600).unwrap()
     }
 
     fn operator(&self) -> String {
-        HmacAuth::<payment_storage::ledger::LedgerApp>::new(SECRET, payment_storage::ledger::principal).issue(self.tenant, 0, 600)
+        keys().issue_operator(self.tenant, 1, 600).unwrap()
     }
 
     async fn call(&self, api: &Api, method: reqwest::Method, path: &str, tok: &str, body: Option<Value>, key: Option<&str>) -> (u16, Value) {

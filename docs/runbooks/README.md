@@ -12,6 +12,7 @@
 | Secret rotation, suspected key exposure | [secret-rotation.md](secret-rotation.md) |
 
 Conventions: `$API` is the API URL; `$OP` an operator token of the tenant
-(`H5I_APP_ISSUE=<tenant>:0 h5i-pay` with the environment's secret, issued
-for the incident and short-lived). Every correction to money is an ordinary
+(`H5I_PAY_ISSUE_OPERATOR=<tenant>:<your-operator-id>[:<ttl>] h5i-pay` with the
+environment's operator secret; at most 12 h, default 1 h; your operator id is
+logged on every request). Every correction to money is an ordinary
 ledger transfer with a recorded reason, never an edit of rows.

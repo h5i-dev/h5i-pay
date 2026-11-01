@@ -12,8 +12,8 @@ an assumption broke: rows written outside the kernel (manual SQL, a
 migration), a restore of inconsistent data, or an engine/database fault.
 
 1. Stop writes: scale the API to 0 (`aws ecs update-service --desired-count 0 ...`).
-   There is no per-tenant switch yet; rotating the HMAC secret revokes
-   every tenant's tokens at once (secret-rotation.md, SEC-02).
+   There is no per-tenant switch yet; rotating the user-token key revokes
+   every tenant's user tokens at once (secret-rotation.md, SEC-02).
 2. Capture the evidence: `curl -H "Authorization: Bearer $OP" $API/v1/ledger/audit`
    (the `violation` field names the currency or account), a database
    snapshot (`aws rds create-db-snapshot`), and recent deploys and

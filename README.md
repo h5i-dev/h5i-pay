@@ -110,8 +110,8 @@ image ships the Amazon RDS bundle at `/etc/h5i-pay/rds-global-bundle.pem`.
 Locally, without `DB_CA_FILE`, it uses plain TCP:
 
 ```sh
-export DATABASE_URL=$(scripts/dev-db.sh) H5I_APP_SECRET=dev-secret
-OP=$(H5I_APP_ISSUE=1:0 cargo run -q -p payment-api --features mock-psp --bin h5i-pay)     # tenant 1, operator
+export DATABASE_URL=$(scripts/dev-db.sh) H5I_APP_SECRET=dev-user-secret H5I_PAY_OPERATOR_SECRET=dev-operator-secret
+OP=$(H5I_PAY_ISSUE_OPERATOR=1:1 cargo run -q -p payment-api --features mock-psp --bin h5i-pay) # tenant 1, operator 1 (1 h)
 ALICE=$(H5I_APP_ISSUE=1:1 cargo run -q -p payment-api --features mock-psp --bin h5i-pay)  # tenant 1, user 1
 cargo run -p payment-api --features mock-psp --bin h5i-pay &   # Mock PSP: dev and test builds only
 

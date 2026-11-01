@@ -37,19 +37,48 @@ resource "aws_kms_alias" "main" {
 # put there by an operator (aws secretsmanager put-secret-value), never in
 # Terraform variables, state or git.
 
+# Bearer-token keys (SEC-02): one for user tokens, one for operator tokens.
+# Each secret is JSON {"current": ..., "previous": ...}; the task injects both
+# fields (H5I_APP_SECRET / H5I_APP_SECRET_PREVIOUS, H5I_PAY_OPERATOR_SECRET /
+# H5I_PAY_OPERATOR_SECRET_PREVIOUS). Outside a rotation previous = current.
+# Rotation is done out of band (docs/runbooks/secret-rotation.md), so
+# Terraform only sets the initial value.
 resource "random_password" "app_secret" {
   length  = 64
   special = false
 }
 
 resource "aws_secretsmanager_secret" "app" {
-  name       = "${local.name}/h5i-app-secret"
-  kms_key_id = aws_kms_key.main.arn
+  name        = "${local.name}/h5i-app-secret"
+  description = "User-token HMAC key: JSON {current, previous}"
+  kms_key_id  = aws_kms_key.main.arn
 }
 
 resource "aws_secretsmanager_secret_version" "app" {
   secret_id     = aws_secretsmanager_secret.app.id
-  secret_string = random_password.app_secret.result
+  secret_string = jsonencode({ current = random_password.app_secret.result, previous = random_password.app_secret.result })
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
+resource "random_password" "operator_secret" {
+  length  = 64
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "operator" {
+  name        = "${local.name}/h5i-pay-operator-secret"
+  description = "Operator-token HMAC key: JSON {current, previous}. Only the API and whoever issues operator tokens may read it."
+  kms_key_id  = aws_kms_key.main.arn
+}
+
+resource "aws_secretsmanager_secret_version" "operator" {
+  secret_id     = aws_secretsmanager_secret.operator.id
+  secret_string = jsonencode({ current = random_password.operator_secret.result, previous = random_password.operator_secret.result })
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
 }
 
 resource "aws_secretsmanager_secret" "stripe_secret_key" {

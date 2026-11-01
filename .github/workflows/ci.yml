@@ -72,7 +72,7 @@ jobs:
       - name: Production binary refuses the Mock PSP
         run: |
           cargo build --locked -p payment-api --bin h5i-pay
-          out=$(H5I_PAY_PSP=mock H5I_APP_SECRET=x DATABASE_URL=postgres://unused@127.0.0.1:1/x ./target/debug/h5i-pay 2>&1 || true)
+          out=$(H5I_PAY_PSP=mock H5I_APP_SECRET=x H5I_PAY_OPERATOR_SECRET=y DATABASE_URL=postgres://unused@127.0.0.1:1/x ./target/debug/h5i-pay 2>&1 || true)
           echo "$out"
           echo "$out" | grep -q 'built without the Mock PSP'
       - name: Stripe test-mode round trip (only with a test key)

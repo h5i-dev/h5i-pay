@@ -221,8 +221,8 @@ async fn unreachable_database() {
         EngineConfig { max_attempts: 2, ..EngineConfig::default() },
     ));
     assert!(e.execute(&op(1), &open(0, 392, false)).await.is_err());
-    let state = payment_api::AppState::new(e, "test-secret");
-    let token = h5i_app_http::HmacAuth::<LedgerApp>::new("test-secret", payment_storage::ledger::principal).issue(1, 0, 60);
+    let state = payment_api::AppState::new(e, &h5i_pay_tests::keys());
+    let token = h5i_pay_tests::operator_token(1);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, payment_api::router(state)).await.unwrap() });

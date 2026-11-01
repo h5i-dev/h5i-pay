@@ -26,6 +26,7 @@ data "aws_iam_policy_document" "task_execution_secrets" {
     actions = ["secretsmanager:GetSecretValue"]
     resources = [
       aws_secretsmanager_secret.app.arn,
+      aws_secretsmanager_secret.operator.arn,
       aws_secretsmanager_secret.stripe_secret_key.arn,
       aws_secretsmanager_secret.stripe_webhook_secret.arn,
       aws_secretsmanager_secret.mock_webhook_secret.arn,

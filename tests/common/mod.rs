@@ -7,6 +7,25 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// The token keys every test server uses (SEC-02: users and operators are
+/// signed with different keys).
+pub const USER_SECRET: &str = "test-user-secret-0123456789abcdef";
+pub const OPERATOR_SECRET: &str = "test-operator-secret-0123456789ab";
+
+pub fn keys() -> payment_api::Keys {
+    payment_api::Keys::new(USER_SECRET, OPERATOR_SECRET).unwrap()
+}
+
+/// A token for user `user` (≥ 1) of tenant `org`.
+pub fn user_token(org: u64, user: u64) -> String {
+    keys().issue_user(org, user, 600).unwrap()
+}
+
+/// An operator token for tenant `org` (operator id 1).
+pub fn operator_token(org: u64) -> String {
+    keys().issue_operator(org, 1, 600).unwrap()
+}
+
 pub fn database_url() -> Option<String> {
     match std::env::var("H5I_APP_TEST_DATABASE_URL") {
         Ok(u) if !u.is_empty() => Some(u),

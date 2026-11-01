@@ -180,6 +180,40 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### SEC-02: separate user and operator token keys
+
+- `crates/payment-api/src/auth.rs`: user tokens are signed with
+  `H5I_APP_SECRET`, operator tokens with `H5I_PAY_OPERATOR_SECRET`; the API
+  refuses equal keys, and keys under 32 bytes on the deployed
+  (`DB_CREDENTIALS`) path. A user-key token for user 0 gets 401, so holding
+  the user key no longer makes an operator. Operator tokens name the operator
+  (id ≥ 1, logged per request with the tenant as `operator request`) and
+  are refused at verification if they expire more than 12 h (+60 s skew)
+  after the time of use, whoever signed them (`issue_operator` also refuses
+  a longer TTL). `…_PREVIOUS` values are accepted during a rotation.
+  `H5I_PAY_ISSUE_OPERATOR=<tenant>:<id>[:<ttl>]` issues operator tokens with
+  the operator key alone; `H5I_APP_ISSUE` issues user tokens (user ≥ 1) with
+  the user key alone. `h5i-pay recover` needs neither key.
+- Deployment: Terraform has a second secret `h5i-pay-operator-secret`; both
+  token secrets are JSON `{current, previous}` (initially equal; Terraform
+  ignores later changes) and the task injects the four variables by JSON
+  key (`<arn>:current::`, `<arn>:previous::`). The execution role may read
+  the new secret. Compose and the CI "refuses mock" step set both keys.
+  `docs/runbooks/secret-rotation.md` has the two-step rotation. Not run on
+  AWS: ECS JSON-key injection is written from the AWS docs and checked only
+  by `terraform validate`.
+- Decision on the operator id in the kernels: not done. Kernel `Principal`
+  is `{org, user, operator}` and operator-created rows record `actor.user`
+  (a payment's `merchant`), so putting the operator id in `user` would
+  collide with user ids; it needs a new field and re-checked authorization
+  proofs. The per-operator trail is the API log. Documented in
+  `docs/security-review.md` (SEC-02 now "partly closed") and
+  `docs/proof-assumptions.md`.
+- Verified: `cargo test --workspace` (with PostgreSQL and both TLS servers),
+  clippy with and without `mock-psp`, `terraform fmt -check` and `validate`,
+  the production binary refuses `mock` and refuses to start without the
+  operator key. Kernels untouched, so no proof re-run was needed.
+
 ### h5i-app 0.5.2 from crates.io
 
 - h5i-app 0.5.2 is on crates.io (published from h5i `02ccdde`, a
@@ -332,8 +366,8 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 ## Open items / decisions
 
 - Not done or not verifiable here:
-  - SEC-02 (coarse identity, operator = user 0) is open; see
-    `docs/security-review.md`.
+  - SEC-02 is partly closed (separate operator key); the kernels still see
+    every operator as user 0. See `docs/security-review.md`.
   - The recovery schedule is written and validated but has not run on AWS.
   - Docker images are built locally now. The worker image did not build
     before (Ubuntu 24.04 has no `awscli` package); fixed by installing AWS

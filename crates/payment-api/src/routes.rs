@@ -4,6 +4,7 @@
 // h5i-app-http's `H5iApp::run` does; boxing it would only add unboxing.
 #![allow(clippy::result_large_err)]
 
+use crate::auth::Keys;
 use crate::orchestrator::{CheckoutParams, OrchError, Orchestrator, View};
 use axum::extract::{FromRef, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -11,7 +12,7 @@ use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use h5i_app_core::TenantId;
-use h5i_app_http::{error_body, reply, Actor, Auth, H5iApp, HmacAuth};
+use h5i_app_http::{error_body, reply, Actor, Auth, H5iApp};
 use h5i_app_json::Value as Out;
 use payment_connectors::{Psp, WebhookError};
 use payment_domain as d;
@@ -44,18 +45,18 @@ impl FromRef<AppState> for Auth<PaymentsApp> {
 
 impl AppState {
     /// The ledger only (no PSP configured).
-    pub fn new(ledger_engine: Arc<LedgerEngine>, secret: &str) -> Self {
-        Self::build(ledger_engine, None, None, secret)
+    pub fn new(ledger_engine: Arc<LedgerEngine>, keys: &Keys) -> Self {
+        Self::build(ledger_engine, None, None, keys)
     }
 
     /// Ledger, payments and the orchestrator with a PSP.
-    pub fn with_payments(ledger_engine: Arc<LedgerEngine>, payments_engine: Arc<PaymentsEngine>, psp: Arc<dyn Psp>, secret: &str) -> Self {
+    pub fn with_payments(ledger_engine: Arc<LedgerEngine>, payments_engine: Arc<PaymentsEngine>, psp: Arc<dyn Psp>, keys: &Keys) -> Self {
         let orch = Arc::new(Orchestrator::new(ledger_engine.clone(), payments_engine.clone(), psp));
-        Self::build(ledger_engine, Some(payments_engine), Some(orch), secret)
+        Self::build(ledger_engine, Some(payments_engine), Some(orch), keys)
     }
 
-    fn build(ledger_engine: Arc<LedgerEngine>, payments_engine: Option<Arc<PaymentsEngine>>, orchestrator: Option<Arc<Orchestrator>>, secret: &str) -> Self {
-        let ledger = H5iApp::new(ledger_engine.clone(), HmacAuth::<LedgerApp>::new(secret.to_string(), ledger::principal));
+    fn build(ledger_engine: Arc<LedgerEngine>, payments_engine: Option<Arc<PaymentsEngine>>, orchestrator: Option<Arc<Orchestrator>>, keys: &Keys) -> Self {
+        let ledger = H5iApp::new(ledger_engine.clone(), crate::auth::ledger_auth(keys));
         let payments_engine = payments_engine.unwrap_or_else(|| {
             // A payments engine on the same pool configuration is still needed
             // for the type; without a PSP its routes answer 503.
@@ -64,7 +65,7 @@ impl AppState {
                 h5i_app_pg::EngineConfig::default(),
             ))
         });
-        let payments = H5iApp::new(payments_engine, HmacAuth::<PaymentsApp>::new(secret.to_string(), payments::principal));
+        let payments = H5iApp::new(payments_engine, crate::auth::payments_auth(keys));
         AppState { ledger, payments, ledger_engine, orchestrator }
     }
 }

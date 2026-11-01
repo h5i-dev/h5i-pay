@@ -203,7 +203,10 @@ locals {
   # credentials secret (JSON with username and password) at start-up.
   api_secrets = concat(
     [
-      { name = "H5I_APP_SECRET", valueFrom = aws_secretsmanager_secret.app.arn },
+      { name = "H5I_APP_SECRET", valueFrom = "${aws_secretsmanager_secret.app.arn}:current::" },
+      { name = "H5I_APP_SECRET_PREVIOUS", valueFrom = "${aws_secretsmanager_secret.app.arn}:previous::" },
+      { name = "H5I_PAY_OPERATOR_SECRET", valueFrom = "${aws_secretsmanager_secret.operator.arn}:current::" },
+      { name = "H5I_PAY_OPERATOR_SECRET_PREVIOUS", valueFrom = "${aws_secretsmanager_secret.operator.arn}:previous::" },
       { name = "DB_CREDENTIALS", valueFrom = aws_db_instance.main.master_user_secret[0].secret_arn },
     ],
     var.psp_mode == "mock" ? [

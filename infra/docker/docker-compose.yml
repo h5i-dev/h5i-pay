@@ -20,7 +20,8 @@ services:
         API_FEATURES: mock-psp
     environment:
       DATABASE_URL: postgres://h5i:h5i@db:5432/h5i
-      H5I_APP_SECRET: dev-secret-change-me
+      H5I_APP_SECRET: dev-user-secret-change-me
+      H5I_PAY_OPERATOR_SECRET: dev-operator-secret-change-me
       H5I_PAY_PSP: mock
       RUST_LOG: info
     ports: ["127.0.0.1:8080:8080"]
