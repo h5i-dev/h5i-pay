@@ -21,6 +21,7 @@
 
 pub mod rules;
 pub mod inputs;
+pub mod join;
 
 pub use rules::Record;
 use rules::*;
@@ -173,29 +174,12 @@ impl Table {
     }
 }
 
-fn classify_row(r: &Recon, int: &Table, ext: &Table, i: usize) -> (u32, u32) {
-    internal_row(&r.internal[i], &r.external, int.as_ref(), ext.as_ref())
-}
-
-/// One thread, one hash table per side.
+/// One thread, one hash table per side: [`join::join`], the code
+/// `proofs/reconcile/Reconcile/Join.lean` proves equal to [`reference`].
 pub fn cpu_single(r: &Recon) -> Result<Report, ReconError> {
     validate(r)?;
-    let ext = Table::build(&r.external, 0..r.external.len(), r.external.len());
-    let int = Table::build(&r.internal, 0..r.internal.len(), r.internal.len());
-    let mut out = Report {
-        internal: Vec::with_capacity(r.internal.len()),
-        matched: Vec::with_capacity(r.internal.len()),
-        external: Vec::with_capacity(r.external.len()),
-    };
-    for i in 0..r.internal.len() {
-        let (c, m) = classify_row(r, &int, &ext, i);
-        out.internal.push(c);
-        out.matched.push(m);
-    }
-    for e in &r.external {
-        out.external.push(external_row(e.key, int.as_ref(), ext.as_ref()));
-    }
-    Ok(out)
+    let out = join::join(&r.internal, &r.external);
+    Ok(Report { internal: out.internal, matched: out.matched, external: out.external })
 }
 
 /// A shared output buffer written at disjoint indices from several threads.
@@ -270,20 +254,25 @@ pub fn cpu_parallel(r: &Recon) -> Result<Report, ReconError> {
     (0..parts).into_par_iter().for_each(|p| {
         let irows = &ip[is[p]..is[p + 1]];
         let erows = &ep[es[p]..es[p + 1]];
-        let ext = Table::build(&r.external, erows.iter().map(|x| *x as usize), erows.len());
-        let int = Table::build(&r.internal, irows.iter().map(|x| *x as usize), irows.len());
-        for &i in irows {
-            let (c, m) = classify_row(r, &int, &ext, i as usize);
+        // The partition's rows in increasing index order, joined by the
+        // proven single-thread join; local indices map back through
+        // `irows`/`erows`. Every key's rows are all in this partition, so
+        // the counts and the first external row are the whole input's.
+        let int: Vec<Record> = irows.iter().map(|&i| r.internal[i as usize]).collect();
+        let ext: Vec<Record> = erows.iter().map(|&j| r.external[j as usize]).collect();
+        let j = join::join(&int, &ext);
+        for (l, &i) in irows.iter().enumerate() {
+            let m = j.matched[l];
+            let m = if m == NONE { NONE } else { erows[m as usize] };
             // SAFETY: every row index is in exactly one partition.
             unsafe {
-                oi.write(i as usize, c);
+                oi.write(i as usize, j.internal[l]);
                 om.write(i as usize, m);
             }
         }
-        for &j in erows {
-            let k = r.external[j as usize].key;
+        for (l, &e) in erows.iter().enumerate() {
             // SAFETY: as above.
-            unsafe { oe.write(j as usize, external_row(k, int.as_ref(), ext.as_ref())) };
+            unsafe { oe.write(e as usize, j.external[l]) };
         }
     });
     Ok(out)

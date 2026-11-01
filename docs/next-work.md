@@ -179,7 +179,7 @@ PROGRESS.md as it lands.
    reduce them (advisory locks on the hot keys, narrower plans, fewer
    shared counters), and re-measure throughput and retries at 10k and 100k
    payments with 8 and 32 clients. Correctness stays SERIALIZABLE.
-5. [ ] **Prove the hash join.** `docs/proof-assumptions.md` "Not proven":
+5. [x] **Prove the hash join.** `docs/proof-assumptions.md` "Not proven":
    the reconciliation join (single-thread open addressing, the multithread
    radix partition, and the GPU's build/probe) is checked only by
    differential tests. Write the join as Rust that Aeneas extracts (at least

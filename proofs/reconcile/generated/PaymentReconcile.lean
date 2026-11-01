@@ -19,6 +19,180 @@ set_option maxRecDepth 2048
 
 namespace payment_reconcile
 
+/-- [payment_reconcile::join::JoinTable]
+    Source: 'crates/payment-reconcile/src/join.rs', lines 20:0-24:1
+    Visibility: public -/
+structure join.JoinTable where
+  keys : alloc.vec.Vec Std.U64
+  count : alloc.vec.Vec Std.U32
+  first : alloc.vec.Vec Std.U32
+
+/-- [payment_reconcile::join::JoinOut]
+    Source: 'crates/payment-reconcile/src/join.rs', lines 28:0-32:1
+    Visibility: public -/
+structure join.JoinOut where
+  internal : alloc.vec.Vec Std.U32
+  matched : alloc.vec.Vec Std.U32
+  external : alloc.vec.Vec Std.U32
+
+/-- [payment_reconcile::join::table_cap]: loop body 0:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 37:4-39:5
+    Visibility: public -/
+@[rust_loop_body]
+def join.table_cap_loop.body
+  (n : Std.Usize) (c : Std.Usize) :
+  Result (ControlFlow Std.Usize Std.Usize)
+  := do
+  let i ← 2#usize * n
+  if c < i
+  then let c1 ← c * 2#usize
+       ok (cont c1)
+  else ok (done c)
+
+/-- [payment_reconcile::join::table_cap]: loop 0:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 37:4-39:5
+    Visibility: public -/
+@[rust_loop]
+def join.table_cap_loop
+  (n : Std.Usize) (c : Std.Usize) : Result Std.Usize := do
+  loop
+    (fun c1 => join.table_cap_loop.body n c1)
+    c
+
+/-- [payment_reconcile::join::table_cap]:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 35:0-41:1
+    Visibility: public -/
+@[reducible]
+def join.table_cap (n : Std.Usize) : Result Std.Usize := do
+  join.table_cap_loop n 16#usize
+
+/-- [payment_reconcile::rules::NONE]
+    Source: 'crates/payment-reconcile/src/rules.rs', lines 52:0-52:31
+    Visibility: public -/
+@[global_simps, irreducible] def rules.NONE : Std.U32 := core.num.U32.MAX
+
+/-- [payment_reconcile::rules::EMPTY]
+    Source: 'crates/payment-reconcile/src/rules.rs', lines 28:0-28:32
+    Visibility: public -/
+@[global_simps, irreducible] def rules.EMPTY : Std.U64 := core.num.U64.MAX
+
+/-- [payment_reconcile::join::empty_table]:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 44:0-46:1
+    Visibility: public -/
+def join.empty_table (cap : Std.Usize) : Result join.JoinTable := do
+  let v ← alloc.vec.from_elem core.clone.CloneU64 rules.EMPTY cap
+  let v1 ← alloc.vec.from_elem core.clone.CloneU32 0#u32 cap
+  let v2 ← alloc.vec.from_elem core.clone.CloneU32 rules.NONE cap
+  ok { keys := v, count := v1, first := v2 }
+
+/-- [payment_reconcile::rules::hash]:
+    Source: 'crates/payment-reconcile/src/rules.rs', lines 100:0-105:1
+    Visibility: public -/
+def rules.hash (k : Std.U64) : Result Std.U64 := do
+  let lo ← lift (k &&& 4294967295#u64)
+  let hi ← k >>> 32#i32
+  let i ← lift (core.num.U64.wrapping_mul lo 2654435761#u64)
+  let i1 ← lift (core.num.U64.wrapping_mul hi 2246822519#u64)
+  let a ← lift (i ^^^ i1)
+  let i2 ← a >>> 29#i32
+  let i3 ← lift (a ^^^ i2)
+  let i4 ← k >>> 17#i32
+  ok (i3 ^^^ i4)
+
+/-- [payment_reconcile::join::start]:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 53:0-55:1
+    Visibility: public -/
+def join.start (k : Std.U64) (cap : Std.Usize) : Result Std.Usize := do
+  let i ← rules.hash k
+  let i1 ← lift (UScalar.cast .U64 cap)
+  let i2 ← i1 - 1#u64
+  let i3 ← lift (i &&& i2)
+  ok (UScalar.cast .Usize i3)
+
+/-- [payment_reconcile::join::probe]: loop body 0:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 65:4-76:1
+    Visibility: public -/
+@[rust_loop_body]
+def join.probe_loop.body
+  (keys : alloc.vec.Vec Std.U64) (k : Std.U64) (cap : Std.Usize)
+  (s : Std.Usize) (n : Std.Usize) :
+  Result (ControlFlow (Std.Usize × Std.Usize) Std.Usize)
+  := do
+  if n < cap
+  then
+    let i ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U64) keys
+        s
+    if i = k
+    then ok (done s)
+    else
+      if i = rules.EMPTY
+      then ok (done s)
+      else
+        let i1 ← s + 1#usize
+        let s1 ← if i1 = cap
+                   then ok 0#usize
+                   else ok i1
+        let n1 ← n + 1#usize
+        ok (cont (s1, n1))
+  else ok (done s)
+
+/-- [payment_reconcile::join::probe]: loop 0:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 65:4-76:1
+    Visibility: public -/
+@[rust_loop]
+def join.probe_loop
+  (keys : alloc.vec.Vec Std.U64) (k : Std.U64) (cap : Std.Usize)
+  (s : Std.Usize) (n : Std.Usize) :
+  Result Std.Usize
+  := do
+  loop
+    (fun (s1, n1) => join.probe_loop.body keys k cap s1 n1)
+    (s, n)
+
+/-- [payment_reconcile::join::probe]:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 61:0-76:1
+    Visibility: public -/
+def join.probe
+  (keys : alloc.vec.Vec Std.U64) (k : Std.U64) : Result Std.Usize := do
+  let cap := alloc.vec.Vec.len keys
+  let s ← join.start k cap
+  join.probe_loop keys k cap s 0#usize
+
+/-- [payment_reconcile::join::insert]:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 80:0-89:1
+    Visibility: public -/
+def join.insert
+  (t : join.JoinTable) (k : Std.U64) (i : Std.U32) :
+  Result join.JoinTable
+  := do
+  let s ← join.probe t.keys k
+  let i1 ←
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U64) 
+      t.keys s
+  if i1 = rules.EMPTY
+  then
+    let (_, index_mut_back) ←
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U64)
+        t.keys s
+    let (_, index_mut_back1) ←
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        t.first s
+    let (_, index_mut_back2) ←
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        t.count s
+    let v := index_mut_back k
+    let v1 := index_mut_back2 1#u32
+    let v2 := index_mut_back1 i
+    ok { keys := v, count := v1, first := v2 }
+  else
+    let (i2, index_mut_back) ←
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        t.count s
+    let i3 ← i2 + 1#u32
+    let v := index_mut_back i3
+    ok { t with count := v }
+
 /-- [payment_reconcile::rules::Record]
     Source: 'crates/payment-reconcile/src/rules.rs', lines 17:0-25:1
     Visibility: public -/
@@ -28,45 +202,102 @@ structure rules.Record where
   currency : Std.U32
   status : Std.U32
 
-/-- [payment_reconcile::rules::MATCHED]
-    Source: 'crates/payment-reconcile/src/rules.rs', lines 40:0-40:27
+/-- [payment_reconcile::join::build]: loop body 0:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 95:4-98:5
     Visibility: public -/
-@[global_simps, irreducible] def rules.MATCHED : Std.U32 := 0#u32
+@[rust_loop_body]
+def join.build_loop.body
+  (rows : alloc.vec.Vec rules.Record) (t : join.JoinTable) (i : Std.Usize) :
+  Result (ControlFlow (join.JoinTable × Std.Usize) join.JoinTable)
+  := do
+  let i1 := alloc.vec.Vec.len rows
+  if i < i1
+  then
+    let r ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice rules.Record)
+        rows i
+    let i2 ← lift (UScalar.cast .U32 i)
+    let t1 ← join.insert t r.key i2
+    let i3 ← i + 1#usize
+    ok (cont (t1, i3))
+  else ok (done t)
 
-/-- [payment_reconcile::rules::AMOUNT_MISMATCH]
-    Source: 'crates/payment-reconcile/src/rules.rs', lines 41:0-41:35
+/-- [payment_reconcile::join::build]: loop 0:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 95:4-98:5
     Visibility: public -/
-@[global_simps, irreducible] def rules.AMOUNT_MISMATCH : Std.U32 := 1#u32
+@[rust_loop]
+def join.build_loop
+  (rows : alloc.vec.Vec rules.Record) (t : join.JoinTable) (i : Std.Usize) :
+  Result join.JoinTable
+  := do
+  loop
+    (fun (t1, i1) => join.build_loop.body rows t1 i1)
+    (t, i)
 
-/-- [payment_reconcile::rules::CURRENCY_MISMATCH]
-    Source: 'crates/payment-reconcile/src/rules.rs', lines 42:0-42:37
+/-- [payment_reconcile::join::build]:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 92:0-100:1
     Visibility: public -/
-@[global_simps, irreducible] def rules.CURRENCY_MISMATCH : Std.U32 := 2#u32
+def join.build
+  (rows : alloc.vec.Vec rules.Record) : Result join.JoinTable := do
+  let i := alloc.vec.Vec.len rows
+  let i1 ← join.table_cap i
+  let t ← join.empty_table i1
+  join.build_loop rows t 0#usize
 
-/-- [payment_reconcile::rules::STATUS_MISMATCH]
-    Source: 'crates/payment-reconcile/src/rules.rs', lines 43:0-43:35
+/-- [payment_reconcile::join::lookup]:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 104:0-111:1
     Visibility: public -/
-@[global_simps, irreducible] def rules.STATUS_MISMATCH : Std.U32 := 3#u32
-
-/-- [payment_reconcile::rules::MISSING_EXTERNAL]
-    Source: 'crates/payment-reconcile/src/rules.rs', lines 45:0-45:36
-    Visibility: public -/
-@[global_simps, irreducible] def rules.MISSING_EXTERNAL : Std.U32 := 4#u32
-
-/-- [payment_reconcile::rules::DUPLICATE_EXTERNAL]
-    Source: 'crates/payment-reconcile/src/rules.rs', lines 46:0-46:38
-    Visibility: public -/
-@[global_simps, irreducible] def rules.DUPLICATE_EXTERNAL : Std.U32 := 5#u32
+def join.lookup
+  (t : join.JoinTable) (k : Std.U64) : Result (Std.U32 × Std.U32) := do
+  let s ← join.probe t.keys k
+  let i ←
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U64) 
+      t.keys s
+  if i = k
+  then
+    let i1 ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        t.count s
+    let i2 ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32)
+        t.first s
+    ok (i1, i2)
+  else ok (0#u32, rules.NONE)
 
 /-- [payment_reconcile::rules::DUPLICATE_INTERNAL]
     Source: 'crates/payment-reconcile/src/rules.rs', lines 47:0-47:38
     Visibility: public -/
 @[global_simps, irreducible] def rules.DUPLICATE_INTERNAL : Std.U32 := 6#u32
 
-/-- [payment_reconcile::rules::EXTRA_EXTERNAL]
-    Source: 'crates/payment-reconcile/src/rules.rs', lines 49:0-49:34
+/-- [payment_reconcile::rules::DUPLICATE_EXTERNAL]
+    Source: 'crates/payment-reconcile/src/rules.rs', lines 46:0-46:38
     Visibility: public -/
-@[global_simps, irreducible] def rules.EXTRA_EXTERNAL : Std.U32 := 7#u32
+@[global_simps, irreducible] def rules.DUPLICATE_EXTERNAL : Std.U32 := 5#u32
+
+/-- [payment_reconcile::rules::MISSING_EXTERNAL]
+    Source: 'crates/payment-reconcile/src/rules.rs', lines 45:0-45:36
+    Visibility: public -/
+@[global_simps, irreducible] def rules.MISSING_EXTERNAL : Std.U32 := 4#u32
+
+/-- [payment_reconcile::rules::STATUS_MISMATCH]
+    Source: 'crates/payment-reconcile/src/rules.rs', lines 43:0-43:35
+    Visibility: public -/
+@[global_simps, irreducible] def rules.STATUS_MISMATCH : Std.U32 := 3#u32
+
+/-- [payment_reconcile::rules::CURRENCY_MISMATCH]
+    Source: 'crates/payment-reconcile/src/rules.rs', lines 42:0-42:37
+    Visibility: public -/
+@[global_simps, irreducible] def rules.CURRENCY_MISMATCH : Std.U32 := 2#u32
+
+/-- [payment_reconcile::rules::AMOUNT_MISMATCH]
+    Source: 'crates/payment-reconcile/src/rules.rs', lines 41:0-41:35
+    Visibility: public -/
+@[global_simps, irreducible] def rules.AMOUNT_MISMATCH : Std.U32 := 1#u32
+
+/-- [payment_reconcile::rules::MATCHED]
+    Source: 'crates/payment-reconcile/src/rules.rs', lines 40:0-40:27
+    Visibility: public -/
+@[global_simps, irreducible] def rules.MATCHED : Std.U32 := 0#u32
 
 /-- [payment_reconcile::rules::classify_internal]:
     Source: 'crates/payment-reconcile/src/rules.rs', lines 59:0-79:1
@@ -95,6 +326,32 @@ def rules.classify_internal
             then ok rules.STATUS_MISMATCH
             else ok rules.MATCHED
 
+/-- [payment_reconcile::join::internal_code]:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 115:0-123:1
+    Visibility: public -/
+def join.internal_code
+  (x : rules.Record) (external : alloc.vec.Vec rules.Record)
+  (int : join.JoinTable) (ext : join.JoinTable) :
+  Result (Std.U32 × Std.U32)
+  := do
+  let (ic, _) ← join.lookup int x.key
+  let (ec, ef) ← join.lookup ext x.key
+  if ec = 0#u32
+  then let i ← rules.classify_internal x ic ec none
+       ok (i, ef)
+  else
+    let i ← lift (UScalar.cast .Usize ef)
+    let r ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice rules.Record)
+        external i
+    let i1 ← rules.classify_internal x ic ec (some r)
+    ok (i1, ef)
+
+/-- [payment_reconcile::rules::EXTRA_EXTERNAL]
+    Source: 'crates/payment-reconcile/src/rules.rs', lines 49:0-49:34
+    Visibility: public -/
+@[global_simps, irreducible] def rules.EXTRA_EXTERNAL : Std.U32 := 7#u32
+
 /-- [payment_reconcile::rules::classify_external]:
     Source: 'crates/payment-reconcile/src/rules.rs', lines 84:0-94:1
     Visibility: public -/
@@ -109,5 +366,104 @@ def rules.classify_external
       if external_count > 1#u32
       then ok rules.DUPLICATE_EXTERNAL
       else ok rules.MATCHED
+
+/-- [payment_reconcile::join::join]: loop body 0:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 133:4-138:5
+    Visibility: public -/
+@[rust_loop_body]
+def join.join_loop0.body
+  (internal : alloc.vec.Vec rules.Record)
+  (external : alloc.vec.Vec rules.Record) (ext : join.JoinTable)
+  (int : join.JoinTable) (codes : alloc.vec.Vec Std.U32)
+  (matched : alloc.vec.Vec Std.U32) (i : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec Std.U32) × (alloc.vec.Vec Std.U32) ×
+    Std.Usize) ((alloc.vec.Vec Std.U32) × (alloc.vec.Vec Std.U32)))
+  := do
+  let i1 := alloc.vec.Vec.len internal
+  if i < i1
+  then
+    let r ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice rules.Record)
+        internal i
+    let (c, m) ← join.internal_code r external int ext
+    let codes1 ← alloc.vec.Vec.push codes c
+    let matched1 ← alloc.vec.Vec.push matched m
+    let i2 ← i + 1#usize
+    ok (cont (codes1, matched1, i2))
+  else ok (done (codes, matched))
+
+/-- [payment_reconcile::join::join]: loop 0:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 133:4-138:5
+    Visibility: public -/
+@[rust_loop]
+def join.join_loop0
+  (internal : alloc.vec.Vec rules.Record)
+  (external : alloc.vec.Vec rules.Record) (ext : join.JoinTable)
+  (int : join.JoinTable) (codes : alloc.vec.Vec Std.U32)
+  (matched : alloc.vec.Vec Std.U32) (i : Std.Usize) :
+  Result ((alloc.vec.Vec Std.U32) × (alloc.vec.Vec Std.U32))
+  := do
+  loop
+    (fun (codes1, matched1, i1) => join.join_loop0.body internal external ext
+      int codes1 matched1 i1)
+    (codes, matched, i)
+
+/-- [payment_reconcile::join::join]: loop body 1:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 141:4-147:5
+    Visibility: public -/
+@[rust_loop_body]
+def join.join_loop1.body
+  (external : alloc.vec.Vec rules.Record) (ext : join.JoinTable)
+  (int : join.JoinTable) (ecodes : alloc.vec.Vec Std.U32) (j : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec Std.U32) × Std.Usize) (alloc.vec.Vec
+    Std.U32))
+  := do
+  let i := alloc.vec.Vec.len external
+  if j < i
+  then
+    let r ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice rules.Record)
+        external j
+    let (ic, _) ← join.lookup int r.key
+    let (ec, _) ← join.lookup ext r.key
+    let i1 ← rules.classify_external ic ec
+    let ecodes1 ← alloc.vec.Vec.push ecodes i1
+    let j1 ← j + 1#usize
+    ok (cont (ecodes1, j1))
+  else ok (done ecodes)
+
+/-- [payment_reconcile::join::join]: loop 1:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 141:4-147:5
+    Visibility: public -/
+@[rust_loop]
+def join.join_loop1
+  (external : alloc.vec.Vec rules.Record) (ext : join.JoinTable)
+  (int : join.JoinTable) (ecodes : alloc.vec.Vec Std.U32) (j : Std.Usize) :
+  Result (alloc.vec.Vec Std.U32)
+  := do
+  loop
+    (fun (ecodes1, j1) => join.join_loop1.body external ext int ecodes1 j1)
+    (ecodes, j)
+
+/-- [payment_reconcile::join::join]:
+    Source: 'crates/payment-reconcile/src/join.rs', lines 127:0-149:1
+    Visibility: public -/
+def join.join
+  (internal : alloc.vec.Vec rules.Record)
+  (external : alloc.vec.Vec rules.Record) :
+  Result join.JoinOut
+  := do
+  let ext ← join.build external
+  let int ← join.build internal
+  let i := alloc.vec.Vec.len internal
+  let codes := alloc.vec.Vec.with_capacity Std.U32 i
+  let i1 := alloc.vec.Vec.len internal
+  let matched := alloc.vec.Vec.with_capacity Std.U32 i1
+  let (codes1, matched1) ←
+    join.join_loop0 internal external ext int codes matched 0#usize
+  let i2 := alloc.vec.Vec.len external
+  let ecodes := alloc.vec.Vec.with_capacity Std.U32 i2
+  let ecodes1 ← join.join_loop1 external ext int ecodes 0#usize
+  ok { internal := codes1, matched := matched1, external := ecodes1 }
 
 end payment_reconcile

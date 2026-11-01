@@ -16,6 +16,7 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Payments | `payment_domain.Theorems.status_steps_allowed`, `terminal_final`, `captured_final`, `refund_safety`, `refunded_le_captured`, `event_dedup`, `reachable_inv` | the extracted `crates/payment-domain/src/lib.rs` (`proofs/payments/generated/PaymentDomain.lean`) |
 | Policies | `payment_domain.Policies.check_sound` | the extracted `crates/payment-domain/src/policy.rs` |
 | Reconciliation | `payment_reconcile.Reconcile.classify_internal_spec`, `classify_external_spec`, `codes_in_range`, `internal_matched_iff`, `external_matched_iff`, `duplicates_first`, `exception_reported_once`, `pair_matched_both_sides` | the extracted `crates/payment-reconcile/src/rules.rs` (`classify_internal`, `classify_external`), the per-row decision every engine calls, the GPU included (`proofs/reconcile/generated/PaymentReconcile.lean`) |
+| Reconciliation join | `payment_reconcile.Join.probe_spec`, `insert_spec`, `build_spec`, `lookup_spec`, `internal_code_spec`, `join_eq_reference`, `join_rows` | the extracted `crates/payment-reconcile/src/join.rs`, the single-thread hash join (`cpu_single`, and `cpu_parallel` per partition), equal row for row to the reference's counts and first external record |
 | Read plans | `payment_ledger.Plan.reads_abs`, `payment_ledger.Frame.frame`, `load_for_sound`; `payment_domain.Plan.reads_abs`, `payment_domain.Frame.frame`, `load_for_sound`; `*.Schema.decode_load` (generated) | the extracted `reads` of each kernel (`Store::load_for` runs it) and the extracted `transition`: on what each command's plan loads, `transition` gives its whole-tenant result |
 
 Gate results (h5i-app 0.5.2, with the read plans): `h5i app check
@@ -162,11 +163,29 @@ committed history is such a sequence.
   and compares), and the device crate's launch shell and `recon_build`
   (the hash-table build with atomics). The SIMD policy engine is a
   separate implementation checked against `check` by tests.
-- **The hash joins are not proven.** `classify_internal` /
-  `classify_external` are proven (`proofs/reconcile`); that each engine's
-  hash table (CPU `Table`, the GPU's `recon_build`, `find_slot`) hands
-  them the right counts and first external record is tested (every engine
-  against the `BTreeMap` reference on every row), not proven.
+- **The hash joins: the single-thread join is proven, the others are
+  tested.** `join.rs` (open addressing, linear probing from `rules::hash`
+  masked to the capacity, per key a row count and the lowest row index) is
+  extracted, and `payment_reconcile.Join.join_eq_reference` proves that it
+  gives every internal row `rowCode` (both key counts and the first
+  external record) and the first external index (`NONE` if none), and every
+  external row `extCode`: the per-row answer of the `BTreeMap` reference
+  (`reference` itself is not extracted; it reads those definitions off a
+  map of key to row list). Preconditions: no key is `EMPTY`, fewer than
+  `u32::MAX` rows a side (`validate`), `4n + 32` fits a `usize`. The proof
+  does not depend on where probing starts. `cpu_single` is this code;
+  `cpu_parallel` runs it on each partition. Not proven, and checked by the
+  differential tests (every engine against the reference on every row):
+  - `cpu_parallel`'s radix partition and the mapping back to global
+    indices (that a partition holds all rows of its keys, in increasing
+    order, so local first rows are the global ones);
+  - the SIMD engine's `Table` and vector probe;
+  - the GPU's `recon_build` (CAS on the key, `atomicAdd` on the count,
+    `atomicMin` on the first index) and its probe `find_slot`. They
+    implement the proven sequential algorithm (same start, same probe
+    order, same per-key count and lowest index), but the concurrent build
+    is not covered: that every interleaving ends in a table with distinct
+    keys and full probe paths is not proven.
 - **Tenant isolation inside PostgreSQL** is proven for the SQL model and the
   engine model, not for the real engine or database.
 - **Replays and authorized callers.** Since SEC-03 only a caller who may

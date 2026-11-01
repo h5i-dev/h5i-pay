@@ -17,4 +17,4 @@ lean_lib Generated where
 
 -- Hand-written specifications and proofs.
 @[default_target] lean_lib Proofs where
-  roots := #[`Reconcile]
+  roots := #[`Reconcile, `Reconcile.Join]

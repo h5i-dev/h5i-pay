@@ -178,6 +178,85 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### F5: the single-thread hash join proven against the reference
+
+- `crates/payment-reconcile/src/join.rs`: the hash join in the Rust subset
+  Aeneas extracts (`Vec`, index loops, `vec!`, no iterators): one
+  open-addressing table per side (`JoinTable { keys, count, first }`,
+  capacity a power of two, at least 16 and twice the rows), linear probing
+  from `rules::hash(k) & (cap − 1)`, the same start as `Table`,
+  `find_slot` and the GPU tables; per key the row count and the lowest row
+  index. `cpu_single` is `join::join`; `cpu_parallel` now runs `join::join`
+  on each partition (the partition's rows copied in index order, local
+  indices mapped back), so it no longer uses `Table`.
+- `proofs/reconcile/Reconcile/Join.lean` (no `sorry`; axioms `propext`,
+  `Classical.choice`, `Quot.sound`):
+  - `probe_spec`: a probe returns the key's slot, or an empty slot reached
+    through full slots when no slot holds the key;
+  - `insert_spec` / `build_spec`: the table invariant `TInv` (distinct keys,
+    each slot's count = rows with its key, first = lowest such row, every
+    row's key has a slot, probe paths full, an empty slot left);
+  - `lookup_spec`: `(count, first)` = `(|rows with k|, index of the first
+    such row or NONE)`;
+  - `join_eq_reference` / `join_rows`: every internal row gets `rowCode`
+    and `matchIdx` (the first external index), every external row
+    `extCode`: the reference's per-row answer.
+  Preconditions are `validate`'s (no `EMPTY` key, fewer than `u32::MAX`
+  rows a side) and `4n + 32 ≤ usize::MAX`. The proof is independent of the
+  start slot. `h5i app check`: 64 theorems in 2 modules (was 15 in 1).
+- Mutants (`h5i app mutate crates/payment-reconcile`): 6/6 caught, the
+  three earlier ones plus `duplicate_count_reset` (a duplicate resets the
+  count to 1), `first_row_overwritten` (a duplicate replaces the first
+  row) and `probe_ignores_empty` (the probe does not stop at an empty
+  slot).
+- Not covered (differential-tested, `docs/proof-assumptions.md`): the radix
+  partition and index mapping of `cpu_parallel`, the SIMD engine's `Table`
+  and vector probe, the GPU's atomic build `recon_build` and its probe
+  `find_slot`. The GPU build implements the proven sequential algorithm
+  (same start, probe order, per-key count and lowest index via
+  `atomicAdd`/`atomicMin`); its concurrent interleavings are not proven.
+- Start slot. The proof holds for any start below the capacity, so
+  `k % cap` (considered to simplify the proof) was measured against the
+  kept start, `rules::hash(k) & (cap − 1)`, with the final code (p50 ms,
+  three runs; the multiplicative start `k·0x9e3779b97f4a7c15 % cap` for
+  comparison):
+
+| engine, rows | hash & mask (kept) | `k % cap` | multiplicative % |
+|---|---:|---:|---:|
+| single 1M | 326–328 | 201–202 | 279–282 |
+| single 10M | 3874–3890 | 2557–2581 | 3583–3608 |
+| parallel 1M | 71–74 | 72–76 | 81–84 |
+| parallel 10M | 2016–2024 | 1573–1593 | 1855–1867 |
+
+  `k % cap` is 34–38% faster single-threaded on the benchmark's keys,
+  because ids with an odd stride map to distinct slots in order (no
+  collisions, sequential memory access). It falls apart on other key
+  patterns: with ids strided by 4096 (200k rows a side, `cpu_single`) it
+  took 976 ms against 38.5 ms for the hash start (25 times slower), because
+  all keys share their low bits and probe through one run. The hash start
+  costs the same 38–40 ms for strides 1, 7 and 4096. It is kept: the
+  external side is PSP data whose id pattern we do not control. Without
+  `#[inline(always)]` on `probe`/`lookup`/`insert` and with element-wise
+  pushes instead of `vec!`, the extracted code was 25% slower than `Table`
+  at 10M; with them it matches it.
+- Measured (`bench one recon <engine> <rows>`, p50 ms, three runs each,
+  same host, another project's Lean build running at the same time; before =
+  `b55fbff`'s `Table` engines):
+
+| rows | single before | single after | parallel before | parallel after |
+|---:|---:|---:|---:|---:|
+| 10k | 1.21–1.26 | 0.93–1.25 | 0.40–0.48 | 0.42–0.46 |
+| 100k | 14.7–15.1 | 14.3–14.4 | 3.7–3.9 | 3.9–4.0 |
+| 1M | 320–322 | 322–325 | 94–97 | 59–63 |
+| 10M | 4087–4123 | 3827–3907 | 2286–3004 | 2024–2051 |
+
+  The single engine is unchanged within noise up to 1M and 5% faster at
+  10M. The parallel engine is 35% faster at 1M and 11% at 10M (the copied
+  partition rows are contiguous). Its peak RSS at 10M rose from +319 to
+  +387 MiB, because of those copies.
+- GPU differential test (6 tests, A10G) and `build-device.sh --check` pass
+  (the device crate is unchanged: it compiles `rules.rs`, not `join.rs`).
+
 ### F4: serialization retries found and reduced
 
 - Found from PostgreSQL's log (`could not serialize access … pivot`, with

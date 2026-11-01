@@ -1,10 +1,13 @@
 # Read by `h5i app` (extract, check, mutate). Run from the repo root:
 #   h5i app prove crates/payment-reconcile
-# Only the per-row classification is extracted: the hash join around it
-# (CPU engines, GPU launch shell) is trusted and differential-tested.
+# Extracted: the per-row classification (`rules.rs`, also compiled into the
+# GPU kernels) and the single-thread hash join (`join.rs`, used by
+# `cpu_single` and per partition by `cpu_parallel`). Trusted and
+# differential-tested: the radix partition of `cpu_parallel`, the SIMD
+# engine's probe and the GPU's atomic table build.
 [extract]
 crate = "."
-start-from = ["rules::classify_internal", "rules::classify_external"]
+start-from = ["rules::classify_internal", "rules::classify_external", "join::join"]
 schema = false
 
 [proofs]
@@ -20,6 +23,13 @@ theorems = [
   "payment_reconcile.Reconcile.duplicates_first",
   "payment_reconcile.Reconcile.exception_reported_once",
   "payment_reconcile.Reconcile.pair_matched_both_sides",
+  "payment_reconcile.Join.probe_spec",
+  "payment_reconcile.Join.insert_spec",
+  "payment_reconcile.Join.build_spec",
+  "payment_reconcile.Join.lookup_spec",
+  "payment_reconcile.Join.internal_code_spec",
+  "payment_reconcile.Join.join_eq_reference",
+  "payment_reconcile.Join.join_rows",
 ]
 
 # Bugs the proofs must reject (`h5i app mutate crates/payment-reconcile`).
@@ -40,3 +50,21 @@ name = "extra_external_reported_matched"
 file = "src/rules.rs"
 old = "    if internal_count == 0 {\n        EXTRA_EXTERNAL"
 new = "    if internal_count == 0 {\n        MATCHED"
+
+[[mutant]]
+name = "duplicate_count_reset"
+file = "src/join.rs"
+old = "    } else {\n        t.count[s] += 1;\n    }"
+new = "    } else {\n        t.count[s] = 1;\n    }"
+
+[[mutant]]
+name = "first_row_overwritten"
+file = "src/join.rs"
+old = "    } else {\n        t.count[s] += 1;\n    }"
+new = "    } else {\n        t.first[s] = i;\n        t.count[s] += 1;\n    }"
+
+[[mutant]]
+name = "probe_ignores_empty"
+file = "src/join.rs"
+old = "        if keys[s] == EMPTY {\n            return s;\n        }"
+new = "        if keys[s] == EMPTY && n == cap {\n            return s;\n        }"

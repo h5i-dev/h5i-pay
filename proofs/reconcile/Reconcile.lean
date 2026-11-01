@@ -21,9 +21,14 @@ from that source (`generated/PaymentReconcile.lean`).
   mismatch gets the mismatch on the internal row and MATCHED on the
   external one), `pair_matched_both_sides`, and `codes_in_range`.
 
-Not proven: that the hash tables (CPU `Table`, the GPU's `recon_build` with
-atomics, `find_slot`) return those counts and that first record. That is the
-trusted join, checked by differential tests against the reference.
+`Reconcile/Join.lean` proves that the single-thread hash join
+(`join.rs`: `cpu_single`, and `cpu_parallel` on each partition) gives every
+row exactly `rowCode` / `extCode` and the first external index
+(`join_eq_reference`). Not proven: the radix partition around
+`cpu_parallel`'s per-partition joins, the SIMD engine's table and probe, the
+GPU's atomic build (`recon_build`) and its probe (`find_slot`), which
+implement the same sequential algorithm; those are checked by differential
+tests against the reference.
 -/
 open Aeneas Aeneas.Std Result payment_reconcile payment_reconcile.rules
 
