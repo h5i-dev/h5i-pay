@@ -5,13 +5,14 @@ edition.workspace = true
 license.workspace = true
 version.workspace = true
 publish.workspace = true
-build = "build.rs"
 
 [features]
 default = []
-# The CUDA engines. Needs nvcc (to compile kernels/batch.cu to PTX), the CUDA
-# driver, and libclang for cust's bindings. Without it this crate only
-# reports that no GPU engine is built, and every caller falls back to CPU.
+# The CUDA engines: the committed PTX in kernels/payment_gpu_device.ptx
+# (compiled from ./device by build-device.sh with rustc_codegen_nvvm), the
+# CUDA driver, and libclang for cust's bindings. No nvcc. Without the
+# feature this crate only reports that no GPU engine is built, and every
+# caller falls back to CPU.
 cuda = ["dep:h5i-app-gpu-backend-nvvm", "dep:cust"]
 
 [dependencies]

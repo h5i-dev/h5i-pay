@@ -5,13 +5,15 @@
 //! codes), so the batch API can select it with `ExecutionPolicy` and the
 //! differential tests can `compare` it with the CPU engines.
 //!
-//! The kernels (`kernels/batch.cu`) are CUDA C transcriptions of the Rust
-//! specifications, compiled to PTX by nvcc and loaded through
-//! `h5i-app-gpu-backend-nvvm` (Rust-CUDA's `cust`). The h5i examples compile
-//! Rust itself to PTX with `rustc_codegen_nvvm`; that toolchain is pinned to
-//! CUDA 12.6 and Ubuntu packages, while this host has CUDA 13.2 on Amazon
-//! Linux, so h5i-pay ships hand-written kernels and relies on differential
-//! tests for equivalence (`docs/proof-assumptions.md`).
+//! The kernels are Rust: the device crate (`device/`) includes
+//! `payment_domain::policy` and `payment_reconcile::rules` verbatim (the
+//! source the CPU engines run and Aeneas extracts) and is compiled to PTX by
+//! Rust-CUDA's `rustc_codegen_nvvm` (`build-device.sh`; toolchain in
+//! `docs/gpu-toolchain.md`). The PTX is committed
+//! (`kernels/payment_gpu_device.ptx`) and loaded through
+//! `h5i-app-gpu-backend-nvvm` (`cust`). Only the launch shell and the
+//! hash-table build are GPU-specific code; the differential tests now check
+//! the compiler and the hardware, not a transcription.
 //!
 //! The GPU computes candidate decisions and reports. It never commits
 //! financial state: callers validate the output shape, and every money

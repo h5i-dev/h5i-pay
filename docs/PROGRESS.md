@@ -117,10 +117,8 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
   through `h5i-app-gpu-backend-nvvm`/`cust` at the pinned Rust-CUDA rev;
   `Gpu` implements `Backend` for both workloads with H2D/kernel/D2H timing.
   `h5i-pay-batch` worker binary (CSV in, JSON report out; Auto selection).
-  The Rust-CUDA single-source toolchain (rustc_codegen_nvvm) was not used:
-  h5i pins it to CUDA 12.6 on Ubuntu, this host has CUDA 13.2 on Amazon
-  Linux. Equivalence of the CUDA C with the Rust spec rests on differential
-  tests. libclang (`dnf install clang-libs clang-devel`) is needed for cust.
+  (Superseded: see "A" under "After M5"; the kernels are now Rust compiled by
+  rustc_codegen_nvvm.) libclang (`dnf install clang-libs clang-devel`) is needed for cust.
 - `tests/differential`: every CPU engine vs the reference, and with
   `--features gpu` the GPU vs the reference on every row (empty batches,
   block boundaries, hot keys, hash collisions, malformed policies, unsorted
@@ -179,6 +177,61 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 - README updated with the full layout and commands.
 
 ## After M5 (newest first)
+
+### A: GPU kernels compiled from the Rust the CPU and the proofs use
+
+- Toolchain (A1) works natively on this Amazon Linux 2023 host, no
+  container: rust-cuda `3a82c35a`, `nightly-2026-04-02`, the prebuilt LLVM
+  7.1 and CUDA 12.6's libNVVM (`cuda-nvvm-12-6` etc. from NVIDIA's rhel9
+  repo, beside CUDA 13.2; `/usr/local/cuda` put back on 13.2 with
+  `alternatives`). The one Ubuntu-only piece was `libedit.so.2` /
+  `libbsd.so.0` for the prebuilt LLVM; Ubuntu 20.04's packages (24.04's need
+  glibc 2.38) are extracted to `/var/tmp`, pinned by SHA-256. Details and
+  the environment file: `docs/gpu-toolchain.md`.
+- `crates/payment-gpu/device` (its own workspace, `no_std`, `cuda_std`)
+  includes `payment-domain/src/policy.rs` and `payment-reconcile/src/rules.rs`
+  with `#[path]` and exports `policy_check`, `recon_build`,
+  `recon_internal`, `recon_external`. `build-device.sh` compiles it to
+  `kernels/payment_gpu_device.ptx` (committed, compute_75, 14.5 KB, sha256
+  `4cedff02…764f`); `--check` rebuilds and compares (two builds were
+  byte-identical). `payment-gpu` embeds that PTX; `kernels/batch.cu`,
+  `build.rs` and the nvcc step are deleted (A2).
+- Reconciliation (A3): `rules.rs` now also holds the per-row probe
+  (`find_slot`, `TableRef`, `internal_row`, `external_row`) that the CPU
+  single-thread and multithread engines and the GPU all call;
+  `classify_internal` lost its match guard (same semantics) so Aeneas takes
+  it. `crates/payment-reconcile/h5i-app.toml` extracts the two classifiers
+  into the new Lake project `proofs/reconcile`. Proven
+  (`proofs/reconcile/Reconcile.lean`, 15 theorems, standard axioms): the
+  extracted functions compute decision tables `specInternal` /
+  `specExternal`; codes are in range; over whole inputs (counts and first
+  external record of the key, what the reference computes),
+  `internal_matched_iff`, `external_matched_iff`, `duplicates_first`,
+  `exception_reported_once`, `pair_matched_both_sides`. `h5i app mutate
+  crates/payment-reconcile`: 3/3 caught (duplicate external ignored, status
+  not compared, extra external reported matched). The hash joins
+  themselves (CPU `Table`, GPU `recon_build` atomics) stay a trusted,
+  tested shell.
+- Differential tests (A4) unchanged and passing on the A10G with the
+  Rust-compiled PTX: every CPU engine and the GPU against the reference on
+  every row (6 tests). They now check the compiler and the hardware, not a
+  transcription. `docs/proof-assumptions.md` has the new trusted base.
+- Cost on the CPU: routing the CPU joins through the shared `TableRef`
+  probe made them about 8% slower until the probe was `#[inline(always)]`;
+  now 2–3% (single) and ~5% (multithread) slower than before at 1M rows
+  (paired A/B runs of the old and new `bench one recon`, 1M rows, 11 runs:
+  single 309 → 316–319 ms, multithread 89–90 → 95 ms).
+- GPU timings with the nvvm PTX (`bench all`, first run, the host was
+  otherwise busy so its CPU rows are not comparable): reconciliation 1M
+  rows p50 18.8 ms (kernels 4.18 ms; nvcc build 16.9 ms / 4.09 ms), 10M
+  206 ms (kernels 49.4 vs 48.2 ms); policy 1M 5.2 ms (kernel 0.54 vs 0.29
+  ms), 10M 59.4 ms (kernel 5.0 vs 2.55 ms). So the reconciliation kernels
+  are as fast as the CUDA C; the policy kernel is about 2× slower than
+  nvcc's, which changes the end-to-end time by a few percent because
+  transfers dominate. A clean re-run of all benchmarks is part of B4.
+- CI: the proofs job extracts, checks and mutates `crates/payment-reconcile`
+  too; a new `device-ptx` job (Ubuntu 24.04, CUDA 12.6 container) builds
+  the backend and runs `build-device.sh --check`. Written, not run here.
 
 ### B2: recovery selects only unfinished work
 

@@ -18,7 +18,8 @@ in a SERIALIZABLE PostgreSQL transaction. The design is
 | `crates/payment-connectors` | PSP connectors: Mock PSP, Stripe (test mode only), webhook signatures |
 | `crates/payment-reconcile` | reconciliation rules and CPU engines (reference, single-thread, multithread, AVX2) |
 | `crates/payment-batch` | batch API on h5i-app-gpu: policy validation and reconciliation with CPU/GPU/Auto selection |
-| `crates/payment-gpu` | CUDA kernels (`kernels/batch.cu`, feature `cuda`) and the `h5i-pay-batch` worker |
+| `crates/payment-gpu` | GPU engines (feature `cuda`): the Rust device crate `device/` (the same `policy.rs` and `rules.rs` the CPU runs, compiled to PTX by rustc_codegen_nvvm, committed as `kernels/payment_gpu_device.ptx`) and the `h5i-pay-batch` worker |
+| `proofs/reconcile` | Lean proofs of the reconciliation classification (`h5i app check crates/payment-reconcile`) |
 | `crates/payment-api` | the `h5i-pay` HTTP server and the payment orchestrator |
 | `proofs/ledger` | Lake project: extracted ledger, `Ledger/`, `Batch/`, `Models/` |
 | `proofs/payments` | Lake project: extracted payment kernel, `Payments/`, `Policies/` |
@@ -85,7 +86,10 @@ to `../../ledger/.lake/packages` instead.
 
 ## GPU batch and benchmarks
 
-Needs the CUDA toolkit (`nvcc`), an NVIDIA driver and libclang. Without the
+Needs the CUDA toolkit headers/libraries for `cust`, an NVIDIA driver and
+libclang; not nvcc (the PTX is committed). Rebuilding the PTX needs the
+pinned Rust-CUDA toolchain: `docs/gpu-toolchain.md`,
+`crates/payment-gpu/build-device.sh [--check]`. Without the
 `cuda` feature everything builds and runs on the CPU only.
 
 ```sh

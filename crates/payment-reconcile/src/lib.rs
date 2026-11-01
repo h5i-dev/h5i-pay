@@ -155,37 +155,26 @@ impl Table {
         t
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn find(&self, k: u64) -> Option<usize> {
-        let mut s = (hash(k) as usize) & self.mask;
-        loop {
-            let x = self.keys[s];
-            if x == k {
-                return Some(s);
-            }
-            if x == EMPTY {
-                return None;
-            }
-            s = (s + 1) & self.mask;
-        }
+        find_slot(&self.keys, self.mask as u64, k)
+    }
+
+    /// The table as the shared per-row functions see it.
+    #[inline(always)]
+    pub fn as_ref(&self) -> TableRef<'_> {
+        TableRef { keys: &self.keys, count: &self.count, first: &self.first, mask: self.mask as u64 }
     }
 
     /// `(count, first)` for key `k`; `(0, NONE)` if absent.
-    #[inline]
+    #[inline(always)]
     pub fn get(&self, k: u64) -> (u32, u32) {
-        match self.find(k) {
-            Some(s) => (self.count[s], self.first[s]),
-            None => (0, NONE),
-        }
+        self.as_ref().get(k)
     }
 }
 
 fn classify_row(r: &Recon, int: &Table, ext: &Table, i: usize) -> (u32, u32) {
-    let x = &r.internal[i];
-    let (ic, _) = int.get(x.key);
-    let (ec, ef) = ext.get(x.key);
-    let first = if ec == 0 { None } else { Some(&r.external[ef as usize]) };
-    (classify_internal(x, ic, ec, first), ef)
+    internal_row(&r.internal[i], &r.external, int.as_ref(), ext.as_ref())
 }
 
 /// One thread, one hash table per side.
@@ -204,7 +193,7 @@ pub fn cpu_single(r: &Recon) -> Result<Report, ReconError> {
         out.matched.push(m);
     }
     for e in &r.external {
-        out.external.push(classify_external(int.get(e.key).0, ext.get(e.key).0));
+        out.external.push(external_row(e.key, int.as_ref(), ext.as_ref()));
     }
     Ok(out)
 }
@@ -294,7 +283,7 @@ pub fn cpu_parallel(r: &Recon) -> Result<Report, ReconError> {
         for &j in erows {
             let k = r.external[j as usize].key;
             // SAFETY: as above.
-            unsafe { oe.write(j as usize, classify_external(int.get(k).0, ext.get(k).0)) };
+            unsafe { oe.write(j as usize, external_row(k, int.as_ref(), ext.as_ref())) };
         }
     });
     Ok(out)

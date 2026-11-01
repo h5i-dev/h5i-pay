@@ -94,6 +94,31 @@ jobs:
           components: clippy
       - run: cargo clippy --locked --all-targets -p payment-gpu -p h5i-pay-tests -p h5i-pay-benchmarks --features payment-gpu/cuda,h5i-pay-tests/gpu,h5i-pay-benchmarks/gpu -- -D warnings
 
+  # The committed PTX is what the device crate compiles to with the pinned
+  # Rust-CUDA toolchain (docs/gpu-toolchain.md). Ubuntu 24.04 with CUDA
+  # 12.6's libNVVM, as h5i's backend-nvvm/setup.sh expects.
+  device-ptx:
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:12.6.3-devel-ubuntu24.04
+    steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends curl ca-certificates build-essential pkg-config git libssl-dev libncurses-dev libxml2-dev libtinfo6 libedit2 zlib1g-dev
+      - uses: actions/checkout@v4
+      - name: Rust-CUDA backend at the pinned rev
+        run: |
+          curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          . "$HOME/.cargo/env"
+          rustup toolchain install --no-self-update nightly-2026-04-02 --profile minimal --component rust-src,rustc-dev,llvm-tools-preview
+          git clone https://github.com/Rust-GPU/rust-cuda /var/tmp/h5i-gpu-rust-cuda
+          git -C /var/tmp/h5i-gpu-rust-cuda checkout --detach 3a82c35a7196731fb60eebdac2a40d2b1bf0ba95
+          cat > /var/tmp/h5i-gpu-env.sh <<'ENV'
+          export CARGO_TARGET_DIR=/var/tmp/h5i-gpu-target CUDA_PATH=/usr/local/cuda-12.6
+          export PATH=$HOME/.cargo/bin:/usr/local/cuda-12.6/bin:$PATH
+          export LD_LIBRARY_PATH=/usr/local/cuda-12.6/nvvm/lib64:/usr/local/cuda-12.6/lib64:$HOME/.rustup/toolchains/nightly-2026-04-02-x86_64-unknown-linux-gnu/lib
+          ENV
+          . /var/tmp/h5i-gpu-env.sh
+          cd /var/tmp/h5i-gpu-rust-cuda && USE_PREBUILT_LLVM=1 cargo +nightly-2026-04-02 build --release --locked -p rustc_codegen_nvvm
+      - run: bash crates/payment-gpu/build-device.sh --check
+
   gpu-tests:
     if: ${{ vars.GPU_RUNNER == 'true' }}
     runs-on: [self-hosted, linux, gpu]
@@ -141,12 +166,12 @@ jobs:
           echo "$RUNNER_TEMP/charon/bin" >> "$GITHUB_PATH"
       - run: h5i app doctor
       # The committed Lean is exactly what the kernels extract to.
-      - run: h5i app extract --check crates/payment-ledger crates/payment-domain
+      - run: h5i app extract --check crates/payment-ledger crates/payment-domain crates/payment-reconcile
       # lake build + no sorry/native_decide/axiom + standard axioms only.
-      - run: h5i app check crates/payment-ledger crates/payment-domain
+      - run: h5i app check crates/payment-ledger crates/payment-domain crates/payment-reconcile
       # Every listed bug must break a proof (main only: ~12 full builds).
       - if: github.ref == 'refs/heads/main'
-        run: h5i app mutate crates/payment-ledger crates/payment-domain
+        run: h5i app mutate crates/payment-ledger crates/payment-domain crates/payment-reconcile
 
   terraform:
     runs-on: ubuntu-latest

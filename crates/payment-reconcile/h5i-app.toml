@@ -1,0 +1,42 @@
+# Read by `h5i app` (extract, check, mutate). Run from the repo root:
+#   h5i app prove crates/payment-reconcile
+# Only the per-row classification is extracted: the hash join around it
+# (CPU engines, GPU launch shell) is trusted and differential-tested.
+[extract]
+crate = "."
+start-from = ["rules::classify_internal", "rules::classify_external"]
+schema = false
+
+[proofs]
+dir = "../../proofs/reconcile"
+
+[check]
+theorems = [
+  "payment_reconcile.Reconcile.classify_internal_spec",
+  "payment_reconcile.Reconcile.classify_external_spec",
+  "payment_reconcile.Reconcile.codes_in_range",
+  "payment_reconcile.Reconcile.internal_matched_iff",
+  "payment_reconcile.Reconcile.external_matched_iff",
+  "payment_reconcile.Reconcile.duplicates_first",
+  "payment_reconcile.Reconcile.exception_reported_once",
+  "payment_reconcile.Reconcile.pair_matched_both_sides",
+]
+
+# Bugs the proofs must reject (`h5i app mutate crates/payment-reconcile`).
+[[mutant]]
+name = "duplicate_external_ignored"
+file = "src/rules.rs"
+old = "            if external_count > 1 {\n                DUPLICATE_EXTERNAL"
+new = "            if external_count > 2 {\n                DUPLICATE_EXTERNAL"
+
+[[mutant]]
+name = "status_not_compared"
+file = "src/rules.rs"
+old = "            } else if e.status != rec.status {"
+new = "            } else if false {"
+
+[[mutant]]
+name = "extra_external_reported_matched"
+file = "src/rules.rs"
+old = "    if internal_count == 0 {\n        EXTRA_EXTERNAL"
+new = "    if internal_count == 0 {\n        MATCHED"

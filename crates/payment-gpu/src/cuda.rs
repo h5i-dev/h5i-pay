@@ -10,7 +10,11 @@ use payment_reconcile::rules::{capacity, NONE};
 use payment_reconcile::{validate, Recon, Record, Report};
 use std::time::Instant;
 
-const PTX: &str = include_str!(concat!(env!("OUT_DIR"), "/batch.ptx"));
+/// The device crate (`../device`) compiled by rustc_codegen_nvvm
+/// (`build-device.sh`; `build-device.sh --check` rebuilds and compares).
+/// Its entry points run the same `policy::check` and `rules::internal_row` /
+/// `external_row` source as the CPU engines.
+const PTX: &str = include_str!("../kernels/payment_gpu_device.ptx");
 const BLOCK: u32 = 256;
 
 /// Where the time of the last run went.
@@ -118,22 +122,22 @@ impl Backend<Recon, (), Report> for Gpu {
         unsafe {
             if ne > 0 {
                 cust::launch!(build<<<grid(ne), BLOCK, 0, stream>>>(
-                    ext_rows.as_device_ptr(), ne as u32, et.keys.as_device_ptr(), et.count.as_device_ptr(), et.first.as_device_ptr(), et.mask))?;
+                    ext_rows.as_device_ptr(), ne, et.keys.as_device_ptr(), et.count.as_device_ptr(), et.first.as_device_ptr(), et.mask))?;
             }
             if ni > 0 {
                 cust::launch!(build<<<grid(ni), BLOCK, 0, stream>>>(
-                    int_rows.as_device_ptr(), ni as u32, it.keys.as_device_ptr(), it.count.as_device_ptr(), it.first.as_device_ptr(), it.mask))?;
+                    int_rows.as_device_ptr(), ni, it.keys.as_device_ptr(), it.count.as_device_ptr(), it.first.as_device_ptr(), it.mask))?;
                 cust::launch!(probe_i<<<grid(ni), BLOCK, 0, stream>>>(
-                    int_rows.as_device_ptr(), ni as u32, ext_rows.as_device_ptr(),
-                    it.keys.as_device_ptr(), it.count.as_device_ptr(), it.mask,
+                    int_rows.as_device_ptr(), ni, ext_rows.as_device_ptr(), ne,
+                    it.keys.as_device_ptr(), it.count.as_device_ptr(), it.first.as_device_ptr(), it.mask,
                     et.keys.as_device_ptr(), et.count.as_device_ptr(), et.first.as_device_ptr(), et.mask,
                     codes_i.as_device_ptr(), matched.as_device_ptr()))?;
             }
             if ne > 0 {
                 cust::launch!(probe_e<<<grid(ne), BLOCK, 0, stream>>>(
-                    ext_rows.as_device_ptr(), ne as u32,
-                    it.keys.as_device_ptr(), it.count.as_device_ptr(), it.mask,
-                    et.keys.as_device_ptr(), et.count.as_device_ptr(), et.mask,
+                    ext_rows.as_device_ptr(), ne,
+                    it.keys.as_device_ptr(), it.count.as_device_ptr(), it.first.as_device_ptr(), it.mask,
+                    et.keys.as_device_ptr(), et.count.as_device_ptr(), et.first.as_device_ptr(), et.mask,
                     codes_e.as_device_ptr()))?;
             }
         }
@@ -185,9 +189,9 @@ impl Backend<PolicyBatch, (), Vec<u32>> for Gpu {
             // buffers (lengths passed explicitly) and writes out[i].
             unsafe {
                 cust::launch!(f<<<grid(n), BLOCK, 0, stream>>>(
-                    reqs.as_device_ptr(), n as u32, limits.as_device_ptr(),
-                    merchants.as_device_ptr(), b.merchants.len() as u64,
-                    blocked.as_device_ptr(), b.blocked.len() as u64, b.n_blocked as u64,
+                    reqs.as_device_ptr(), n, limits.as_device_ptr(),
+                    merchants.as_device_ptr(), b.merchants.len(),
+                    blocked.as_device_ptr(), b.blocked.len(), b.n_blocked,
                     codes.as_device_ptr()))?;
             }
         }

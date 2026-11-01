@@ -15,6 +15,7 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Engine model | `Models.isolation`, `noninterference`, `others_commute`, `keyed_replay`, `keyed_conflict`, `ledger_isolation` | a hand-written Lean model of the engine (`proofs/ledger/Models/Engine.lean`) |
 | Payments | `payment_domain.Theorems.status_steps_allowed`, `terminal_final`, `captured_final`, `refund_safety`, `refunded_le_captured`, `event_dedup`, `reachable_inv` | the extracted `crates/payment-domain/src/lib.rs` (`proofs/payments/generated/PaymentDomain.lean`) |
 | Policies | `payment_domain.Policies.check_sound` | the extracted `crates/payment-domain/src/policy.rs` |
+| Reconciliation | `payment_reconcile.Reconcile.classify_internal_spec`, `classify_external_spec`, `codes_in_range`, `internal_matched_iff`, `external_matched_iff`, `duplicates_first`, `exception_reported_once`, `pair_matched_both_sides` | the extracted `crates/payment-reconcile/src/rules.rs` (`classify_internal`, `classify_external`), the per-row decision every engine calls, the GPU included (`proofs/reconcile/generated/PaymentReconcile.lean`) |
 | Read plans | `payment_ledger.Plan.reads_abs`, `payment_ledger.Frame.frame`, `load_for_sound`; `payment_domain.Plan.reads_abs`, `payment_domain.Frame.frame`, `load_for_sound`; `*.Schema.decode_load` (generated) | the extracted `reads` of each kernel (`Store::load_for` runs it) and the extracted `transition`: on what each command's plan loads, `transition` gives its whole-tenant result |
 
 Gate results (h5i-app 0.5.2, with the read plans): `h5i app check
@@ -127,17 +128,24 @@ committed history is such a sequence.
   every rule holds. The merchant allowlist uses binary search, which may
   miss a merchant on an unsorted list (refusing, never wrongly approving).
 - **CPU/GPU equivalence** of the batch engines is checked by differential
-  tests on the inputs they cover, not proven (see `docs/benchmarks.md`).
-  The CPU engines and the CUDA kernels are separate implementations of the
-  Rust rules: the CUDA C in `crates/payment-gpu/kernels/batch.cu` is a
-  transcription, not compiled from the extracted Rust. Trusted for the GPU
-  path: nvcc, the PTX JIT, the CUDA driver and hardware, `cust`, the buffer
-  layouts (asserted sizes), and the launch shell. Only the policy rules the
-  CPU engines run are the verified function; the SIMD policy engine is a
-  separate implementation checked against it by tests.
-- **Reconciliation rules are not proven.** `payment_reconcile::rules` is
-  tested (every code, random inputs, four engines against an oracle), not
-  extracted.
+  tests, not proven. Since A (2026-11) the GPU runs the same Rust: the
+  device crate (`crates/payment-gpu/device`) includes `policy.rs` and
+  `rules.rs` verbatim and is compiled to PTX by Rust-CUDA's
+  `rustc_codegen_nvvm` (`docs/gpu-toolchain.md`); the CUDA C transcription
+  is gone. The policy decision and the reconciliation classification on the
+  GPU are therefore the verified functions, compiled by a different
+  compiler. Trusted for the GPU path: the nightly rustc front end,
+  `rustc_codegen_nvvm` and `cuda_std` (rust-cuda `3a82c35a`), LLVM 7.1,
+  libNVVM 12.6, the PTX JIT, the CUDA driver and hardware, `cust`, the
+  committed PTX being the output of `build-device.sh` (`--check` rebuilds
+  and compares), and the device crate's launch shell and `recon_build`
+  (the hash-table build with atomics). The SIMD policy engine is a
+  separate implementation checked against `check` by tests.
+- **The hash joins are not proven.** `classify_internal` /
+  `classify_external` are proven (`proofs/reconcile`); that each engine's
+  hash table (CPU `Table`, the GPU's `recon_build`, `find_slot`) hands
+  them the right counts and first external record is tested (every engine
+  against the `BTreeMap` reference on every row), not proven.
 - **Tenant isolation inside PostgreSQL** is proven for the SQL model and the
   engine model, not for the real engine or database.
 - **The `Exists` replay path does not check the caller.** A principal who

@@ -9,11 +9,13 @@ ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo PATH=/opt/cargo/bin:$PATH
 RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.99.1
 WORKDIR /src
 COPY . .
-# compute_75 PTX: the driver JIT-compiles it for T4 (g4dn), A10G (g5), L4 (g6).
+# The kernels are the committed compute_75 PTX (crates/payment-gpu/kernels,
+# built from Rust by build-device.sh); the driver JIT-compiles it for T4
+# (g4dn), A10G (g5), L4 (g6). No nvcc runs here.
 RUN --mount=type=cache,target=/opt/cargo/registry \
     --mount=type=cache,target=/opt/cargo/git \
     --mount=type=cache,target=/src/target \
-    PAYMENT_GPU_ARCH=compute_75 cargo build --release --locked -p payment-gpu --features cuda --bin h5i-pay-batch \
+    cargo build --release --locked -p payment-gpu --features cuda --bin h5i-pay-batch \
  && cp target/release/h5i-pay-batch /h5i-pay-batch
 
 # AWS CLI v2 for the entrypoint's S3 copies (Ubuntu 24.04 has no awscli

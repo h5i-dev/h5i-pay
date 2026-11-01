@@ -68,6 +68,9 @@ on user tokens) and edits in `payment-api/src/{lib,main,routes}.rs` and
 
 ## A. GPU the way h5i-app intends: one Rust source for CPU, proofs and GPU
 
+- [x] **Done** A1–A4 (PROGRESS.md "A"; toolchain in `docs/gpu-toolchain.md`).
+  The clean benchmark re-run is folded into B4.
+
 `crates/payment-gpu/kernels/batch.cu` is hand-written CUDA C transcribing
 `payment_domain::policy::check` and `payment_reconcile::rules` and the hash
 join; the only link to the Rust is differential tests and runtime size

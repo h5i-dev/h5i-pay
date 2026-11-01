@@ -1,0 +1,21 @@
+# The GPU entry points, compiled to PTX by rustc_codegen_nvvm (Rust-CUDA).
+# Built only by `crates/payment-gpu/build-device.sh` with the pinned nightly
+# and libNVVM (CUDA 12.6); never by the workspace's stable toolchain, which
+# is why this is a workspace of its own. The PTX it makes is committed as
+# `crates/payment-gpu/kernels/payment_gpu_device.ptx`.
+[package]
+name = "payment-gpu-device"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+gpu = []
+
+[dependencies]
+cuda_std = { git = "https://github.com/Rust-GPU/rust-cuda", rev = "3a82c35a7196731fb60eebdac2a40d2b1bf0ba95" }
+
+[workspace]
