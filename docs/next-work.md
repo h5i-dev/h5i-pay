@@ -118,6 +118,9 @@ Aeneas extracts.
 
 ## E. Unverified or unexecuted
 
+- [x] Recovery interval agrees (5 minutes); SEC-03, SEC-07, SEC-09 closed
+  (PROGRESS.md "E"). What needs credentials: see the last bullet there.
+
 - Recovery interval: PROGRESS.md says every 5 minutes, `infra/terraform/recovery.tf`
   defaults to `rate(1 hour)`; make them agree.
 - Not run anywhere: Terraform plan/apply, the recovery schedule on AWS,

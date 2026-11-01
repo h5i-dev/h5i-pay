@@ -225,7 +225,10 @@ fn open(actor: &Principal, s: &Snapshot, owner: u64, currency: u32, code: u32, n
     Ok((two(Write::PutAccount(a), Write::SetLedger(l2)), Reply::Created(a.id)))
 }
 
-/// Post one transfer, or recognise its replay.
+/// Post one transfer, or recognise its replay. The caller must be allowed
+/// to debit the debit account before the journal is consulted, so a caller
+/// without that right learns nothing about which transfer ids exist
+/// (SEC-03): it gets the answer it would get for an unused id.
 pub fn transfer(actor: &Principal, s: &Snapshot, t: &TransferReq) -> Outcome {
     if t.id == 0 {
         return Err(Error::InvalidId);
@@ -233,29 +236,27 @@ pub fn transfer(actor: &Principal, s: &Snapshot, t: &TransferReq) -> Outcome {
     if t.amount == 0 {
         return Err(Error::ZeroAmount);
     }
-    match find_transfer(&s.transfers, t.id) {
-        Some(old) => {
-            if same_transfer(&old, t) {
-                Ok((Vec::new(), Reply::Exists(t.id)))
+    if t.debit == t.credit {
+        return Err(Error::SameAccount);
+    }
+    match find_account(&s.accounts, t.debit) {
+        None => Err(Error::NotFound),
+        Some(a) => {
+            if !may_debit(actor, &a) {
+                Err(Error::Forbidden)
             } else {
-                Err(Error::IdConflict)
-            }
-        }
-        None => {
-            if t.debit == t.credit {
-                return Err(Error::SameAccount);
-            }
-            match find_account(&s.accounts, t.debit) {
-                None => Err(Error::NotFound),
-                Some(a) => {
-                    if !may_debit(actor, &a) {
-                        Err(Error::Forbidden)
-                    } else {
-                        match find_account(&s.accounts, t.credit) {
-                            None => Err(Error::NotFound),
-                            Some(b) => post(s, t, a, b),
+                match find_transfer(&s.transfers, t.id) {
+                    Some(old) => {
+                        if same_transfer(&old, t) {
+                            Ok((Vec::new(), Reply::Exists(t.id)))
+                        } else {
+                            Err(Error::IdConflict)
                         }
                     }
+                    None => match find_account(&s.accounts, t.credit) {
+                        None => Err(Error::NotFound),
+                        Some(b) => post(s, t, a, b),
+                    },
                 }
             }
         }
@@ -584,6 +585,21 @@ mod tests {
                 assert!(a.debits <= a.credits);
             }
         }
+    }
+
+    #[test]
+    fn replay_does_not_reveal_ids_to_others() {
+        let s = setup();
+        let (s, _) = run(&s, op(), Command::Transfer { t: tr(10, 0, 1, 100) });
+        let (s, r) = run(&s, user(1), Command::Transfer { t: tr(11, 1, 2, 30) });
+        assert_eq!(r, Ok(Reply::Posted(11)));
+        // User 2 may not debit account 1: the same answer as for an unused id.
+        assert_eq!(run(&s, user(2), Command::Transfer { t: tr(11, 1, 2, 30) }).1, Err(Error::Forbidden));
+        assert_eq!(run(&s, user(2), Command::Transfer { t: tr(11, 1, 2, 31) }).1, Err(Error::Forbidden));
+        assert_eq!(run(&s, user(2), Command::Transfer { t: tr(99, 1, 2, 30) }).1, Err(Error::Forbidden));
+        // The owner and the operator still get the replay.
+        assert_eq!(run(&s, user(1), Command::Transfer { t: tr(11, 1, 2, 30) }).1, Ok(Reply::Exists(11)));
+        assert_eq!(run(&s, op(), Command::Transfer { t: tr(11, 1, 2, 30) }).1, Ok(Reply::Exists(11)));
     }
 
     #[test]

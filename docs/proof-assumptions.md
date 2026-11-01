@@ -9,7 +9,7 @@ not proven. Every theorem named here builds with `lake build` and passes
 
 | Area | Theorems | About |
 |---|---|---|
-| Ledger | `payment_ledger.Theorems.conservation`, `journal_balanced`, `no_overdraft`, `no_overcredit`, `posting_balanced`, `replay_is_noop`, `only_owner_or_operator_debits`, `reachable_inv` | the Lean that Charon+Aeneas extract from `crates/payment-ledger/src/lib.rs` (`proofs/ledger/generated/PaymentLedger.lean`) |
+| Ledger | `payment_ledger.Theorems.conservation`, `journal_balanced`, `no_overdraft`, `no_overcredit`, `posting_balanced`, `replay_is_noop`, `replay_needs_debit_right`, `only_owner_or_operator_debits`, `reachable_inv` | the Lean that Charon+Aeneas extract from `crates/payment-ledger/src/lib.rs` (`proofs/ledger/generated/PaymentLedger.lean`) |
 | Batch | `payment_ledger.Batch.batch_serial` | the extracted `batch` loop |
 | Storage | `payment_ledger.Storage.db_inv` | the extracted `sql_writes`/`decode` and h5i-app's SQL model (`H5iAppLib.Pg`) |
 | Engine model | `Models.isolation`, `noninterference`, `others_commute`, `keyed_replay`, `keyed_conflict`, `ledger_isolation` | a hand-written Lean model of the engine (`proofs/ledger/Models/Engine.lean`) |
@@ -19,8 +19,8 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Read plans | `payment_ledger.Plan.reads_abs`, `payment_ledger.Frame.frame`, `load_for_sound`; `payment_domain.Plan.reads_abs`, `payment_domain.Frame.frame`, `load_for_sound`; `*.Schema.decode_load` (generated) | the extracted `reads` of each kernel (`Store::load_for` runs it) and the extracted `transition`: on what each command's plan loads, `transition` gives its whole-tenant result |
 
 Gate results (h5i-app 0.5.2, with the read plans): `h5i app check
-crates/payment-ledger` — 224 theorems in 13 modules; `h5i app check
-crates/payment-domain` — 222 theorems in 8 modules; both on the three
+crates/payment-ledger` — 227 theorems in 13 modules; `h5i app check
+crates/payment-domain` — 228 theorems in 8 modules; both on the three
 standard axioms only. (Before the read plans: 145 and 122.)
 
 Ledger `currency` and `code`, and payment `currency` and `status`, are
@@ -44,6 +44,7 @@ the failing step lemma and cannot be proved without it.
 | ledger | `anyone_may_debit` | `Commands.may_debit_spec` |
 | ledger | `credit_side_short` | `Commands.post_spec` |
 | ledger | `replay_ignores_amount` | `Commands.same_transfer_spec` |
+| ledger | `replay_answers_anyone` | `Commands.transfer_spec` |
 | payments | `refund_past_capture` | `Commands.request_refund_spec` |
 | payments | `capture_beyond_authorization` | `Commands.record_captured_spec` |
 | payments | `decline_after_capture` | `Commands.record_declined_spec` |
@@ -148,9 +149,10 @@ committed history is such a sequence.
   against the `BTreeMap` reference on every row), not proven.
 - **Tenant isolation inside PostgreSQL** is proven for the SQL model and the
   engine model, not for the real engine or database.
-- **The `Exists` replay path does not check the caller.** A principal who
-  re-sends a transfer id that exists learns that it exists (and its own
-  payload matched). It cannot change anything.
+- **Replays and authorized callers.** Since SEC-03 only a caller who may
+  debit the debit account reaches the journal lookup
+  (`replay_needs_debit_right`); such a caller still learns from
+  `IdConflict` that an id it reuses was taken.
 - **Liveness.** Nothing proves that a valid command eventually succeeds; under
   contention the engine can give up after `max_attempts` (tests show this
   path leaves the ledger untouched).

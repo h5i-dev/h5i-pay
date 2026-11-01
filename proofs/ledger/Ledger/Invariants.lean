@@ -12,6 +12,7 @@ from any callers (batches included), satisfies `Spec.Inv`. From it:
 * `posting_balanced`: each committed transfer posts one debit and one credit
   of the same amount in the same currency, to two different accounts;
 * `replay_is_noop`: re-sending a committed transfer changes nothing;
+* `replay_needs_debit_right`: only those who may debit get `Exists` (SEC-03);
 * `only_owner_or_operator_debits`: only an account's owner or the tenant's
   operator can increase its debits (move money out of it).
 -/
@@ -129,28 +130,37 @@ theorem posting_balanced (a : Principal) (s : Snapshot) (t : TransferReq) ws r
 
 /-! ## Idempotency -/
 
-/-- A transfer whose id is in the journal with the same payload is a replay. -/
-theorem replay_ok (a : Principal) (s : Snapshot) (t : TransferReq) (old : Transfer)
-    (hid : t.id.val ≠ 0) (hamt : t.amount.val ≠ 0) (hf : findTr (Snapshot.toSt s) t.id.val = some old)
+/-- A transfer whose id is in the journal with the same payload is a
+replay, for a caller who may debit its debit account. -/
+theorem replay_ok (a : Principal) (s : Snapshot) (t : TransferReq) (old : Transfer) (acc : Account)
+    (hid : t.id.val ≠ 0) (hamt : t.amount.val ≠ 0) (hne : t.debit ≠ t.credit)
+    (hacc : findAcc (Snapshot.toSt s) t.debit.val = some acc) (hauth : a.operator = true ∨ acc.owner = a.user)
+    (hf : findTr (Snapshot.toSt s) t.id.val = some old)
     (h1 : old.debit = t.debit) (h2 : old.credit = t.credit) (h3 : old.amount = t.amount) (h4 : old.code = t.code) :
     transition a s (.Transfer t) = ok (.Ok (alloc.vec.Vec.new Write, .Exists t.id)) := by
   have hid' : t.id ≠ 0#u64 := fun e => hid (by simp [e])
   have hamt' : t.amount ≠ 0#u64 := fun e => hamt (by simp [e])
   have ho : find_transfer s.transfers t.id = ok (some old) := by
-    apply eq_ok_of_spec
-    apply WP.spec_mono (find_transfer_spec _ _)
-    intro o ho; rw [ho, findTr_eq]; exact hf
+    rw [eq_ok_of_spec (find_transfer_spec _ _), findTr_eq, hf]
+  have ha : find_account s.accounts t.debit = ok (some acc) := by
+    rw [eq_ok_of_spec (find_account_spec _ _), findAcc_eq, hacc]
+  have hm : may_debit a acc = ok true := by
+    unfold may_debit; rcases hauth with h | h <;> simp [h]
   have hs : same_transfer old t = ok true := by
     unfold same_transfer; simp [h1, h2, h3, h4]
   simp only [transition]
   unfold transfer
-  simp [hid', hamt', ho, hs]
+  simp [hid', hamt', hne, ho, ha, hm, hs]
 
 /-- **Idempotency.** Re-sending a committed transfer (same id, same payload)
-to the state it produced is accepted, writes nothing and reports `Exists`. -/
+to the state it produced, by a caller who may debit its debit account (its
+owner or an operator), is accepted, writes nothing and reports `Exists`.
+Since SEC-03 a caller without that right gets `Forbidden`, as for an
+unused id, so the replay path reveals nothing to it. -/
 theorem replay_is_noop (a a' : Principal) (s s' : Snapshot) (t : TransferReq) ws r
     (h : transition a s (.Transfer t) = ok (.Ok (ws, r)))
-    (hs' : Snapshot.toSt s' = applyAll (Snapshot.toSt s) ws.val) :
+    (hs' : Snapshot.toSt s' = applyAll (Snapshot.toSt s) ws.val)
+    (hauth : a'.operator = true ∨ ∀ acc, findAcc (Snapshot.toSt s) t.debit.val = some acc → acc.owner = a'.user) :
     transition a' s' (.Transfer t) = ok (.Ok (alloc.vec.Vec.new Write, .Exists t.id)) := by
   have hT : transfer a s t = ok (.Ok (ws, r)) := h
   have hid : t.id.val ≠ 0 ∧ t.amount.val ≠ 0 := by
@@ -161,15 +171,37 @@ theorem replay_is_noop (a a' : Principal) (s s' : Snapshot) (t : TransferReq) ws
       · simp [e1, e2] at hT
       · exact ⟨fun e => e1 (by scalar_tac), fun e => e2 (by scalar_tac)⟩
   rcases post_of_ok (transfer_spec a s t) h ws r rfl with
-    ⟨old, hf, h1, h2, h3, h4, hws, _⟩ | ⟨_, _, htr, hne, qa, qb, ha, _, hb, hcur, _, d, k, hd, hk, _, _, hws⟩
+    ⟨old, hf, h1, h2, h3, h4, hws, _, hne, acc, hacc, _⟩ |
+    ⟨_, _, htr, hne, qa, qb, ha, _, hb, hcur, _, d, k, hd, hk, _, _, hws⟩
   · rw [hws] at hs'
     have hf' : findTr (Snapshot.toSt s') t.id.val = some old := by rw [hs']; exact hf
-    exact replay_ok a' s' t old hid.1 hid.2 hf' h1 h2 h3 h4
+    have hacc' : findAcc (Snapshot.toSt s') t.debit.val = some acc := by rw [hs']; exact hacc
+    exact replay_ok a' s' t old acc hid.1 hid.2 hne hacc' (hauth.imp id (fun h => h acc hacc)) hf' h1 h2 h3 h4
   · have hf' : findTr (Snapshot.toSt s') t.id.val = some (Commands.journalRow t qa.currency) := by
       rw [hs', hws]
       simp only [applyAll, List.foldl_cons, List.foldl_nil, findTr_put, findTr_putAcc, Commands.journalRow]
       simp
-    exact replay_ok a' s' t _ hid.1 hid.2 hf' rfl rfl rfl rfl
+    have hqa : qa.id.val = t.debit.val := by simpa using (List.find?_some ha)
+    have hqb : qb.id.val = t.credit.val := by simpa using (List.find?_some hb)
+    have hacc' : findAcc (Snapshot.toSt s') t.debit.val = some { qa with debits := d } := by
+      rw [hs', hws]
+      simp only [applyAll, List.foldl_cons, List.foldl_nil, findAcc_putTr, findAcc_put]
+      have : qb.id.val ≠ t.debit.val := by
+        intro e; apply hne; apply UScalar.eq_of_val_eq; rw [← hqb, e]
+      simp [this, hqa]
+    exact replay_ok a' s' t _ { qa with debits := d } hid.1 hid.2 hne hacc' (hauth.imp id (fun h => h qa ha)) hf'
+      rfl rfl rfl rfl
+
+/-- **Replays answer only to those who may debit (SEC-03).** A transfer
+command that reports `Exists` was sent by the debit account's owner or an
+operator; anyone else gets the refusal an unused id gets. -/
+theorem replay_needs_debit_right (a : Principal) (s : Snapshot) (t : TransferReq) ws
+    (h : transition a s (.Transfer t) = ok (.Ok (ws, .Exists t.id))) :
+    ∃ acc, findAcc (Snapshot.toSt s) t.debit.val = some acc ∧ (a.operator = true ∨ acc.owner = a.user) := by
+  rcases post_of_ok (transfer_spec a s t) h ws _ rfl with
+    ⟨_, _, _, _, _, _, _, _, _, acc, hacc, hm⟩ | ⟨_, _, _, _, _, _, _, _, _, _, hrep, _⟩
+  · exact ⟨acc, hacc, hm⟩
+  · cases hrep
 
 /-! ## Only owners and operators move money out -/
 

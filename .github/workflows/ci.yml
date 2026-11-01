@@ -48,6 +48,10 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --workspace --all-targets --locked
+      # SEC-09: advisories, licenses, banned and unknown sources (deny.toml).
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo clippy --workspace --all-targets --locked --features payment-api/mock-psp -- -D warnings
       # Two TLS-only PostgreSQL servers (default protocols and TLS 1.2 only)

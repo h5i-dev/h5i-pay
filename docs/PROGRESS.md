@@ -178,6 +178,24 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### E (part): SEC-03, SEC-07, SEC-09, recovery interval
+
+- SEC-03 closed: `payment_ledger::transfer` checks `SameAccount`, the debit
+  account and `may_debit` before the journal lookup, so a caller without
+  the right to debit gets `Forbidden`/`NotFound` whether or not the id was
+  used. `transfer_spec` re-proven; `replay_is_noop` now assumes the
+  replaying caller may debit; new `replay_needs_debit_right`. Gate 227
+  theorems / 13 modules; mutate 8/8 (new `replay_answers_anyone`, caught
+  by `transfer_spec`). Kernel test `replay_does_not_reveal_ids_to_others`.
+- SEC-07 closed: ADOT sidecar pinned to `v0.51.0@sha256:955e240b…e07d`.
+- SEC-09 closed: `deny.toml` and `cargo-deny-action` in CI; `cargo deny
+  check` passes here; RUSTSEC-2026-0173 (unmaintained `proc-macro-error2`,
+  build-time, via libcrux-hmac, no fix) ignored with that reason.
+- Recovery interval: the variable's default was already `rate(5 minutes)`;
+  the `rate(1 hour)` in `recovery.tf` was only the placeholder for a
+  disabled schedule. It now reads `rate(5 minutes)` too, so docs and
+  Terraform agree.
+
 ### C: the batch path connected to the system
 
 - `h5i-pay export <dir>` (`payment_api::batch::export`): for every tenant
@@ -544,7 +562,7 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 ## Open items / decisions
 
 - Not done or not verifiable here:
-  - SEC-02 is partly closed (separate operator key); the kernels still see
+  - SEC-03, SEC-07, SEC-09 closed (E). SEC-02 is partly closed (separate operator key); the kernels still see
     every operator as user 0. See `docs/security-review.md`.
   - The recovery schedule is written and validated but has not run on AWS.
   - Docker images are built locally now. The worker image did not build

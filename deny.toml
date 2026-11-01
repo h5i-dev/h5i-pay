@@ -1,0 +1,31 @@
+# cargo deny check (SEC-09): advisories, licenses, bans, sources.
+[graph]
+all-features = false
+
+[advisories]
+# RustSec advisory DB; a vulnerability or a yanked crate fails CI.
+yanked = "deny"
+ignore = [
+  # proc-macro-error2 is unmaintained (no vulnerability). It is a build-time
+  # proc macro of hax-lib, reached through libcrux-hmac in h5i-app-http (the
+  # token HMAC); there is no maintained version to move to. Re-check when
+  # libcrux updates.
+  { id = "RUSTSEC-2026-0173", reason = "unmaintained build-time proc macro via libcrux; no fix available" },
+]
+
+[licenses]
+allow = ["MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Unicode-3.0", "Zlib", "CDLA-Permissive-2.0", "MPL-2.0", "OpenSSL", "BSL-1.0"]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# The pinned git dependencies (Cargo.lock pins the commits): h5i-app-gpu and
+# its nvvm backend from h5i, cust from Rust-CUDA.
+allow-git = ["https://github.com/h5i-dev/h5i", "https://github.com/Rust-GPU/rust-cuda"]

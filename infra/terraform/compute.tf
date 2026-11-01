@@ -247,8 +247,10 @@ locals {
     }
   }
   otel_container = {
-    name      = "otel"
-    image     = "public.ecr.aws/aws-observability/aws-otel-collector:latest"
+    name = "otel"
+    # Pinned by digest (SEC-07): v0.51.0, the image index `latest` pointed at
+    # on 2026-11-01. Bump tag and digest together.
+    image     = "public.ecr.aws/aws-observability/aws-otel-collector:v0.51.0@sha256:955e240b27d7fd3c7995fd937db4b963975948eb553f656d8c37a564e5b5e07d"
     essential = false
     command   = ["--config=/etc/ecs/ecs-default-config.yaml"]
     logConfiguration = {

@@ -1118,7 +1118,7 @@ inductive Write where
 | SetLedger : Ledger → Write
 
 /-- [payment_ledger::apply_write]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 502:0-508:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 503:0-509:1 -/
 def apply_write (s : Snapshot) (w : Write) : Result Snapshot := do
   match w with
   | Write.PutAccount a =>
@@ -1205,7 +1205,7 @@ def apply (snap : Snapshot) (ws : alloc.vec.Vec Write) : Result Snapshot := do
   apply_loop ws s 0#usize
 
 /-- [payment_ledger::sql_write]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 511:0-517:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 512:0-518:1 -/
 def sql_write
   (w : Write) (out : alloc.vec.Vec h5i_app_sql.Write) :
   Result (alloc.vec.Vec h5i_app_sql.Write)
@@ -1542,7 +1542,7 @@ def «open»
           ok (core.result.Result.Ok (v, Reply.Created s.ledger.next_account))
 
 /-- [payment_ledger::post]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 266:0-316:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 267:0-317:1 -/
 def post
   (s : Snapshot) (t : TransferReq) (a : Account) (b : Account) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -1627,7 +1627,7 @@ def post
             ok (core.result.Result.Ok (v, Reply.Posted t.id))
 
 /-- [payment_ledger::transfer]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 229:0-263:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 232:0-264:1
     Visibility: public -/
 def transfer
   (actor : Principal) (s : Snapshot) (t : TransferReq) :
@@ -1639,34 +1639,34 @@ def transfer
     if t.amount = 0#u64
     then ok (core.result.Result.Err Error.ZeroAmount)
     else
-      let o ← find_transfer s.transfers t.id
-      match o with
-      | none =>
-        if t.debit = t.credit
-        then ok (core.result.Result.Err Error.SameAccount)
-        else
-          let o1 ← find_account s.accounts t.debit
-          match o1 with
-          | none => ok (core.result.Result.Err Error.NotFound)
-          | some a =>
-            let b ← may_debit actor a
-            if b
-            then
+      if t.debit = t.credit
+      then ok (core.result.Result.Err Error.SameAccount)
+      else
+        let o ← find_account s.accounts t.debit
+        match o with
+        | none => ok (core.result.Result.Err Error.NotFound)
+        | some a =>
+          let b ← may_debit actor a
+          if b
+          then
+            let o1 ← find_transfer s.transfers t.id
+            match o1 with
+            | none =>
               let o2 ← find_account s.accounts t.credit
               match o2 with
               | none => ok (core.result.Result.Err Error.NotFound)
               | some b1 => post s t a b1
-            else ok (core.result.Result.Err Error.Forbidden)
-      | some old =>
-        let b ← same_transfer old t
-        if b
-        then
-          ok (core.result.Result.Ok (alloc.vec.Vec.new Write, Reply.Exists
-            t.id))
-        else ok (core.result.Result.Err Error.IdConflict)
+            | some old =>
+              let b1 ← same_transfer old t
+              if b1
+              then
+                ok (core.result.Result.Ok (alloc.vec.Vec.new Write,
+                  Reply.Exists t.id))
+              else ok (core.result.Result.Err Error.IdConflict)
+          else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::append]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 320:4-323:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 321:4-324:5 -/
 @[rust_loop_body]
 def append_loop.body
   (more : alloc.vec.Vec Write) (ws : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -1684,7 +1684,7 @@ def append_loop.body
   else ok (done ws)
 
 /-- [payment_ledger::append]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 320:4-323:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 321:4-324:5 -/
 @[rust_loop]
 def append_loop
   (ws : alloc.vec.Vec Write) (more : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -1695,7 +1695,7 @@ def append_loop
     (ws, i)
 
 /-- [payment_ledger::append]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 318:0-324:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 319:0-325:1 -/
 @[reducible]
 def append
   (ws : alloc.vec.Vec Write) (more : alloc.vec.Vec Write) :
@@ -1704,7 +1704,7 @@ def append
   append_loop ws more 0#usize
 
 /-- [payment_ledger::batch]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 337:4-348:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 338:4-349:1
     Visibility: public -/
 @[rust_loop_body]
 def batch_loop.body
@@ -1734,7 +1734,7 @@ def batch_loop.body
     ok (done (core.result.Result.Ok (ws, Reply.Batch i3)))
 
 /-- [payment_ledger::batch]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 337:4-348:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 338:4-349:1
     Visibility: public -/
 @[rust_loop]
 def batch_loop
@@ -1747,7 +1747,7 @@ def batch_loop
     (cur, ws, i)
 
 /-- [payment_ledger::batch]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 327:0-348:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 328:0-349:1
     Visibility: public -/
 def batch
   (actor : Principal) (s : Snapshot) (ts : alloc.vec.Vec TransferReq) :
@@ -1765,7 +1765,7 @@ def batch
       batch_loop actor ts cur (alloc.vec.Vec.new Write) 0#usize
 
 /-- [payment_ledger::read_account]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 350:0-362:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 351:0-363:1 -/
 def read_account
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -1780,7 +1780,7 @@ def read_account
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_ledger::visible_accounts]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 367:4-372:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 368:4-373:5 -/
 @[rust_loop_body]
 def visible_accounts_loop.body
   (actor : Principal) (s : Snapshot) (out : alloc.vec.Vec Account)
@@ -1803,7 +1803,7 @@ def visible_accounts_loop.body
   else ok (done out)
 
 /-- [payment_ledger::visible_accounts]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 367:4-372:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 368:4-373:5 -/
 @[rust_loop]
 def visible_accounts_loop
   (actor : Principal) (s : Snapshot) (out : alloc.vec.Vec Account)
@@ -1815,14 +1815,14 @@ def visible_accounts_loop
     (out, i)
 
 /-- [payment_ledger::visible_accounts]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 364:0-374:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 365:0-375:1 -/
 @[reducible]
 def visible_accounts
   (actor : Principal) (s : Snapshot) : Result (alloc.vec.Vec Account) := do
   visible_accounts_loop actor s (alloc.vec.Vec.new Account) 0#usize
 
 /-- [payment_ledger::transition]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 378:0-395:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 379:0-396:1
     Visibility: public -/
 def transition
   (actor : Principal) (s : Snapshot) (cmd : Command) :
@@ -1846,65 +1846,65 @@ def transition
     else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::T_ACCOUNTS]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 400:0-400:30
+    Source: 'crates/payment-ledger/src/lib.rs', lines 401:0-401:30
     Visibility: public -/
 @[global_simps, irreducible] def T_ACCOUNTS : Std.U32 := 0#u32
 
 /-- [payment_ledger::T_TRANSFERS]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 401:0-401:31
+    Source: 'crates/payment-ledger/src/lib.rs', lines 402:0-402:31
     Visibility: public -/
 @[global_simps, irreducible] def T_TRANSFERS : Std.U32 := 1#u32
 
 /-- [payment_ledger::T_LEDGER]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 402:0-402:28
+    Source: 'crates/payment-ledger/src/lib.rs', lines 403:0-403:28
     Visibility: public -/
 @[global_simps, irreducible] def T_LEDGER : Std.U32 := 2#u32
 
 /-- [payment_ledger::ACCOUNT_ID]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 404:0-404:30
+    Source: 'crates/payment-ledger/src/lib.rs', lines 405:0-405:30
     Visibility: public -/
 @[global_simps, irreducible] def ACCOUNT_ID : Std.U32 := 0#u32
 
 /-- [payment_ledger::ACCOUNT_OWNER]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 405:0-405:33
+    Source: 'crates/payment-ledger/src/lib.rs', lines 406:0-406:33
     Visibility: public -/
 @[global_simps, irreducible] def ACCOUNT_OWNER : Std.U32 := 1#u32
 
 /-- [payment_ledger::TRANSFER_ID]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 406:0-406:31
+    Source: 'crates/payment-ledger/src/lib.rs', lines 407:0-407:31
     Visibility: public -/
 @[global_simps, irreducible] def TRANSFER_ID : Std.U32 := 0#u32
 
 /-- [payment_ledger::MAX_PLANNED_BATCH]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 411:0-411:40
+    Source: 'crates/payment-ledger/src/lib.rs', lines 412:0-412:40
     Visibility: public -/
 @[global_simps, irreducible] def MAX_PLANNED_BATCH : Std.Usize := 64#usize
 
 /-- [payment_ledger::v_int]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 413:0-415:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 414:0-416:1 -/
 def v_int (x : Std.U64) : Result h5i_app_sql.Val := do
   U64.Insts.H5i_app_sqlColumn.to_val x
 
 /-- [payment_ledger::p_eq]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 417:0-419:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 418:0-420:1 -/
 def p_eq (col : Std.U32) (v : h5i_app_sql.Val) : Result h5i_app_sql.Pred := do
   ok (h5i_app_sql.Pred.Eq col v)
 
 /-- [payment_ledger::p_or]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 421:0-423:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 422:0-424:1 -/
 def p_or
   (a : h5i_app_sql.Pred) (b : h5i_app_sql.Pred) : Result h5i_app_sql.Pred := do
   ok (h5i_app_sql.Pred.Or a b)
 
 /-- [payment_ledger::rd_where]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 425:0-427:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 426:0-428:1 -/
 def rd_where
   (table : Std.U32) (pred : h5i_app_sql.Pred) : Result h5i_app_sql.Read := do
   let w ← h5i_app_sql.whole
   ok { table, pred, window := w }
 
 /-- [payment_ledger::accounts_of]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 430:0-432:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 431:0-433:1 -/
 def accounts_of (t : TransferReq) : Result h5i_app_sql.Pred := do
   let v ← v_int t.debit
   let p ← p_eq ACCOUNT_ID v
@@ -1913,7 +1913,7 @@ def accounts_of (t : TransferReq) : Result h5i_app_sql.Pred := do
   p_or p p1
 
 /-- [payment_ledger::batch_reads]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 439:4-443:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 440:4-444:5 -/
 @[rust_loop_body]
 def batch_reads_loop.body
   (ts : alloc.vec.Vec TransferReq) (accts : h5i_app_sql.Pred)
@@ -1937,7 +1937,7 @@ def batch_reads_loop.body
   else ok (done (accts, trs))
 
 /-- [payment_ledger::batch_reads]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 439:4-443:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 440:4-444:5 -/
 @[rust_loop]
 def batch_reads_loop
   (ts : alloc.vec.Vec TransferReq) (accts : h5i_app_sql.Pred)
@@ -1949,7 +1949,7 @@ def batch_reads_loop
     (accts, trs, i)
 
 /-- [payment_ledger::batch_reads]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 435:0-448:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 436:0-449:1 -/
 def batch_reads
   (ts : alloc.vec.Vec TransferReq) :
   Result (alloc.vec.Vec h5i_app_sql.Read)
@@ -1967,7 +1967,7 @@ def batch_reads
   alloc.vec.Vec.push out r1
 
 /-- [payment_ledger::reads]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 455:0-499:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 456:0-500:1
     Visibility: public -/
 def reads
   (actor : Principal) (cmd : Command) :

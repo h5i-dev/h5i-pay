@@ -40,6 +40,17 @@ attribute [simp] u64_val_eq
   unfold may_debit
   cases h : actor.operator <;> simp
 
+theorem may_debit_spec' (actor : Principal) (a : Account) :
+    may_debit actor a ⦃ b => b = (actor.operator || decide (a.owner = actor.user)) ⦄ := by
+  unfold may_debit; cases actor.operator <;> simp
+
+theorem same_transfer_spec' (old : Transfer) (t : TransferReq) :
+    same_transfer old t ⦃ b => b = (decide (old.debit = t.debit) && decide (old.credit = t.credit) &&
+      decide (old.amount = t.amount) && decide (old.code = t.code)) ⦄ := by
+  unfold same_transfer
+  by_cases h1 : old.debit = t.debit <;> by_cases h2 : old.credit = t.credit <;>
+    by_cases h3 : old.amount = t.amount <;> by_cases h4 : old.code = t.code <;> simp [h1, h2, h3, h4]
+
 @[step] theorem same_transfer_spec (old : Transfer) (t : TransferReq) :
     same_transfer old t ⦃ b => b = true ↔
       (old.debit = t.debit ∧ old.credit = t.credit ∧ old.amount = t.amount ∧ old.code = t.code) ⦄ := by
@@ -88,12 +99,14 @@ theorem open_spec (actor : Principal) (s : Snapshot) (owner : U64) (cur code : U
     step* <;> simp_all [core.num.U64.MAX, U64.rMax] <;> scalar_tac
 
 /-- A transfer either recognises its replay (same id, same payload: no
-writes) or posts a balanced pair between two different, existing accounts
-of one currency, the debit side authorised. -/
+writes; the caller may debit the debit account) or posts a balanced pair
+between two different, existing accounts of one currency, the debit side
+authorised. -/
 theorem transfer_spec (actor : Principal) (s : Snapshot) (t : TransferReq) :
     transfer actor s t ⦃ r => ∀ ws rep, r = .Ok (ws, rep) →
       (∃ old, findTr (Snapshot.toSt s) t.id.val = some old ∧ old.debit = t.debit ∧ old.credit = t.credit ∧
-        old.amount = t.amount ∧ old.code = t.code ∧ ws.val = [] ∧ rep = .Exists t.id) ∨
+        old.amount = t.amount ∧ old.code = t.code ∧ ws.val = [] ∧ rep = .Exists t.id ∧ t.debit ≠ t.credit ∧
+        ∃ a, findAcc (Snapshot.toSt s) t.debit.val = some a ∧ (actor.operator = true ∨ a.owner = actor.user)) ∨
       (t.id.val ≠ 0 ∧ t.amount.val ≠ 0 ∧ findTr (Snapshot.toSt s) t.id.val = none ∧ t.debit ≠ t.credit ∧
         ∃ a b, findAcc (Snapshot.toSt s) t.debit.val = some a ∧ (actor.operator = true ∨ a.owner = actor.user) ∧
           findAcc (Snapshot.toSt s) t.credit.val = some b ∧ a.currency = b.currency ∧ rep = .Posted t.id ∧
@@ -103,15 +116,53 @@ theorem transfer_spec (actor : Principal) (s : Snapshot) (t : TransferReq) :
             ws.val = [.PutAccount { a with debits := d }, .PutAccount { b with credits := c },
               .PutTransfer (journalRow t a.currency)]) ⦄ := by
   unfold transfer
-  step*
-  · right
-    obtain ⟨hcur, hrep, d, c, hd, hc, hld, hlc, hws⟩ := r_post _ _ r_post1
-    refine ⟨by scalar_tac, by scalar_tac, by rw [← findTr_eq, ← o_post]; assumption, by assumption,
-      a, b1, by rw [← findAcc_eq, ← o1_post]; assumption, by simp_all,
-      by rw [← findAcc_eq, ← o2_post]; assumption, hcur, hrep, d, c, hd, hc, hld, hlc, hws⟩
-  · intro ws rep h
-    obtain ⟨rfl, rfl⟩ := ok_inj h
-    left
-    exact ⟨old, by rw [← findTr_eq, ← o_post]; assumption, by simp_all⟩
+  have hA := find_account_spec s.accounts t.debit
+  have hB := find_account_spec s.accounts t.credit
+  have hT := find_transfer_spec s.transfers t.id
+  rw [eq_ok_of_spec hA, eq_ok_of_spec hT, eq_ok_of_spec hB]
+  simp only [bind_tc_ok, bind_ok]
+  by_cases e1 : t.id = 0#u64
+  · simp [e1]
+  by_cases e2 : t.amount = 0#u64
+  · simp [e1, e2]
+  by_cases e3 : t.debit = t.credit
+  · simp [e1, e2, e3]
+  simp only [e1, e2, e3, if_false]
+  cases ha : s.accounts.val.find? (fun a => decide (a.id.val = t.debit.val)) with
+  | none => simp
+  | some a =>
+    simp only []
+    rw [eq_ok_of_spec (may_debit_spec' actor a)]
+    simp only [bind_tc_ok, bind_ok]
+    by_cases hm : (actor.operator || decide (a.owner = actor.user)) = true
+    · have hm' : actor.operator = true ∨ a.owner = actor.user := by simpa using hm
+      simp only [hm, if_true]
+      cases ht : s.transfers.val.find? (fun x => decide (x.id.val = t.id.val)) with
+      | some old =>
+        simp only []
+        rw [eq_ok_of_spec (same_transfer_spec' old t)]
+        simp only [bind_tc_ok, bind_ok]
+        by_cases hs : (decide (old.debit = t.debit) && decide (old.credit = t.credit) && decide (old.amount = t.amount) &&
+            decide (old.code = t.code)) = true
+        · simp only [hs, if_true, WP.spec_ok]
+          intro ws rep h; obtain ⟨rfl, rfl⟩ := ok_inj h
+          left
+          simp only [Bool.and_eq_true, decide_eq_true_eq] at hs
+          exact ⟨old, ht, hs.1.1.1, hs.1.1.2, hs.1.2, hs.2, rfl, rfl, e3, a, ha, hm'⟩
+        · simp [hs]
+      | none =>
+        simp only []
+        cases hb : s.accounts.val.find? (fun x => decide (x.id.val = t.credit.val)) with
+        | none => simp
+        | some b =>
+          simp only []
+          apply WP.spec_mono (post_spec s t a b)
+          intro r hr ws rep h
+          obtain ⟨hcur, hrep, d, c, hd, hc, hld, hlc, hws⟩ := hr ws rep h
+          right
+          exact ⟨by intro h0; exact e1 (by scalar_tac), by intro h0; exact e2 (by scalar_tac), ht, e3, a, b, ha, hm', hb,
+            hcur, hrep, d, c, hd, hc, hld, hlc, hws⟩
+    · simp at hm
+      simp [hm]
 
 end payment_ledger.Commands

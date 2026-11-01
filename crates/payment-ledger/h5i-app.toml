@@ -16,6 +16,7 @@ theorems = [
   "payment_ledger.Theorems.journal_balanced",
   "payment_ledger.Theorems.no_overdraft",
   "payment_ledger.Theorems.replay_is_noop",
+  "payment_ledger.Theorems.replay_needs_debit_right",
   "payment_ledger.Theorems.only_owner_or_operator_debits",
   "payment_ledger.Storage.db_inv",
   # Read plans (`reads`, `LedgerStore::load_for`): the extracted plans are
@@ -30,8 +31,8 @@ theorems = [
 # Bugs the proofs must reject (`h5i app mutate crates/payment-ledger`).
 [[mutant]]
 name = "self_transfer_allowed"
-old = "if t.debit == t.credit {\n                return Err(Error::SameAccount);"
-new = "if false {\n                return Err(Error::SameAccount);"
+old = "if t.debit == t.credit {\n        return Err(Error::SameAccount);"
+new = "if false {\n        return Err(Error::SameAccount);"
 
 [[mutant]]
 name = "overdraft_allowed"
@@ -62,3 +63,8 @@ new = "p_or(p_eq(ACCOUNT_ID, v_int(t.debit)), p_eq(ACCOUNT_ID, v_int(t.debit)))"
 name = "user_accounts_plan_wrong_column"
 old = "pub const ACCOUNT_OWNER: u32 = 1;"
 new = "pub const ACCOUNT_OWNER: u32 = 2;"
+
+[[mutant]]
+name = "replay_answers_anyone"
+old = "            if !may_debit(actor, &a) {\n                Err(Error::Forbidden)\n            } else {\n                match find_transfer(&s.transfers, t.id) {"
+new = "            if !may_debit(actor, &a) && find_transfer(&s.transfers, t.id).is_none() {\n                Err(Error::Forbidden)\n            } else {\n                match find_transfer(&s.transfers, t.id) {"

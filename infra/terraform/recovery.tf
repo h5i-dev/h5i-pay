@@ -14,7 +14,9 @@ resource "aws_scheduler_schedule" "recover" {
   description = "h5i-pay recover: finish payments and refunds left half done (docs/failure-recovery.md)"
   state       = var.recover_schedule == "" ? "DISABLED" : "ENABLED"
 
-  schedule_expression          = var.recover_schedule == "" ? "rate(1 hour)" : var.recover_schedule
+  # A disabled schedule still needs a valid expression; the interval is the
+  # variable's default, rate(5 minutes).
+  schedule_expression          = var.recover_schedule == "" ? "rate(5 minutes)" : var.recover_schedule
   schedule_expression_timezone = "UTC"
 
   flexible_time_window {
