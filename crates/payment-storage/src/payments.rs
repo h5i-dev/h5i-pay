@@ -65,19 +65,21 @@ impl Store<PaymentsApp> for PaymentsStore {
         ddl.push("DROP INDEX IF EXISTS payments_merchant".into());
         ddl.push("CREATE INDEX IF NOT EXISTS payments_merchant_seq ON payments (tenant_id, merchant, seq)".into());
         ddl.push("CREATE INDEX IF NOT EXISTS refunds_payment ON refunds (tenant_id, payment)".into());
-        ddl.push(format!(
-            "CREATE INDEX IF NOT EXISTS payments_unfinished ON payments (tenant_id, id) \
-             WHERE status = {} OR status = {} OR refund_pending > 0",
-            k::PROCESSING,
-            k::AUTHORIZED
-        ));
-        // Recovery's ledger work: captured and not marked complete (F2).
-        // It replaces the index on every captured payment.
+        // Recovery's work (F4): payments not marked done, and payments with
+        // a refund in flight. The status is in neither index, so the status
+        // changes on the hot path (BeginAuthorize, Record) are HOT updates:
+        // they add no index entries, and concurrent commands on neighbouring
+        // payments stop conflicting on shared primary-key index pages under
+        // SERIALIZABLE. Only `MarkPosted` and refund changes touch an index.
+        // These replace `payments_unfinished` and `payments_unposted`
+        // (status in the predicate made every status change a non-HOT update).
+        ddl.push("DROP INDEX IF EXISTS payments_unfinished".into());
+        ddl.push("DROP INDEX IF EXISTS payments_unposted".into());
         ddl.push("DROP INDEX IF EXISTS payments_captured".into());
-        ddl.push(format!(
-            "CREATE INDEX IF NOT EXISTS payments_unposted ON payments (tenant_id, id) WHERE status = {} AND NOT ledger_done",
-            k::CAPTURED
-        ));
+        ddl.push("CREATE INDEX IF NOT EXISTS payments_open ON payments (tenant_id, id) WHERE NOT ledger_done".into());
+        ddl.push("CREATE INDEX IF NOT EXISTS payments_refunding ON payments (tenant_id, id) WHERE refund_pending > 0".into());
+        // Room in each heap page for HOT updates of its rows.
+        ddl.push(crate::fillfactor("payments", 70));
         ddl
     }
 
@@ -106,17 +108,24 @@ impl Store<PaymentsApp> for PaymentsStore {
     /// Writes queue on the payment they change. Only a hint for fewer
     /// retries; SERIALIZABLE makes any interleaving serial.
     ///
+    /// F4: `AttachRef` also takes a tenant-wide key. It reads `psp_refs`
+    /// by key and inserts there; PostgreSQL's SERIALIZABLE tracks key reads
+    /// per B-tree page, and recent payments share a page, so two concurrent
+    /// `AttachRef`s on neighbouring payments each read what the other
+    /// writes and one is aborted. (The payments table avoids the same
+    /// conflict without a lock: its status changes are HOT updates, see
+    /// `ddl`.)
     fn lock_for(_actor: &k::Principal, cmd: &k::Command) -> Lock {
         let pay = |id: &u64| Lock::key("payment", &id.to_be_bytes());
         let counter = || Lock::key("counter", &[]);
         match cmd {
             k::Command::Create { .. } => Lock::Keys(vec![counter()]),
             k::Command::RequestRefund { payment, .. } => Lock::Keys(vec![pay(payment), counter()]),
+            k::Command::AttachRef { payment, .. } => Lock::Keys(vec![pay(payment), Lock::key("psp-refs", &[])]),
             k::Command::BeginAuthorize { id } | k::Command::Cancel { id } => Lock::Keys(vec![pay(id)]),
-            k::Command::Record { payment, .. }
-            | k::Command::Event { payment, .. }
-            | k::Command::AttachRef { payment, .. }
-            | k::Command::MarkPosted { payment, .. } => Lock::Keys(vec![pay(payment)]),
+            k::Command::Record { payment, .. } | k::Command::Event { payment, .. } | k::Command::MarkPosted { payment, .. } => {
+                Lock::Keys(vec![pay(payment)])
+            }
             k::Command::Get { .. }
             | k::Command::List { .. }
             | k::Command::GetRefund { .. }

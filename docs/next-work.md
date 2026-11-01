@@ -172,7 +172,7 @@ PROGRESS.md as it lands.
    theorems for the paged reads, and remove or bound the whole-tenant
    fallback for large batches (e.g. split, or a plan that covers them).
    Update clients in the orchestrator, recovery, export and tests.
-4. [ ] **Serialization retries.** 8 concurrent clients cause 88–132 retries
+4. [x] **Serialization retries.** 8 concurrent clients cause 88–132 retries
    per 200 payments (B4). Find which transactions conflict (log retry
    causes; check the per-key `lock_for` plans, shared rows like system
    accounts and counters, and read plans that read more than they need),

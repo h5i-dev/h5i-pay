@@ -522,12 +522,13 @@ theorem refundsOf_eq (s : Snapshot) (id : U64) :
   simp [refundsOf, Snapshot.toSt]
 
 /-- `MarkPosted`: only an operator; it writes nothing, or the payment marked
-(and nothing else about it changed) when the payment is captured for the
-amount the orchestrator saw and its refund rows are exactly the ones the
-orchestrator saw. -/
+(and nothing else about it changed) when the payment is settled (captured,
+failed or canceled) for the captured amount the orchestrator saw and its
+refund rows are exactly the ones the orchestrator saw. -/
 theorem mark_posted_spec (a : Principal) (s : Snapshot) (id cap : U64) (seen : alloc.vec.Vec Refund) :
     mark_posted a s id cap seen ⦃ r => ∀ ws rep, r = .Ok (ws, rep) → a.operator = true ∧
-      (ws.val = [] ∨ ∃ p, findPay (Snapshot.toSt s) id.val = some p ∧ p.status = CAPTURED ∧ p.captured = cap ∧
+      (ws.val = [] ∨ ∃ p, findPay (Snapshot.toSt s) id.val = some p ∧
+        (p.status = CAPTURED ∨ p.status = FAILED ∨ p.status = CANCELED) ∧ p.captured = cap ∧
         RefundsCover (refundsOf (Snapshot.toSt s) id.val) seen.val ∧ RefundsCover seen.val (refundsOf (Snapshot.toSt s) id.val) ∧
         ws.val = [.PutPayment { p with operator := a.opId, ledger_done := true }]) ⦄ := by
   unfold mark_posted with_ledger_done

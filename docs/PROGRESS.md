@@ -178,6 +178,49 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### F4: serialization retries found and reduced
+
+- Found from PostgreSQL's log (`could not serialize access … pivot`, with
+  the statement): every retry was in the payments schema (upserts of
+  `payments` and `psp_refs`, and `COMMIT`); none in the ledger, whose
+  per-account advisory locks already queue the postings. Cause: SERIALIZABLE
+  tracks key reads per B-tree page, recent payments share a page of the
+  primary-key index, and every status change was a non-HOT update (the
+  status was in the predicates of the partial indexes `payments_unfinished`
+  and `payments_unposted`), so it added an index entry to the page every
+  concurrent command on a neighbouring payment had read; two such commands
+  each read what the other wrote, and one was aborted. Same for
+  `AttachRef` (reads `psp_refs` by key, inserts there).
+- Changes (shell only, correctness still from SERIALIZABLE):
+  - the partial indexes no longer mention the status:
+    `payments_open (tenant_id, id) WHERE NOT ledger_done` and
+    `payments_refunding … WHERE refund_pending > 0` replace them, and
+    `payments` gets `fillfactor = 70`, so `BeginAuthorize` and `Record`
+    (status changes) are HOT updates that add no index entry;
+  - so that the open index does not keep failed and canceled payments
+    forever, `MarkPosted` also marks a `FAILED` or `CANCELED` payment
+    (nothing to post; kernel change, re-proven: `marked_only_as_seen` now
+    says "settled": captured, failed or canceled), and the orchestrator
+    marks them after recording a decline or cancel; recovery's ledger part
+    selects settled, unmarked payments;
+  - `AttachRef` takes a tenant-wide advisory key (`psp-refs`).
+- Measured (same harness as B4, quiet host, one run each; payments/s and
+  serialization retries per run of 25 payments per client):
+
+| tenant | clients | before (F3) | after | payments per run |
+|---|---:|---:|---:|---:|
+| 10k | 8 | 168.8 / 225 | 183.6 / 29 | 200 |
+| 10k | 32 | 166.7 / 1416 | 181.8 / 124 | 800 |
+| 100k | 8 | 175.7 / 227 | 197.5 / 18 | 200 |
+| 100k | 32 | 167.1 / 1335 | 181.4 / 109 | 800 |
+
+  Retries fell by 8 to 12 times and throughput rose 7–12%. The rest are
+  `MarkPosted` (still a non-HOT update: it flips the indexed `ledger_done`)
+  against `Create` (inserts into the same page). Serializing those two with
+  the counter key removed them too (0 and 1 retries at 10k) but cost 20% of
+  the throughput (142 instead of 179 payments/s), so it is not done.
+- Payments mutants 16/16 caught (`h5i app mutate`, run 1793564254); `h5i app check` 293 theorems; tests and clippy (plain, mock-psp, CUDA) pass.
+
 ### F3: cursor pagination; no whole-tenant loads for batches
 
 - Payments `List { merchant, from, limit }` and ledger

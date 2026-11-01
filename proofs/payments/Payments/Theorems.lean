@@ -399,14 +399,15 @@ amount and refund rows are the ones the orchestrator synced, because
 nothing has written them since. -/
 
 /-- **The marker is set only on the state it names.** `MarkPosted` is an
-operator's, and the payment row it writes is the payment, captured for
-exactly the amount the orchestrator saw, whose refund rows are exactly the
-ones it saw (each found by id, the same), with only `operator` and
-`ledger_done` changed. -/
+operator's, and the payment row it writes is the payment, settled
+(captured, failed or canceled) with exactly the captured amount the
+orchestrator saw, whose refund rows are exactly the ones it saw (each found
+by id, the same), with only `operator` and `ledger_done` changed. -/
 theorem marked_only_as_seen (a : Principal) (s : Snapshot) (id cap : U64) (seen : alloc.vec.Vec Refund) ws r
     (h : transition a s (.MarkPosted id cap seen) = .ok (.Ok (ws, r))) :
     (∃ o, a.actor = .Operator o) ∧ ∀ p', Write.PutPayment p' ∈ ws.val →
-      ∃ p, findPay (Snapshot.toSt s) id.val = some p ∧ p.status = CAPTURED ∧ p.captured = cap ∧
+      ∃ p, findPay (Snapshot.toSt s) id.val = some p ∧
+        (p.status = CAPTURED ∨ p.status = FAILED ∨ p.status = CANCELED) ∧ p.captured = cap ∧
         RefundsCover (refundsOf (Snapshot.toSt s) id.val) seen.val ∧
         RefundsCover seen.val (refundsOf (Snapshot.toSt s) id.val) ∧
         p' = { p with operator := a.opId, ledger_done := true } := by

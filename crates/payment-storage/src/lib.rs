@@ -51,6 +51,20 @@ pub(crate) fn add_column(table: &str, column: &str, ty: &str) -> String {
     )
 }
 
+/// `ALTER TABLE … SET (fillfactor = n)`, only when not set yet (it takes a
+/// lock and would serialize engines installing at once). Applies to pages
+/// written from then on.
+pub(crate) fn fillfactor(table: &str, n: u32) -> String {
+    format!(
+        "DO $$ BEGIN \
+           IF NOT EXISTS (SELECT 1 FROM pg_class WHERE oid = '{table}'::regclass \
+                          AND reloptions @> ARRAY['fillfactor={n}']) THEN \
+             ALTER TABLE {table} SET (fillfactor = {n}); \
+           END IF; \
+         END $$"
+    )
+}
+
 /// F3: `table.seq` numbers each row among the rows with the same `scope`
 /// column (0, 1, … by id), and `counters (scope, next)` holds the next
 /// number. A table created before the column existed gets it, numbered by
@@ -150,7 +164,8 @@ pub struct RecoveryWork {
     pub psp: Vec<u64>,
     /// A refund pending: ask the PSP about it.
     pub refunds: Vec<u64>,
-    /// `CAPTURED` and not marked `ledger_done` ([`ledger_pending`]).
+    /// Settled (`CAPTURED`, `FAILED`, `CANCELED`) and not marked
+    /// `ledger_done` ([`ledger_pending`]): sync and mark.
     pub ledger: Vec<u64>,
 }
 
@@ -184,13 +199,15 @@ pub fn needs_ledger_sync(p: &payment_domain::Payment, refunds: &[payment_domain:
     })
 }
 
-/// Whether recovery must sync a payment's ledger postings: it is
-/// `CAPTURED` and not marked complete. The payment kernel clears
-/// `ledger_done` on every other write of the payment, so a payment changed
-/// since its last successful sync is always pending
+/// Whether recovery must sync a payment's ledger postings (or, for a
+/// failed or canceled payment, which needs none, just mark it): it is
+/// `CAPTURED`, `FAILED` or `CANCELED` and not marked complete. The payment
+/// kernel clears `ledger_done` on every other write of the payment, so a
+/// payment changed since its last successful sync is always pending
 /// (`payment_domain.Theorems.changes_clear_ledger_done`).
 pub fn ledger_pending(p: &payment_domain::Payment) -> bool {
-    p.status == payment_domain::CAPTURED && !p.ledger_done
+    use payment_domain::{CANCELED, CAPTURED, FAILED};
+    (p.status == CAPTURED || p.status == FAILED || p.status == CANCELED) && !p.ledger_done
 }
 
 /// A connection outside the engines (cross-tenant reads, the `ops` schema).
@@ -215,8 +232,8 @@ async fn connect_direct(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Clien
 /// Every tenant's unfinished work, in one read-only query: payments to ask
 /// the PSP about, payments with a pending refund, and captured payments
 /// whose ledger postings are not marked complete ([`ledger_pending`]).
-/// Each part is a partial index (`payments_unfinished`,
-/// `payments_unposted`), so a pass costs O(unfinished payments), not
+/// Each part is a partial index (`payments_open`: not `ledger_done`;
+/// `payments_refunding`), so a pass costs O(unfinished payments), not
 /// O(captured) (F2; before, an anti-join on the ledger's transfer ids per
 /// captured payment).
 ///
@@ -228,14 +245,17 @@ async fn connect_direct(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Clien
 /// by reconciliation and by `POST /v1/recover` (`Orchestrator::find_work`
 /// also checks the journal).
 pub async fn recovery_work(url: &str, tls: &DbTls) -> Result<Vec<RecoveryWork>, DbError> {
-    use payment_domain::{AUTHORIZED, CAPTURED, PROCESSING};
+    use payment_domain::{AUTHORIZED, CANCELED, CAPTURED, FAILED, PROCESSING};
+    // A payment in PROCESSING or AUTHORIZED is never marked, so `NOT
+    // ledger_done` (the partial index) holds for it.
     let sql = format!(
         "SELECT tenant_id, id, 0 FROM {PAYMENTS_SCHEMA}.payments \
-           WHERE status = {PROCESSING} OR (status = {AUTHORIZED} AND NOT manual_capture) \
+           WHERE NOT ledger_done AND (status = {PROCESSING} OR (status = {AUTHORIZED} AND NOT manual_capture)) \
          UNION ALL \
          SELECT tenant_id, id, 1 FROM {PAYMENTS_SCHEMA}.payments WHERE refund_pending > 0 \
          UNION ALL \
-         SELECT tenant_id, id, 2 FROM {PAYMENTS_SCHEMA}.payments WHERE status = {CAPTURED} AND NOT ledger_done \
+         SELECT tenant_id, id, 2 FROM {PAYMENTS_SCHEMA}.payments \
+           WHERE NOT ledger_done AND status IN ({CAPTURED}, {FAILED}, {CANCELED}) \
          ORDER BY 1, 3, 2"
     );
     let (mut client, conn) = connect_direct(url, tls).await?;

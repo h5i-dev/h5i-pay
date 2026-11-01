@@ -117,7 +117,8 @@ committed history is such a sequence.
 
 7. **The ledger marker (F2).** The payment kernel proves that only an
    operator's `MarkPosted` sets `ledger_done`, only on the state it names
-   (the captured amount and exactly the payment's current refund rows), and
+   (a settled payment — captured, failed or canceled — with that captured
+   amount and exactly the payment's current refund rows), and
    that every other command writing the payment or one of its refunds
    clears it (`marked_only_as_seen`, `changes_clear_ledger_done`). That the
    ledger really holds the postings when the orchestrator sends

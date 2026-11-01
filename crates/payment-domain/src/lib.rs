@@ -209,7 +209,8 @@ pub enum Command {
     View { id: u64 },
     /// The ledger holds every posting of `payment` as of `captured` and
     /// `refunds` (operator only: the orchestrator, after its ledger sync
-    /// succeeded). Marks the payment `ledger_done` if that is still its
+    /// succeeded; for a failed or canceled payment, which needs none, after
+    /// recording it). Marks the payment `ledger_done` if that is still its
     /// state; if it changed meanwhile, nothing is written (`Stale`).
     MarkPosted { payment: u64, captured: u64, refunds: Vec<Refund> },
 }
@@ -833,14 +834,14 @@ fn mark_posted(actor: &Principal, s: &Snapshot, id: u64, captured: u64, seen: &V
     match find_payment(&s.payments, id) {
         None => Err(Error::NotFound),
         Some(p) => {
-            if p.status != CAPTURED {
+            if p.status != CAPTURED && p.status != FAILED && p.status != CANCELED {
                 Err(Error::InvalidTransition)
             } else if p.ledger_done {
                 Ok((Vec::new(), Reply::Unchanged))
             } else {
                 let rows = refunds_for(&s.refunds, id);
                 if p.captured == captured && covers(&rows, seen) && covers(seen, &rows) {
-                    Ok((one(Write::PutPayment(with_ledger_done(p, operator_of(actor)))), Reply::Status(CAPTURED)))
+                    Ok((one(Write::PutPayment(with_ledger_done(p, operator_of(actor)))), Reply::Status(p.status)))
                 } else {
                     Ok((Vec::new(), Reply::Stale))
                 }
@@ -1174,6 +1175,15 @@ mod tests {
         let (s, id) = captured(100);
         let p = pay(&s, id);
         assert!(!p.ledger_done);
+        // A payment still in flight cannot be marked; a failed one can.
+        let (s1, r) = run(&s, M, Command::Create { amount: 5, currency: 392, manual_capture: false });
+        let Ok(Reply::Created(other)) = r else { panic!("{r:?}") };
+        let in_flight = Command::MarkPosted { payment: other, captured: 0, refunds: vec![] };
+        assert_eq!(run(&s1, OP, in_flight.clone()).1, Err(Error::InvalidTransition));
+        let (s1, _) = run(&s1, M, Command::BeginAuthorize { id: other });
+        let (s1, _) = run(&s1, OP, Command::Record { payment: other, result: PspResult::Declined });
+        let (s1, r) = run(&s1, OP, in_flight);
+        assert_eq!((r, pay(&s1, other).ledger_done), (Ok(Reply::Status(FAILED)), true));
         let mark = |captured, refunds: Vec<Refund>| Command::MarkPosted { payment: id, captured, refunds };
         assert_eq!(run(&s, M, mark(100, vec![])).1, Err(Error::Forbidden));
         assert_eq!(run(&s, OP, mark(99, vec![])).1, Ok(Reply::Stale));

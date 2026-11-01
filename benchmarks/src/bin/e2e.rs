@@ -258,26 +258,41 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
     }
     let refund_tx = (api.attempts() - a0) as f64 / 20.0;
 
-    // Throughput: 8 clients, 25 payments each.
+    // Throughput: `E2E_CLIENTS` (default 8; e.g. "8,32") concurrent clients,
+    // 25 payments each. Retries are counted per run.
     let api = Arc::new(api);
-    let t = Instant::now();
-    let a0 = api.attempts();
-    let mut tasks = Vec::new();
-    for c in 0..8u64 {
-        let api = api.clone();
-        tasks.push(tokio::spawn(async move {
-            for i in 0..25 {
-                let (st, p) = api.pay(900 + c * 25 + i).await;
-                assert_eq!(st, 200, "{p}");
-            }
-        }));
+    let client_counts: Vec<u64> = std::env::var("E2E_CLIENTS")
+        .ok()
+        .map(|v| v.split(',').filter_map(|x| x.trim().parse().ok()).collect())
+        .unwrap_or_else(|| vec![8]);
+    let mut concurrent = Vec::new();
+    let mut first = 900u64;
+    for &n in &client_counts {
+        let t = Instant::now();
+        let a0 = api.attempts();
+        let r0 = api.ledger.stats.retries.load(Relaxed) + api.payments.stats.retries.load(Relaxed);
+        let mut tasks = Vec::new();
+        for c in 0..n {
+            let api = api.clone();
+            let b = first;
+            tasks.push(tokio::spawn(async move {
+                for i in 0..25 {
+                    let (st, p) = api.pay(b + c * 25 + i).await;
+                    assert_eq!(st, 200, "{p}");
+                }
+            }));
+        }
+        for t in tasks {
+            t.await.unwrap();
+        }
+        first += n * 25;
+        let secs = t.elapsed().as_secs_f64();
+        let retries = api.ledger.stats.retries.load(Relaxed) + api.payments.stats.retries.load(Relaxed) - r0;
+        let payments = n * 25;
+        eprintln!("{label}: {n} clients: {:.1} payments/s, {retries} retries", payments as f64 / secs);
+        concurrent.push(json!({"clients": n, "payments": payments, "seconds": secs, "per_s": payments as f64 / secs,
+            "retries_total": retries, "kernel_tx": api.attempts() - a0}));
     }
-    for t in tasks {
-        t.await.unwrap();
-    }
-    let conc_s = t.elapsed().as_secs_f64();
-    let retries = api.ledger.stats.retries.load(Relaxed) + api.payments.stats.retries.load(Relaxed);
-    let conc_tx = api.attempts() - a0;
 
     // Five payments whose PSP answer is lost: left PROCESSING (202).
     for _ in 0..5 {
@@ -321,8 +336,8 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
         "create": stats(create), "create_kernel_tx": create_tx,
         "view": stats(view), "view_kernel_tx": view_tx,
         "refund": stats(refund), "refund_kernel_tx": refund_tx,
-        "concurrent_create": {"clients": 8, "payments": 200, "seconds": conc_s, "per_s": 200.0 / conc_s,
-            "kernel_tx": conc_tx, "retries_total": retries},
+        "concurrent_create": concurrent[0].clone(),
+        "concurrent": concurrent,
         "recovery_passes": passes,
         "reconcile": stats(recon), "reconcile_exceptions": exceptions,
     });

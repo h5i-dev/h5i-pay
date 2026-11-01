@@ -179,7 +179,8 @@ impl Orchestrator {
             Outcome::Pending => return Ok(()),
         };
         self.record(tenant, id, result).await?;
-        if matches!(outcome, Outcome::Captured { .. }) {
+        if matches!(outcome, Outcome::Captured { .. } | Outcome::Declined { .. } | Outcome::Canceled) {
+            // Post a capture; mark a declined or canceled payment done.
             self.sync_ledger(tenant, id).await?;
         }
         Ok(())
@@ -246,6 +247,7 @@ impl Orchestrator {
             Err(PspError::Timeout | PspError::Unavailable(_)) => Ok(true),
             Err(PspError::Rejected { .. }) => {
                 self.record(tenant, id, d::PspResult::Declined).await?;
+                self.sync_ledger(tenant, id).await?;
                 Ok(false)
             }
             Err(e) => Err(OrchError::Psp(e)),
@@ -289,6 +291,7 @@ impl Orchestrator {
         match v.payment.status {
             d::CREATED | d::CANCELED => {
                 self.pay_ok(merchant, d::Command::Cancel { id }).await?;
+                self.sync_ledger(tenant, id).await?;
             }
             d::AUTHORIZED | d::PROCESSING => {
                 let reference = v.reference.clone().ok_or(OrchError::Payment(d::Error::InvalidTransition))?;
@@ -454,7 +457,14 @@ impl Orchestrator {
     async fn sync_ledger_with(&self, tenant: u64, id: u64, force: bool) -> Result<()> {
         let v = self.view(&self.op_p(tenant), id).await?;
         let p = v.payment;
-        if p.status != d::CAPTURED || (p.ledger_done && !force) {
+        if p.ledger_done && !force {
+            return Ok(());
+        }
+        if p.status == d::FAILED || p.status == d::CANCELED {
+            // Nothing to post: mark it done, so recovery stops looking at it.
+            return self.mark_posted(tenant, &p, v.refunds).await;
+        }
+        if p.status != d::CAPTURED {
             return Ok(());
         }
         let clearing = self.account(tenant, 0, p.currency, PSP_CLEARING, false).await?;
@@ -513,7 +523,12 @@ impl Orchestrator {
                 }
             }
         }
-        let mark = d::Command::MarkPosted { payment: id, captured: p.captured, refunds: v.refunds };
+        self.mark_posted(tenant, &p, v.refunds).await
+    }
+
+    /// `MarkPosted` for the state a `View` read.
+    async fn mark_posted(&self, tenant: u64, p: &d::Payment, refunds: Vec<d::Refund>) -> Result<()> {
+        let mark = d::Command::MarkPosted { payment: p.id, captured: p.captured, refunds };
         match self.pay(&self.op_p(tenant), mark).await? {
             // Marked, already marked, or changed meanwhile (left for recovery).
             Ok(_) => Ok(()),
@@ -625,6 +640,7 @@ impl Orchestrator {
             None if fail_unsubmitted && p.status == d::PROCESSING => {
                 // The PSP never received it: no money moved.
                 self.record(tenant, id, d::PspResult::Declined).await?;
+                self.sync_ledger(tenant, id).await?;
                 Ok(PaymentRecovery::Failed)
             }
             None => Ok(PaymentRecovery::Unresolved),
