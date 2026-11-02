@@ -54,7 +54,7 @@ payments) inside PostgreSQL (the anti-join on the ledger's transfer ids):
 Since F2 a per-payment "ledger complete" marker makes it O(unfinished):
 7.8 ms at 100k with nothing to fix (see "After F" below).
 
-`POST /v1/reconcile` is unchanged by B1–B3 and is O(tenant) by nature: it
+(Until G6; see "After G".) `POST /v1/reconcile` is unchanged by B1–B3 and is O(tenant) by nature: it
 loads both kernels' full snapshots and the PSP report, classifies on one
 CPU thread and renders every exception (110k at 100k payments, since the
 Mock PSP of the measurement does not know the seeded payments). 583 ms at
@@ -104,6 +104,80 @@ Against B4's "after" column:
 - `POST /v1/reconcile` is unchanged within noise (the F4 harness gave
   70–76 ms at 10k and 602–626 ms at 100k). It runs `cpu_single`, now the
   proven join; it is still O(tenant), as above.
+
+### After G (`405ffc9`)
+
+The same harness and B4-era seeded databases (`e2e_seed_*`), the build
+before G (`f889488`, "pre-G") and after G6 (`405ffc9`) interleaved, order
+alternating, three rounds per size, `E2E_CLIENTS=8,32`, medians [range]
+(raw: `benchmarks/results/e2e-afterG-g5.xlarge.json`). Load average was
+2–3.5 during the series (it reached 5–9 at other times today, from
+another session's job; those runs are not used). The G builds migrate the
+pre-G seeds at startup (history backfill, `open_payments`), before timing.
+
+| | build | 1k | 10k | 100k |
+|---|---|---:|---:|---:|
+| `POST /v1/payments`, p50 ms | pre-G | 19.0 | 17.4 | 16.2 |
+| | G | 23.6 | 21.4 | 21.1 |
+| … kernel transactions per payment | both | 8 | 8 | 8 |
+| `GET /v1/payments/{id}`, p50 ms | pre-G | 0.7 | 0.7 | 0.7 |
+| | G | 1.1 | 1.1 | 1.1 |
+| 8 clients, payments/s | pre-G | 183.9 [179–188] | 182.8 [182–183] | 187.3 [184–188] |
+| | G | 143.1 [141–144] | 140.1 [138–143] | 151.3 [145–152] |
+| … serialization retries per run | pre-G | 25–34 | 17–28 | 16–27 |
+| | G | 3–8 | 0–10 | 0–15 |
+| 32 clients, payments/s | pre-G | 185.0 [183–186] | 180.2 [180–183] | 180.9 [177–186] |
+| | G | 143.9 [142–145] | 142.0 [140–144] | 141.9 [141–147] |
+| … serialization retries per run | pre-G | 110–114 | 107–121 | 100–107 |
+| | G | 0–3 | 0 | 0–3 |
+| recovery pass, 5 to fix, ms | pre-G | 57.7 | 58.4 | 55.0 |
+| | G | 74.1 | 74.4 | 91.9 |
+| recovery pass, nothing to fix, ms | pre-G | 6.5 | 6.5 | 6.6 |
+| | G | 7.6 | 10.0 | 25.5 |
+| `POST /v1/reconcile`, one call, p50 ms | pre-G (whole tenant) | 12.9 | 61.5 | 509 |
+| | G (first period, ≤ 4096 ids) | 288 | 423 | 350 |
+| whole tenant, ms | pre-G (one call) | 12.9 | 61.5 | 509 |
+| | G (all periods) | 254 (1 period) | 1256 (3) | 9615 (28) |
+
+What changed, and what it cost:
+
+- **Serialization retries** are gone from the payment flow: 0–15 per run
+  against 16–121 (G5: `MarkPosted` is a HOT update; `open_payments`).
+- **Throughput fell 19–23%** (about 183 to 142 payments/s), and every
+  kernel transaction got about 0.4–0.6 ms slower (view +0.4 ms with one
+  transaction, create +4–5 ms with eight). A bisect at 10k, interleaved,
+  two rounds (`e2e-afterG-bisect-g5.xlarge.json`): pre-G 187–191 / 179–181
+  payments/s (8 / 32 clients), G1 (`ce20fde`) 141–145 / 139–141, G3
+  (`95fc7d2`) 139–140 / 141–142, G6 140–142 / 142–143. The whole drop is
+  G1. G1 makes the engines use the database's clock (`Clock::Database`, for
+  the history's `at`), which runs one more statement, `SELECT
+  transaction_timestamp()`, in every kernel transaction (visible in
+  PostgreSQL's log), and every change now also inserts a history row. The
+  per-transaction cost matches the extra round trip; I did not measure the
+  two parts separately. G1's PROGRESS entry did not measure throughput;
+  this is the first measurement of it. Reading the clock with the first
+  query of the load (or `now()` in the write) would remove the round trip;
+  not done.
+- **Recovery** stays O(unfinished) but is slower: the empty pass 7.6 /
+  10.0 / 25.5 ms against 6.5–6.6 (the `open_payments` join; the query
+  itself took 0.3 ms in `EXPLAIN ANALYZE` at 100k, so most of it is not
+  the query; not traced), and a pass fixing 5 payments 74–92 ms against
+  55–58 (more transactions per payment, each slower).
+- **Reconciliation** is bounded per call and no longer loads the tenant,
+  but costs much more in total. One call reads at most 4096 ids, in 64-id
+  pages (h5i-app's read predicates have no range comparison, so a page is
+  an `OR` of 64 keys; F3): 64 `Range` + 64 `RefundRange` + 128
+  `TransferRange` kernel transactions, 290–420 ms whatever the tenant's
+  size. Reading the whole tenant that way takes 20× (10k) and 19× (100k)
+  the pre-G single call. Part of that cost came with G4, not G6: G4 reads
+  the ledger side through each system account's journal in 64-entry
+  pages instead of one snapshot, and the whole-tenant call of the G5
+  build took 606 ms at 10k and 5.7 s at 100k (`docs/PROGRESS.md`, G6),
+  10× the pre-G call; G4's PROGRESS entry did not measure that. The same
+  paged journal read is in `POST /v1/recover` (`find_work`), not measured. Nightly runs only need the periods since
+  the last closed one. A range predicate in h5i-app (a read of `id ≥ a AND
+  id < b`) would make a period one read per table; that is a change to
+  h5i-app's query language and its Lean semantics, not done.
 
 ### The batch worker, with its files
 
@@ -287,7 +361,8 @@ the 4-thread CPU engine matches or beats the GPU for reconciliation.
   memory bandwidth and the partition pass. A larger CPU instance would
   narrow the GPU's lead; it was not measured.
 - *The batch is rarely the bottleneck end to end*: measured in B4 above
-  (CSV parsing in the worker, snapshot loading in `POST /v1/reconcile`).
+  (CSV parsing in the worker; snapshot loading in `POST /v1/reconcile`
+  before G6, page reads since).
 - *Cost per million rows is negligible for every engine* (below $0.0001 at
   the g5.xlarge price). What costs money is a GPU instance that idles: the
   AWS Batch compute environment scales GPU capacity from zero per job.

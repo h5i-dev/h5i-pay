@@ -178,6 +178,25 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### After G: full checks and the B4 end-to-end re-run
+
+- Checks on `405ffc9` (+ docs): `cargo test --workspace` 103 passed;
+  clippy plain, `mock-psp` and CUDA clean; `h5i app extract --check` up
+  to date for all three kernels; gates ledger 376 theorems in 15 modules,
+  payments 451 in 10, reconcile 69 in 3 (standard axioms only); full
+  mutation runs on the final kernels ledger 20/20, payments 22/22,
+  reconcile 6/6; GPU differential tests 6/6 and `build-device.sh --check`;
+  `terraform validate` and `fmt -check` ok, checkov 400 passed / 0 failed /
+  44 skipped, `cargo deny check` ok.
+- B4 re-run, pre-G (`f889488`) and G interleaved at 1k/10k/100k with 8
+  and 32 clients: `docs/benchmarks.md` "After G". Retries in the payment
+  flow went from 16–121 per run to 0–15; throughput fell 19–23% (about
+  183 to 142 payments/s), all of it at G1 by a bisect (G1's database
+  clock adds a statement to every kernel transaction, and every change
+  writes a history row); one reconciliation call is bounded (290–420 ms)
+  but the whole tenant period by period costs 19–20× the pre-G single
+  call, part of it from G4's paged journal reads.
+
 ### G6: `POST /v1/reconcile` by period, read page by page
 
 - A period is a range of ids, `from ≤ id < to`: the payment id of a

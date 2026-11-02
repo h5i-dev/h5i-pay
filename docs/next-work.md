@@ -256,7 +256,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    restricted to it (test against the full run on random data). Measure at
    10k/100k.
 
-After G: re-run all checks and the B4 end-to-end benchmarks (interleaved
+After G (done, PROGRESS.md "After G", `docs/benchmarks.md` "After G"): re-run all checks and the B4 end-to-end benchmarks (interleaved
 with the previous build if the host is loaded), update `docs/benchmarks.md`,
 `docs/security-review.md`, `docs/proof-assumptions.md`, and report what was
 proven, measured and left open.

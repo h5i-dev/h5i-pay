@@ -133,7 +133,7 @@ pay() { curl -s -H "Authorization: Bearer $1" -H 'content-type: application/json
 pay $MERCHANT /v1/payments '{"amount":1200,"currency":"jpy","capture":"manual","payment_method":"tok_visa"}'
 pay $MERCHANT /v1/payments/0/capture '{"amount":1000}'
 pay $MERCHANT /v1/payments/0/refunds '{"amount":300}'
-pay $OP /v1/reconcile '{}'
+pay $OP /v1/reconcile '{}'          # ids 0..4095; next period: /v1/reconcile?from=4096 (G6)
 curl -s -H "Authorization: Bearer $OP" localhost:8080/v1/reconcile/reports   # latest nightly batch report (after h5i-pay export / worker / ingest)
 pay $OP /v1/payments/rpc '{"cmd":"history","payment":0}'                     # who changed it, when, how (G1)
 

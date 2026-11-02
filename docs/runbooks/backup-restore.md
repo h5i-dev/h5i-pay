@@ -14,7 +14,8 @@ restore test into a throwaway instance, Multi-AZ for automatic failover.
    Use the `<sha>-mock` API image; the production image has no Mock PSP
    and refuses to start with `mock`.
 3. For every tenant: `GET /v1/ledger/audit` must return `ok: true`, and
-   `POST /v1/reconcile` must show no `ledger` exceptions. The audit checks
+   `POST /v1/reconcile` must show no `ledger` exceptions in any period
+   (from `?from=0`, follow `period.next` until it is `null`). The audit checks
    the same invariants the proofs establish, on the restored rows.
 4. Record the recovery point time, restore duration (RTO) and data age
    (RPO) in the drill log; delete the instance.
