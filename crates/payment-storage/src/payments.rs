@@ -36,6 +36,11 @@ impl Kernel for PaymentsApp {
     fn stamp(actor: &mut k::Principal, now: h5i_app_core::Timestamp) {
         actor.at = now.0;
     }
+
+    /// Proven sound: `payment_domain.ReadOnly.sound` (gated, G6).
+    fn read_only(cmd: &k::Command) -> bool {
+        k::read_only(cmd)
+    }
 }
 
 /// User `user` (a merchant) of tenant `org`.
@@ -151,7 +156,9 @@ impl Store<PaymentsApp> for PaymentsStore {
             | k::Command::Refunds { .. }
             | k::Command::GetRef { .. }
             | k::Command::View { .. }
-            | k::Command::History { .. } => Lock::None,
+            | k::Command::History { .. }
+            | k::Command::Range { .. }
+            | k::Command::RefundRange { .. } => Lock::None,
         }
     }
 }
@@ -348,6 +355,12 @@ impl h5i_app_http::Api<PaymentsApp> for PaymentsStore {
                 ("history", Out::Arr(hs.iter().map(history_json).collect())),
                 ("next", next.map_or(Out::Null, Out::from)),
             ]),
+            k::Reply::Range(ps, rs, parents, next) => Out::obj([
+                ("payments", Out::Arr(ps.iter().map(payment_json).collect())),
+                ("refunds", Out::Arr(rs.iter().map(refund_json).collect())),
+                ("refund_payments", Out::Arr(parents.iter().map(payment_json).collect())),
+                ("next", next.map_or(Out::Null, Out::from)),
+            ]),
         }
     }
 
@@ -458,6 +471,8 @@ enum StoredReply {
     View(StoredPayment, Vec<StoredRefund>, Option<Vec<u8>>),
     /// G1: a history page, entries as tuples.
     History(Vec<StoredEntry>, Option<u64>),
+    /// G6: a page of payments and refunds by id.
+    Range(Vec<StoredPayment>, Vec<StoredRefund>, Vec<StoredPayment>, Option<u64>),
 }
 
 /// A history entry in a stored reply.
@@ -531,6 +546,12 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
                 StoredReply::View(store_payment(p), rs.iter().map(store_refund).collect(), r.clone())
             }
             k::Reply::History(hs, next) => StoredReply::History(hs.iter().map(store_entry).collect(), *next),
+            k::Reply::Range(ps, rs, parents, next) => StoredReply::Range(
+                ps.iter().map(store_payment).collect(),
+                rs.iter().map(store_refund).collect(),
+                parents.iter().map(store_payment).collect(),
+                *next,
+            ),
         };
         serde_json::to_vec(&stored).expect("stored replies serialize")
     }
@@ -550,6 +571,12 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
             StoredReply::Ref(b) => k::Reply::Ref(b),
             StoredReply::View(p, rs, r) => k::Reply::View(load_payment(p), rs.into_iter().map(load_refund).collect(), r),
             StoredReply::History(hs, next) => k::Reply::History(hs.into_iter().map(load_entry).collect(), next),
+            StoredReply::Range(ps, rs, parents, next) => k::Reply::Range(
+                ps.into_iter().map(load_payment).collect(),
+                rs.into_iter().map(load_refund).collect(),
+                parents.into_iter().map(load_payment).collect(),
+                next,
+            ),
         })
     }
 }

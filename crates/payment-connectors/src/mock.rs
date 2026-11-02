@@ -368,6 +368,14 @@ impl Psp for MockPsp {
             Ok(self.state.lock().unwrap().settlement.iter().filter(|r| r.tenant == tenant).cloned().collect())
         })
     }
+
+    /// One period's lines, selected in memory.
+    fn settlement_report_range<'a>(&'a self, tenant: u64, from: u64, to: u64) -> BoxFut<'a, Result<Vec<SettlementRecord>, PspError>> {
+        Box::pin(async move {
+            let st = self.state.lock().unwrap();
+            Ok(st.settlement.iter().filter(|r| r.tenant == tenant && from <= r.id && r.id < to).cloned().collect())
+        })
+    }
 }
 
 #[cfg(test)]

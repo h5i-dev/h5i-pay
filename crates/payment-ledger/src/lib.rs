@@ -212,6 +212,11 @@ pub enum Command {
     /// One page of an account's history (operators only): its entries
     /// numbered `from` to `from + limit - 1`, `limit` at most `MAX_PAGE`.
     History { account: u64, from: u64, limit: u32 },
+    /// The transfers with ids `from` to `from + limit - 1` (operators only,
+    /// G6), in table order; the reply's `next` is always `None`.
+    /// Reconciliation reads a period's system postings with it: their ids
+    /// are contiguous per kind of posting.
+    TransferRange { from: u64, limit: u32 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -660,6 +665,31 @@ fn account_range(actor: &Principal, s: &Snapshot, from: u64, limit: u32) -> Outc
     Ok((Vec::new(), Reply::Accounts(id_range(s, from, end), next)))
 }
 
+/// The transfers with ids `from` up to (not including) `end`, in table order.
+fn transfer_ids(s: &Snapshot, from: u64, end: u64) -> Vec<Transfer> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < s.transfers.len() {
+        let t = s.transfers[i];
+        if from <= t.id && t.id < end {
+            out.push(t);
+        }
+        i += 1;
+    }
+    out
+}
+
+fn transfer_range(actor: &Principal, s: &Snapshot, from: u64, limit: u32) -> Outcome {
+    if limit == 0 || limit > MAX_PAGE {
+        return Err(Error::BadPage);
+    }
+    if !is_operator(actor) {
+        return Err(Error::Forbidden);
+    }
+    let end = page_end(from, limit);
+    Ok((Vec::new(), Reply::Transfers(transfer_ids(s, from, end), None)))
+}
+
 /// The ledger's logic: a command's writes and reply, or a refusal that
 /// commits nothing. Every account a command changes gets one history entry
 /// per change, written right after the account (`Theorems.every_change_logged`).
@@ -675,6 +705,7 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
         Command::Transfers { account, from, limit } => journal_page(actor, s, *account, *from, *limit),
         Command::AccountRange { from, limit } => account_range(actor, s, *from, *limit),
         Command::History { account, from, limit } => history_page(actor, s, *account, *from, *limit),
+        Command::TransferRange { from, limit } => transfer_range(actor, s, *from, *limit),
     }
 }
 
@@ -760,7 +791,12 @@ fn batch_reads(ts: &Vec<TransferReq>) -> Vec<h5i_app_sql::Read> {
 pub fn read_only(cmd: &Command) -> bool {
     matches!(
         cmd,
-        Command::Account { .. } | Command::Accounts { .. } | Command::Transfers { .. } | Command::AccountRange { .. } | Command::History { .. }
+        Command::Account { .. }
+            | Command::Accounts { .. }
+            | Command::Transfers { .. }
+            | Command::AccountRange { .. }
+            | Command::History { .. }
+            | Command::TransferRange { .. }
     )
 }
 
@@ -850,6 +886,16 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
                 let end = page_end(*from, *limit);
                 if *from < end {
                     out.push(rd_where(T_HISTORY, entry_range(*account, *from, end)));
+                }
+            }
+            Some(out)
+        }
+        Command::TransferRange { from, limit } => {
+            let mut out = Vec::new();
+            if *limit != 0 && *limit <= MAX_PAGE && is_operator(actor) {
+                let end = page_end(*from, *limit);
+                if *from < end {
+                    out.push(rd_where(T_TRANSFERS, seq_range(TRANSFER_ID, *from, end)));
                 }
             }
             Some(out)

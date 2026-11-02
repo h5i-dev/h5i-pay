@@ -30,6 +30,9 @@ theorems = [
   "payment_reconcile.Join.internal_code_spec",
   "payment_reconcile.Join.join_eq_reference",
   "payment_reconcile.Join.join_rows",
+  # G6: on a period's rows (any set of keys), the join gives each row the
+  # code of the whole-tenant run.
+  "payment_reconcile.Period.join_period",
 ]
 
 # Bugs the proofs must reject (`h5i app mutate crates/payment-reconcile`).

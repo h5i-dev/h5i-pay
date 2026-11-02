@@ -17,7 +17,6 @@
 //! (`docs/runbooks/reconciliation-exceptions.md`).
 
 use crate::orchestrator::{OrchError, Orchestrator};
-use h5i_app_core::TenantId;
 use payment_connectors as psp;
 use payment_reconcile::rules::{key, KIND_CAPTURE, KIND_REFUND};
 use payment_reconcile::{inputs, Record};
@@ -90,8 +89,16 @@ pub async fn export(o: &Orchestrator, url: &str, tls: &DbTls, dir: &Path) -> Res
     let mut tenants = Vec::new();
     let mut failed = Vec::new();
     for t in payment_storage::tenants_with_payments(url, tls).await? {
-        let snap = o.payments.snapshot(TenantId(t)).await?;
-        let internal = inputs::internal_records(&snap);
+        // G6: in `Range` pages, not one snapshot of the tenant.
+        let internal = match o.internal_records_paged(t).await {
+            Ok(r) => r,
+            Err(crate::orchestrator::OrchError::Db(e)) => return Err(e.into()),
+            Err(e) => {
+                tracing::error!(tenant = t, error = %e, "reading the payments failed");
+                failed.push(json!({"tenant": t, "error": e.to_string()}));
+                continue;
+            }
+        };
         let report = match o.psp.settlement_report(t).await {
             Ok(r) => r,
             Err(e) => {

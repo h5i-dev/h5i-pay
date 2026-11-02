@@ -110,6 +110,20 @@ theorem account_range_writes (a : Principal) (s : Snapshot) (f : U64) (l : U32) 
     simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
   · simp at h
 
+theorem transfer_range_writes (a : Principal) (s : Snapshot) (f : U64) (l : U32) ws r
+    (h : transfer_range a s f l = ok (.Ok (ws, r))) : ws.val = [] := by
+  unfold transfer_range at h
+  simp only [is_operator_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  split at h
+  · obtain ⟨e, -, h⟩ := bind_tc_eq_ok.1 h
+    obtain ⟨v, -, h⟩ := bind_tc_eq_ok.1 h
+    simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
+  · simp at h
+
 /-- The commands that only read. -/
 def IsRead : Command → Prop
   | .Account _ => True
@@ -117,6 +131,7 @@ def IsRead : Command → Prop
   | .Transfers .. => True
   | .AccountRange .. => True
   | .History .. => True
+  | .TransferRange .. => True
   | _ => False
 
 theorem reads_nothing (a : Principal) (s : Snapshot) (c : Command) ws r
@@ -127,6 +142,7 @@ theorem reads_nothing (a : Principal) (s : Snapshot) (c : Command) ws r
   · exact journal_page_writes a s _ _ _ ws r h
   · exact account_range_writes a s _ _ ws r h
   · exact history_page_writes a s _ _ _ ws r h
+  · exact transfer_range_writes a s _ _ ws r h
 
 /-! ## Reads of the whole tenant's data are operators' (SEC-02, G4) -/
 
@@ -166,11 +182,24 @@ theorem history_page_operator (a : Principal) (s : Snapshot) (p f : U64) (l : U3
   · assumption
   · simp at h
 
+theorem transfer_range_operator (a : Principal) (s : Snapshot) (f : U64) (l : U32) ws r
+    (h : transfer_range a s f l = ok (.Ok (ws, r))) : a.operator = true := by
+  unfold transfer_range at h
+  simp only [is_operator_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  split at h
+  · assumption
+  · simp at h
+
 /-- The commands that read across the tenant's accounts. -/
 def IsOperatorRead : Command → Prop
   | .Transfers .. => True
   | .AccountRange .. => True
   | .History .. => True
+  | .TransferRange .. => True
   | _ => False
 
 /-- Only an operator reads an account's journal or history, or lists the
@@ -181,6 +210,7 @@ theorem operator_reads (a : Principal) (s : Snapshot) (c : Command) ws r
   · exact journal_page_operator a s _ _ _ ws r h
   · exact account_range_operator a s _ _ ws r h
   · exact history_page_operator a s _ _ _ ws r h
+  · exact transfer_range_operator a s _ _ ws r h
 
 /-! ## The invariant -/
 
@@ -219,6 +249,7 @@ theorem inv_preserved (a : Principal) (s : Snapshot) (c : Command) ws r
   | Accounts o f l => rw [reads_nothing a s _ ws r h trivial]; exact hinv
   | Transfers acc f l => rw [reads_nothing a s _ ws r h trivial]; exact hinv
   | AccountRange f l => rw [reads_nothing a s _ ws r h trivial]; exact hinv
+  | TransferRange f l => rw [reads_nothing a s _ ws r h trivial]; exact hinv
   | History p f l => rw [reads_nothing a s _ ws r h trivial]; exact hinv
 
 theorem init_inv : Inv init := by
@@ -435,6 +466,7 @@ theorem guarded (a : Principal) (s : Snapshot) (c : Command) ws r
   | Accounts o f l => rw [reads_nothing a s _ ws r h trivial]; exact Guarded.refl _ _
   | Transfers acc f l => rw [reads_nothing a s _ ws r h trivial]; exact Guarded.refl _ _
   | AccountRange f l => rw [reads_nothing a s _ ws r h trivial]; exact Guarded.refl _ _
+  | TransferRange f l => rw [reads_nothing a s _ ws r h trivial]; exact Guarded.refl _ _
   | History p f l => rw [reads_nothing a s _ ws r h trivial]; exact Guarded.refl _ _
 
 /-- **Authorization of debits.** In every reachable state, if a command
@@ -492,6 +524,7 @@ theorem transfers_record_operator (a : Principal) (s : Snapshot) (c : Command) w
   | Accounts o f l => rw [reads_nothing a s _ ws r h trivial]; simp
   | Transfers acc f l => rw [reads_nothing a s _ ws r h trivial]; simp
   | AccountRange f l => rw [reads_nothing a s _ ws r h trivial]; simp
+  | TransferRange f l => rw [reads_nothing a s _ ws r h trivial]; simp
   | History p f l => rw [reads_nothing a s _ ws r h trivial]; simp
 
 end payment_ledger.Theorems

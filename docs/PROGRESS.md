@@ -178,6 +178,93 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### G6: `POST /v1/reconcile` by period, read page by page
+
+- A period is a range of ids, `from ≤ id < to`: the payment id of a
+  capture, the refund id of a refund (the reconciliation key's id).
+  Payments and refunds take ids from one tenant counter in creation order,
+  so a period is the money that entered between two counter values. Every
+  code depends only on the rows that share a key, and each key is in one
+  period, so a period's result is the whole-tenant result restricted to it.
+  Proven of the single-thread join for any set of keys:
+  `payment_reconcile.Period.join_period` (with `rowCode_restrict`,
+  `extCode_restrict`; gated). Not claimed: the matched *index* (it indexes
+  the period's external rows; the matched record is the same).
+- Payment kernel (operators only): `Command::Range { from, limit }`, the
+  payments with ids in the page, and `Command::RefundRange { from, limit }`,
+  the refunds with ids in the page and the payment of each (refunds carry
+  no currency); both say `next` while the counter is past the page. Plans:
+  payments `id ∈ page`; refunds `id ∈ page` and payments `id IN (SELECT
+  payment FROM refunds WHERE id ∈ page)`; the counter. A first version
+  read both in one command with `id ∈ page OR id IN (…)`: PostgreSQL then
+  scanned the whole primary-key index (35 ms a page at 100k payments; a
+  sweep of the tenant took 95 s), hence two commands. Frame theorems
+  (`range_page_congr`, `refund_range_page_congr`), `reads_abs`,
+  `*_writes`; `payment_domain.Theorems.range_operator` (gated) for both. The kernel's read
+  commands are now declared read-only (`payment_domain::read_only`,
+  `PaymentsApp::read_only`; `payment_domain.ReadOnly.sound` gated), so they
+  run `READ ONLY DEFERRABLE` as the ledger's do since G4.
+- Ledger kernel: `Command::TransferRange { from, limit }` (operators only):
+  transfers by id. A period's capture and refund-settlement postings have
+  contiguous ids per kind (`system_transfer_id`), so two ranges per page
+  read them. Plan, frame (`transfer_range_congr`), read-only and
+  `operator_reads` cover it.
+- `Orchestrator::reconcile_period(tenant, from, to)`, `to − from` at most
+  `MAX_PERIOD` = 4096: 64 `Range` and 64 `RefundRange` pages, 128
+  `TransferRange` pages, and
+  `Psp::settlement_report_range` (new; the default filters the whole
+  report, the Mock PSP selects in memory). Each page is its own read-only
+  transaction. The route takes `from` (default 0), `to` (default and at
+  most `from + 4096`), `exceptions_from` and `exceptions_limit` (default
+  100, at most 1000); each section lists that page of its exceptions with
+  `listed_exceptions` and `exceptions_next`; `period` says `closed` (ids
+  past `to` existed when read) and `next` (the next period's `from`, `null`
+  for the open period). The export (`batch::export`) reads the payments in
+  `Range`/`RefundRange` pages too (`internal_records_paged`). `reconcile_inputs` (one
+  whole-tenant snapshot) stays, as the reference the tests compare with.
+- Tests: `reconcile_periods::a_period_equals_the_whole_tenant_run_restricted_to_it`
+  (about 150 ids of random payments, refunds and lost PSP answers; a PSP
+  report with changed amounts and currencies, dropped, doubled and unknown
+  lines; stray ledger postings with system ids, also past the newest id):
+  for 25 random periods, a tiling of [0, 4096) by 512 and edge cases, the
+  period's rows are exactly the whole run's rows in the period and every
+  engine gives each row the whole run's code, on both sections; over HTTP
+  the counts of eight 1024-id periods add up to the whole run's; the
+  exceptions paged three at a time equal the full list; limits are 400.
+  `payment_reconcile::period` unit test: 200 random runs, every engine.
+  `reconciliation_finds_discrepancies` now finds the unknown line in its
+  own period.
+- Measured (`e2e.rs`, seeds `e2e_g4_10000`/`e2e_g4_100000`, G5 and G6
+  builds interleaved, order alternating, 3 rounds; medians [range]; raw:
+  `benchmarks/results/e2e-G6-reconcile-g5.xlarge.json`):
+
+| tenant | G5: one call (whole tenant) | G6: one call (first period, 4096 ids) | G6: whole tenant, period by period |
+|---|---:|---:|---:|
+| 10k | 606 ms [588–609] | 422 ms [421–435] | 1252 ms [1249–1256], 3 periods, 762 kernel transactions |
+| 100k | 5693 ms [5655–5703] | 350 ms [348–350] | 9643 ms [9630–9643], 28 periods, 7056 kernel transactions |
+
+  A call is now bounded (about 350–430 ms for a full period, whatever the
+  tenant's size) and never holds one snapshot of the tenant. Reconciling
+  the whole tenant costs more in total than one whole-tenant call did
+  (2.1× at 10k, 1.7× at 100k: about 1.4 ms per kernel transaction, 256 per
+  period); a nightly run needs only the periods since the last closed one.
+  Payments/s is unchanged (medians G5 / G6: 10k 143.4 / 143.2 at 8
+  clients, 142.8 / 142.9 at 32; 100k 149.4 / 153.8 and 141.6 / 144.5).
+  Serialization retries per run: G6 0, 11, 0 (8 clients) and 4, 2, 0 (32)
+  at 10k, 0, 0, 0 and 1, 3, 0 at 100k; G5 in the same series had 46, 47,
+  11 / 4, 9, 3 at 10k and 87, 0, 0 / 6, 0, 5 at 100k, higher than in the
+  G5 series itself (0–2); PostgreSQL's log shows `MarkPosted` again, with
+  99% of `payments` updates HOT. Not traced further; G6's read-only
+  payment reads (no predicate locks) are the one change on that path.
+- Proofs: ledger gate 376 theorems in 15 modules, payments 451 in 10,
+  reconcile 69 in 3. Full mutation runs: ledger 20/20, payments 22/22,
+  reconcile 6/6 caught. The new ones: `range_plan_misses_refund_payments`
+  (`Plan.reads_abs`), `range_open_to_users` (`Commands.range_page_writes`),
+  `create_declared_read_only` (`ReadOnly.decide_reads_nothing`),
+  `transfer_range_past_end` (`Frame.transfer_ids_spec`). GPU differential
+  tests 6/6 and `build-device.sh --check` pass (the device crate is
+  unchanged). Tests: 103 passed in the workspace.
+
 ### G5: the last serialization retries removed, throughput kept
 
 - Cause, from PostgreSQL's log with every statement (32 clients, 10k

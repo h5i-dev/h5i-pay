@@ -257,6 +257,15 @@ pub enum Command {
     /// One page of a payment's history (operators only): its entries
     /// numbered `from` to `from + limit - 1`, `limit` at most `MAX_PAGE`.
     History { payment: u64, from: u64, limit: u32 },
+    /// One page of the tenant's payments by id (operators only, G6): those
+    /// with ids `from` to `from + limit - 1`, `limit` at most `MAX_PAGE`.
+    /// Reconciliation reads a period of ids with it and `RefundRange`
+    /// (payments and refunds are numbered by one counter).
+    Range { from: u64, limit: u32 },
+    /// One page of the tenant's refunds by id (operators only, G6): those
+    /// with ids `from` to `from + limit - 1`, and the payment of each
+    /// (refunds carry no currency).
+    RefundRange { from: u64, limit: u32 },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -292,6 +301,10 @@ pub enum Reply {
     View(Payment, Vec<Refund>, Option<Vec<u8>>),
     /// A page of a payment's history, and where the next page starts.
     History(Vec<HistoryEntry>, Option<u64>),
+    /// A page by id: payments (`Range`), or refunds and the payment of
+    /// each, in the refunds' order (`RefundRange`); and where the next page
+    /// starts (`None`: no id is past this page yet).
+    Range(Vec<Payment>, Vec<Refund>, Vec<Payment>, Option<u64>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -961,6 +974,74 @@ fn history_page(actor: &Principal, s: &Snapshot, payment: u64, from: u64, limit:
     }
 }
 
+/// The payments with ids `from` up to (not including) `end`, in table order.
+fn payment_ids(s: &Snapshot, from: u64, end: u64) -> Vec<Payment> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < s.payments.len() {
+        let p = s.payments[i];
+        if from <= p.id && p.id < end {
+            out.push(p);
+        }
+        i += 1;
+    }
+    out
+}
+
+/// The refunds with ids `from` up to (not including) `end`, in table order.
+fn refund_ids(s: &Snapshot, from: u64, end: u64) -> Vec<Refund> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < s.refunds.len() {
+        let r = s.refunds[i];
+        if from <= r.id && r.id < end {
+            out.push(r);
+        }
+        i += 1;
+    }
+    out
+}
+
+/// The payment of each of `rs`, in their order (one the tenant lacks is skipped).
+fn parents_of(s: &Snapshot, rs: &Vec<Refund>) -> Vec<Payment> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < rs.len() {
+        match find_payment(&s.payments, rs[i].payment) {
+            Some(p) => out.push(p),
+            None => {}
+        }
+        i += 1;
+    }
+    out
+}
+
+fn range_page(actor: &Principal, s: &Snapshot, from: u64, limit: u32) -> Outcome {
+    if limit == 0 || limit > MAX_PAGE {
+        return Err(Error::BadPage);
+    }
+    if !is_operator(actor) {
+        return Err(Error::Forbidden);
+    }
+    let end = page_end(from, limit);
+    let next = if end < s.counter.next_id { Some(end) } else { None };
+    Ok((Vec::new(), Reply::Range(payment_ids(s, from, end), Vec::new(), Vec::new(), next)))
+}
+
+fn refund_range_page(actor: &Principal, s: &Snapshot, from: u64, limit: u32) -> Outcome {
+    if limit == 0 || limit > MAX_PAGE {
+        return Err(Error::BadPage);
+    }
+    if !is_operator(actor) {
+        return Err(Error::Forbidden);
+    }
+    let end = page_end(from, limit);
+    let next = if end < s.counter.next_id { Some(end) } else { None };
+    let rs = refund_ids(s, from, end);
+    let parents = parents_of(s, &rs);
+    Ok((Vec::new(), Reply::Range(Vec::new(), rs, parents, next)))
+}
+
 /// What the commands decide, before the history entry is added
 /// (`transition`): writes and reply, or a refusal that commits nothing.
 pub fn decide_command(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
@@ -980,6 +1061,8 @@ pub fn decide_command(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome
         Command::View { id } => view(actor, s, *id),
         Command::MarkPosted { payment, captured, refunds } => mark_posted(actor, s, *payment, *captured, refunds),
         Command::History { payment, from, limit } => history_page(actor, s, *payment, *from, *limit),
+        Command::Range { from, limit } => range_page(actor, s, *from, *limit),
+        Command::RefundRange { from, limit } => refund_range_page(actor, s, *from, *limit),
     }
 }
 
@@ -1267,6 +1350,26 @@ fn result_reads(result: &PspResult, out: &mut Vec<h5i_app_sql::Read>) {
     }
 }
 
+/// `cmd` only reads: whenever `transition` accepts it, it writes nothing
+/// (`payment_domain.ReadOnly.sound`). The engine runs these in a
+/// `SERIALIZABLE READ ONLY DEFERRABLE` transaction: no predicate locks, and
+/// no aborts caused for concurrent writes (G6: reconciliation pages read
+/// while payments are made).
+pub fn read_only(cmd: &Command) -> bool {
+    matches!(
+        cmd,
+        Command::Get { .. }
+            | Command::List { .. }
+            | Command::GetRefund { .. }
+            | Command::Refunds { .. }
+            | Command::GetRef { .. }
+            | Command::View { .. }
+            | Command::History { .. }
+            | Command::Range { .. }
+            | Command::RefundRange { .. }
+    )
+}
+
 /// The rows `transition(actor, _, cmd)` reads, one declarative read per
 /// table (`Store::load_for`); a table without a read loads empty.
 /// `proofs/payments/Payments/Frame.lean` proves that `transition` gives the
@@ -1349,6 +1452,36 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
                     let pred = h5i_app_sql::Pred::And(Box::new(p_eq(HISTORY_PAYMENT, v_int(*payment))), Box::new(range));
                     out.push(rd_where(T_HISTORY, pred));
                 }
+            }
+        }
+        Command::Range { from, limit } => {
+            // Refused pages read nothing.
+            if *limit != 0 && *limit <= MAX_PAGE && is_operator(actor) {
+                let end = page_end(*from, *limit);
+                if *from < end {
+                    out.push(rd_where(T_PAYMENTS, seq_range(PAYMENT_ID, *from, end)));
+                }
+                out.push(rd_where(T_COUNTER, h5i_app_sql::Pred::All));
+            }
+        }
+        Command::RefundRange { from, limit } => {
+            // Refused pages read nothing.
+            if *limit != 0 && *limit <= MAX_PAGE && is_operator(actor) {
+                let end = page_end(*from, *limit);
+                if *from < end {
+                    out.push(rd_where(T_REFUNDS, seq_range(REFUND_ID, *from, end)));
+                    // The payments of those refunds (not `OR`ed with an id
+                    // range: PostgreSQL scans the whole index for that).
+                    let parents = h5i_app_sql::Pred::In {
+                        col: PAYMENT_ID,
+                        table: T_REFUNDS,
+                        pred: Box::new(seq_range(REFUND_ID, *from, end)),
+                        of: REFUND_PAYMENT,
+                        window: h5i_app_sql::whole(),
+                    };
+                    out.push(rd_where(T_PAYMENTS, parents));
+                }
+                out.push(rd_where(T_COUNTER, h5i_app_sql::Pred::All));
             }
         }
     }

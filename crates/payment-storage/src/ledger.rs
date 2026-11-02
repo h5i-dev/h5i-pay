@@ -174,7 +174,8 @@ impl Store<LedgerApp> for LedgerStore {
             | k::Command::Accounts { .. }
             | k::Command::Transfers { .. }
             | k::Command::AccountRange { .. }
-            | k::Command::History { .. } => Lock::None,
+            | k::Command::History { .. }
+            | k::Command::TransferRange { .. } => Lock::None,
         }
     }
 }

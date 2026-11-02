@@ -11,15 +11,23 @@ pub const PENDING: u32 = 1;
 /// that succeeded, plus pending refunds (so a PSP that already settled one
 /// shows up as a status mismatch, not as an extra line).
 pub fn internal_records(s: &d::Snapshot) -> Vec<Record> {
-    let mut out = Vec::with_capacity(s.payments.len() + s.refunds.len());
+    records(&s.payments, &s.refunds, &[])
+}
+
+/// [`internal_records`] of the given rows: captures of `payments`, then
+/// `refunds`, each refund in its payment's currency (found among
+/// `payments` and `more`, 0 if neither has it). A `Range` page passes its
+/// payments, its refunds and the refunds' payments (G6).
+pub fn records(payments: &[d::Payment], refunds: &[d::Refund], more: &[d::Payment]) -> Vec<Record> {
+    let mut out = Vec::with_capacity(payments.len() + refunds.len());
     // A refund's currency is its payment's: one map, not a scan per refund.
-    let currency: std::collections::HashMap<u64, u32> = s.payments.iter().map(|p| (p.id, p.currency)).collect();
-    for p in &s.payments {
+    let currency: std::collections::HashMap<u64, u32> = payments.iter().chain(more).map(|p| (p.id, p.currency)).collect();
+    for p in payments {
         if p.status == d::CAPTURED {
             out.push(Record { key: key(KIND_CAPTURE, p.id), amount: p.captured, currency: p.currency, status: SETTLED });
         }
     }
-    for r in &s.refunds {
+    for r in refunds {
         let status = match r.status {
             d::REFUND_SUCCEEDED => SETTLED,
             d::REFUND_PENDING => PENDING,

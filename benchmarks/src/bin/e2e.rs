@@ -22,8 +22,9 @@
 //! * `jobs::recover_all` (the scheduled job's pass) with 5 payments left
 //!   `PROCESSING` by a lost PSP answer, and a second pass with nothing left;
 //!   PSP calls each pass makes;
-//! * `POST /v1/reconcile` (loads both kernels' snapshots and the PSP report,
-//!   classifies, renders JSON).
+//! * `POST /v1/reconcile`: one call (since G6 the first period of ids, read
+//!   page by page; before, the whole tenant from both kernels' snapshots and
+//!   the PSP report), and a sweep of the whole tenant period by period.
 //!
 //! The same source builds against older revisions (it uses only APIs that
 //! exist since SEC-02), which is how the "before" numbers were taken. The
@@ -91,6 +92,10 @@ impl Psp for Counted {
     fn settlement_report<'a>(&'a self, tenant: u64) -> BoxFut<'a, Result<Vec<psp::SettlementRecord>, PspError>> {
         self.tick();
         self.0.settlement_report(tenant)
+    }
+    fn settlement_report_range<'a>(&'a self, tenant: u64, from: u64, to: u64) -> BoxFut<'a, Result<Vec<psp::SettlementRecord>, PspError>> {
+        self.tick();
+        self.0.settlement_report_range(tenant, from, to)
     }
 }
 
@@ -348,6 +353,32 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
         assert_eq!(st, 200, "{r}");
         exceptions = json!({"psp": r["psp"]["exceptions"], "ledger": r["ledger"]["exceptions"]});
     }
+    // G6: `POST /v1/reconcile` reconciles one period of ids (the first,
+    // above); the whole tenant is a sweep over the periods until the open
+    // one. A build before G6 answers for the whole tenant at once (no
+    // `period` in the reply): its sweep is that one call.
+    let mut sweep = Vec::new();
+    let mut sweep_periods = 0;
+    let mut sweep_exceptions = (0u64, 0u64);
+    for _ in 0..3 {
+        let (t, a0) = (Instant::now(), api.attempts());
+        let (mut from, mut n, mut ex) = (0u64, 0, (0, 0));
+        loop {
+            let (st, r) = api.post(&format!("/v1/reconcile?from={from}"), &api.op, json!({})).await;
+            assert_eq!(st, 200, "{r}");
+            n += 1;
+            ex.0 += r["psp"]["exceptions"].as_u64().unwrap_or(0);
+            ex.1 += r["ledger"]["exceptions"].as_u64().unwrap_or(0);
+            match r["period"]["next"].as_u64() {
+                Some(next) => from = next,
+                None => break,
+            }
+        }
+        sweep.push(t.elapsed().as_secs_f64() * 1e3);
+        sweep_periods = n;
+        sweep_exceptions = ex;
+        eprintln!("{label}: reconcile sweep {n} periods, {:.0} ms, {} kernel transactions", sweep[sweep.len() - 1], api.attempts() - a0);
+    }
     let (st, audit) = api.get("/v1/ledger/audit", &api.op).await;
     assert_eq!((st, audit["ok"].as_bool()), (200, Some(true)), "{audit}");
 
@@ -368,6 +399,8 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
         "concurrent": concurrent,
         "recovery_passes": passes,
         "reconcile": stats(recon), "reconcile_exceptions": exceptions,
+        "reconcile_sweep": stats(sweep), "reconcile_sweep_periods": sweep_periods,
+        "reconcile_sweep_exceptions": {"psp": sweep_exceptions.0, "ledger": sweep_exceptions.1},
         "payments_updates": hot,
     });
     println!("{}", serde_json::to_string_pretty(&result).unwrap());

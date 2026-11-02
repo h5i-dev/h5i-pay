@@ -86,6 +86,10 @@ def journalA (acc : U64) (f e : Nat) : List (Read Val) :=
 def idsA (f e : Nat) : List (Read Val) :=
   if f < e then [⟨0, rangeA 0 f e, {}⟩, ⟨2, .all, {}⟩] else [⟨2, .all, {}⟩]
 
+/-- A `TransferRange` page that is not refused (G6): transfers by id. -/
+def tidsA (f e : Nat) : List (Read Val) :=
+  if f < e then [⟨1, rangeA 0 f e, {}⟩] else []
+
 def readsA (a : Principal) : Command → Option (List (Read Val))
   | .Open owner .. => some [⟨2, .all, {}⟩, ⟨3, eqU 0 owner, {}⟩]
   | .Transfer t => some [⟨0, accsA t, {}⟩, ⟨1, eqU 0 t.id, {}⟩]
@@ -105,6 +109,9 @@ def readsA (a : Principal) : Command → Option (List (Read Val))
     else some []
   | .History acc f l =>
     if l.val ≠ 0 ∧ l.val ≤ 64 ∧ a.operator = true then some (histA acc f.val (pageEndN f.val l.val))
+    else some []
+  | .TransferRange f l =>
+    if l.val ≠ 0 ∧ l.val ≤ 64 ∧ a.operator = true then some (tidsA f.val (pageEndN f.val l.val))
     else some []
 
 /-! ## The extracted plans compute `readsA` -/
@@ -400,6 +407,39 @@ theorem reads_abs (a : Principal) (c : Command) : ∃ o, reads a c = ok o ∧ pl
       · simp only [hfe, if_false, bind_ok, rd_where, h5i_app_sql.whole]
         simp [alloc.vec.Vec.push, alloc.vec.Vec.new, U32.max, U32.numBits, alloc.vec.Vec.from_val, planOf, idsA,
           Read.abs, Pred.abs, Window.abs, T_LEDGER, show ¬ f.val < e.val by scalar_tac]
+    simp only [reads, readsA]
+    by_cases h0 : l = 0#u32
+    · subst h0; simp [planOf]
+    have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+    by_cases hm : l ≤ MAX_PAGE
+    · have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      cases ha : a.operator
+      · simp [h0, hm, ha, h0', hm', planOf]
+      · simp only [h0, hm, ha, h0', hm', bne_iff_ne, ne_eq, not_false_eq_true, if_true, is_operator_eq, bind_ok,
+          true_and, and_self, Bool.and_true, decide_true, Bool.true_and, and_true]
+        exact page
+    · have hm' : ¬ l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      simp [h0, hm, hm', planOf]
+  case TransferRange f l =>
+    obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+    have page : ∃ o, (do
+        let «end» ← page_end f l
+        if f < «end» then do
+            let p ← seq_range TRANSFER_ID f «end»
+            let r ← rd_where T_TRANSFERS p
+            let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+            ok (some out)
+          else ok (some (alloc.vec.Vec.new h5i_app_sql.Read))) = ok o ∧
+        planOf o = some (tidsA f.val (pageEndN f.val l.val)) := by
+      rw [← hev]
+      simp only [he, bind_ok]
+      by_cases hfe : f < e
+      · obtain ⟨r, hr, hra⟩ := ok_of' (seq_range_spec TRANSFER_ID f e (by scalar_tac))
+        simp only [hfe, if_true, hr, bind_ok, rd_where, h5i_app_sql.whole]
+        simp [alloc.vec.Vec.push, alloc.vec.Vec.new, U32.max, U32.numBits, alloc.vec.Vec.from_val, planOf, tidsA,
+          Read.abs, Pred.abs, Window.abs, hra, T_TRANSFERS, TRANSFER_ID, show f.val < e.val by scalar_tac]
+      · simp only [hfe, if_false]
+        simp [alloc.vec.Vec.new, planOf, tidsA, show ¬ f.val < e.val by scalar_tac]
     simp only [reads, readsA]
     by_cases h0 : l = 0#u32
     · subst h0; simp [planOf]

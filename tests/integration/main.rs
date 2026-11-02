@@ -5,4 +5,5 @@ mod idempotency;
 mod tokens;
 mod ledger_api;
 mod payments_api;
+mod reconcile_periods;
 mod recovery_job;

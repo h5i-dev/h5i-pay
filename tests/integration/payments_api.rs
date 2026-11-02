@@ -387,11 +387,17 @@ async fn reconciliation_finds_discrepancies() {
         rows.push(extra);
     });
     for engine in ["single", "parallel", "simd", "reference"] {
+        // The first period (ids 0 to 4095) has our payments; the unknown
+        // line (id 9999) is in a later one (G6).
         let (st, r) = e.post(&format!("/v1/reconcile?engine={engine}"), &e.op, json!({})).await;
         assert_eq!(st, 200);
         assert_eq!(r["psp"]["internal_codes"], json!({"matched": 2, "amount_mismatch": 1, "missing_external": 1}), "{engine}: {r}");
-        assert_eq!(r["psp"]["external_codes"], json!({"matched": 3, "extra_external": 1}), "{engine}: {r}");
+        assert_eq!(r["psp"]["external_codes"], json!({"matched": 3}), "{engine}: {r}");
         assert_eq!(r["ledger"]["exceptions"], 0, "{engine}: {r}");
+        assert_eq!(r["period"], json!({"from": 0, "to": 4096, "closed": false, "next": null}), "{engine}: {r}");
+        let (st, r) = e.post(&format!("/v1/reconcile?engine={engine}&from=8192&to=12288"), &e.op, json!({})).await;
+        assert_eq!(st, 200);
+        assert_eq!((&r["psp"]["internal"], &r["psp"]["external_codes"]), (&json!(0), &json!({"extra_external": 1})), "{engine}: {r}");
     }
     assert_eq!(e.post("/v1/reconcile", &e.merchant, json!({})).await.0, 403);
 }

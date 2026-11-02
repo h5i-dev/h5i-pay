@@ -207,6 +207,17 @@ pub trait Psp: Send + Sync + 'static {
 
     /// Settled captures and refunds of a tenant, for reconciliation.
     fn settlement_report<'a>(&'a self, tenant: u64) -> BoxFut<'a, Result<Vec<SettlementRecord>, PspError>>;
+
+    /// The lines of [`Psp::settlement_report`] whose `id` (our payment id
+    /// for a capture, refund id for a refund) is in `[from, to)`: one
+    /// reconciliation period (G6). The default reads the whole report and
+    /// filters it; a PSP that can select by our ids overrides it.
+    fn settlement_report_range<'a>(&'a self, tenant: u64, from: u64, to: u64) -> BoxFut<'a, Result<Vec<SettlementRecord>, PspError>> {
+        Box::pin(async move {
+            let all = self.settlement_report(tenant).await?;
+            Ok(all.into_iter().filter(|r| from <= r.id && r.id < to).collect())
+        })
+    }
 }
 
 /// Refuse anything that could be a raw card number (PCI DSS scope): 12 to

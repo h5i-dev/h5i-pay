@@ -297,6 +297,175 @@ theorem history_page_congr (a : Principal) (s s' : Snapshot) (p f : U64) (l : U3
   unfold history_page
   simp only [find_payment_eq, h0, he, history_range_congr s s' p f e h1, bind_ok]
 
+/-! ## A page by id (G6) -/
+
+def pidP (f e : U64) (x : Payment) : Bool := decide (f ≤ x.id) && decide (x.id < e)
+
+def pidStepL (f e : U64) (l : List Payment) (x : Payment) : List Payment :=
+  if pidP f e x then l ++ [x] else l
+
+theorem foldl_pidStepL (f e : U64) (l init : List Payment) :
+    l.foldl (pidStepL f e) init = init ++ l.filter (pidP f e) := by
+  induction l generalizing init with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl_cons, ih, pidStepL, List.filter_cons]
+    split <;> simp
+
+theorem payment_ids_spec (s : Snapshot) (f e : U64) :
+    payment_ids s f e ⦃ v => v.val = s.payments.val.filter (pidP f e) ⦄ := by
+  unfold payment_ids payment_ids_loop
+  have h := loop_fold s.payments.val (fun v : alloc.vec.Vec Payment => v.val) (pidStepL f e)
+    (fun v k => v.length + (s.payments.length - k) ≤ Usize.max)
+    (fun x => payment_ids_loop.body s f e x.1 x.2) ?_ (alloc.vec.Vec.new Payment) 0#usize (by simp)
+    (by simp [alloc.vec.Vec.length])
+  · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_pidStepL]; simp)
+  · intro v j hj hv
+    unfold payment_ids_loop.body
+    simp only [alloc.vec.Vec.length] at hj hv
+    simp only [alloc.vec.Vec.len]
+    split
+    · rename_i hlt
+      have hlt' : j.val < s.payments.val.length := by scalar_tac
+      rw [vec_index_eq s.payments j hlt']
+      simp only [bind_ok]
+      have hj1 : j.val + 1 ≤ Usize.max := by scalar_tac
+      by_cases h2 : f ≤ s.payments.val[j.val].id <;> by_cases h3 : s.payments.val[j.val].id < e <;>
+        simp only [h2, h3, if_true, if_false, bind_ok] <;> step* <;> simp only [FoldStep] <;>
+        refine ⟨hlt', ?_, by scalar_tac, by simp only [alloc.vec.Vec.length] at *; scalar_tac⟩ <;>
+        simp_all [pidStepL, pidP]
+    · simp only [WP.spec_ok, FoldStep, and_true]
+      scalar_tac
+
+def ridP (f e : U64) (x : Refund) : Bool := decide (f ≤ x.id) && decide (x.id < e)
+
+def ridStepL (f e : U64) (l : List Refund) (x : Refund) : List Refund :=
+  if ridP f e x then l ++ [x] else l
+
+theorem foldl_ridStepL (f e : U64) (l init : List Refund) :
+    l.foldl (ridStepL f e) init = init ++ l.filter (ridP f e) := by
+  induction l generalizing init with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl_cons, ih, ridStepL, List.filter_cons]
+    split <;> simp
+
+theorem refund_ids_spec (s : Snapshot) (f e : U64) :
+    refund_ids s f e ⦃ v => v.val = s.refunds.val.filter (ridP f e) ⦄ := by
+  unfold refund_ids refund_ids_loop
+  have h := loop_fold s.refunds.val (fun v : alloc.vec.Vec Refund => v.val) (ridStepL f e)
+    (fun v k => v.length + (s.refunds.length - k) ≤ Usize.max)
+    (fun x => refund_ids_loop.body s f e x.1 x.2) ?_ (alloc.vec.Vec.new Refund) 0#usize (by simp)
+    (by simp [alloc.vec.Vec.length])
+  · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_ridStepL]; simp)
+  · intro v j hj hv
+    unfold refund_ids_loop.body
+    simp only [alloc.vec.Vec.length] at hj hv
+    simp only [alloc.vec.Vec.len]
+    split
+    · rename_i hlt
+      have hlt' : j.val < s.refunds.val.length := by scalar_tac
+      rw [vec_index_eq s.refunds j hlt']
+      simp only [bind_ok]
+      have hj1 : j.val + 1 ≤ Usize.max := by scalar_tac
+      by_cases h2 : f ≤ s.refunds.val[j.val].id <;> by_cases h3 : s.refunds.val[j.val].id < e <;>
+        simp only [h2, h3, if_true, if_false, bind_ok] <;> step* <;> simp only [FoldStep] <;>
+        refine ⟨hlt', ?_, by scalar_tac, by simp only [alloc.vec.Vec.length] at *; scalar_tac⟩ <;>
+        simp_all [ridStepL, ridP]
+    · simp only [WP.spec_ok, FoldStep, and_true]
+      scalar_tac
+
+def parStep (s : Snapshot) (acc : List Payment) (r : Refund) : List Payment :=
+  match s.payments.val.find? (fun p => p.id.val = r.payment.val) with
+  | none => acc
+  | some p => acc ++ [p]
+
+theorem parStep_length (s : Snapshot) (acc : List Payment) (r : Refund) :
+    (parStep s acc r).length ≤ acc.length + 1 := by
+  unfold parStep; split <;> simp
+
+theorem parents_of_spec (s : Snapshot) (rs : alloc.vec.Vec Refund) :
+    parents_of s rs ⦃ v => v.val = rs.val.foldl (parStep s) [] ⦄ := by
+  unfold parents_of parents_of_loop
+  have h := loop_fold rs.val (fun v : alloc.vec.Vec Payment => v.val) (parStep s)
+    (fun v k => v.length ≤ k)
+    (fun x => parents_of_loop.body s rs x.1 x.2) ?_ (alloc.vec.Vec.new Payment) 0#usize (by simp)
+    (by simp [alloc.vec.Vec.length])
+  · exact WP.spec_mono h (fun r hr => by rw [hr]; simp)
+  · intro v j hj hv
+    unfold parents_of_loop.body
+    simp only [alloc.vec.Vec.length] at hj hv
+    simp only [alloc.vec.Vec.len]
+    split
+    · rename_i hlt
+      have hlt' : j.val < rs.val.length := by scalar_tac
+      rw [vec_index_eq rs j hlt']
+      simp only [bind_ok]
+      rw [find_payment_eq]
+      simp only [bind_ok]
+      have hj1 : j.val + 1 ≤ Usize.max := by scalar_tac
+      cases hf : s.payments.val.find? (fun p => decide (p.id.val = rs.val[j.val].payment.val)) with
+      | none =>
+        simp only [bind_ok]
+        step*
+        simp only [FoldStep]
+        refine ⟨hlt', ?_, by scalar_tac, by scalar_tac⟩
+        show v.val = parStep s v.val rs.val[j.val]
+        unfold parStep; rw [hf]
+      | some p =>
+        simp only [bind_ok]
+        have : v.val.length < Usize.max := by scalar_tac
+        step*
+        simp only [FoldStep]
+        refine ⟨hlt', by simp_all [parStep], by scalar_tac, ?_⟩
+        simp_all [alloc.vec.Vec.length]
+        try scalar_tac
+    · simp only [WP.spec_ok, FoldStep, and_true]
+      scalar_tac
+
+theorem foldl_parStep_congr (s s' : Snapshot) (l : List Refund)
+    (h : ∀ r ∈ l, s'.payments.val.find? (fun p => p.id.val = r.payment.val) = s.payments.val.find? (fun p => p.id.val = r.payment.val)) :
+    ∀ acc, l.foldl (parStep s') acc = l.foldl (parStep s) acc := by
+  induction l with
+  | nil => intro acc; rfl
+  | cons x xs ih =>
+    intro acc
+    simp only [List.foldl_cons]
+    have e1 : parStep s' acc x = parStep s acc x := by simp only [parStep, h x (by simp)]
+    rw [e1]; exact ih (fun r hr => h r (List.mem_cons_of_mem _ hr)) _
+
+theorem range_page_congr (a : Principal) (s s' : Snapshot) (f : U64) (l : U32) (e : U64)
+    (he : page_end f l = ok e) (hc : s'.counter = s.counter)
+    (h1 : s'.payments.val.filter (pidP f e) = s.payments.val.filter (pidP f e)) :
+    range_page a s' f l = range_page a s f l := by
+  obtain ⟨ps, hps⟩ := ok_of (payment_ids_spec s f e)
+  obtain ⟨ps', hps'⟩ := ok_of (payment_ids_spec s' f e)
+  have ep := post_of_ok (payment_ids_spec s f e) hps
+  have ep' := post_of_ok (payment_ids_spec s' f e) hps'
+  have hp : ps' = ps := alloc.vec.Vec.ext _ _ (by rw [ep, ep', h1])
+  unfold range_page
+  simp only [he, hc, hps, hps', hp, bind_ok]
+
+theorem refund_range_page_congr (a : Principal) (s s' : Snapshot) (f : U64) (l : U32) (e : U64)
+    (he : page_end f l = ok e) (hc : s'.counter = s.counter)
+    (h2 : s'.refunds.val.filter (ridP f e) = s.refunds.val.filter (ridP f e))
+    (h3 : ∀ x ∈ s.refunds.val.filter (ridP f e),
+      s'.payments.val.find? (fun p => p.id.val = x.payment.val) = s.payments.val.find? (fun p => p.id.val = x.payment.val)) :
+    refund_range_page a s' f l = refund_range_page a s f l := by
+  obtain ⟨rs, hrs⟩ := ok_of (refund_ids_spec s f e)
+  obtain ⟨rs', hrs'⟩ := ok_of (refund_ids_spec s' f e)
+  have er := post_of_ok (refund_ids_spec s f e) hrs
+  have er' := post_of_ok (refund_ids_spec s' f e) hrs'
+  have hr : rs' = rs := alloc.vec.Vec.ext _ _ (by rw [er, er', h2])
+  obtain ⟨q, hq⟩ := ok_of (parents_of_spec s rs)
+  obtain ⟨q', hq'⟩ := ok_of (parents_of_spec s' rs)
+  have eq := post_of_ok (parents_of_spec s rs) hq
+  have eq' := post_of_ok (parents_of_spec s' rs) hq'
+  have hpar : q' = q := alloc.vec.Vec.ext _ _ (by
+    rw [eq, eq', foldl_parStep_congr s s' _ (fun x hx => h3 x (by rw [← er]; exact hx))])
+  unfold refund_range_page
+  simp only [he, hc, hrs, hrs', hr, hq, hq', hpar, bind_ok]
+
 /-! ## What a plan loads -/
 
 theorem find_filter_kept {α : Type} (l : List α) (keep P : α → Bool) (h : ∀ x, P x = true → keep x = true) :
@@ -548,6 +717,92 @@ theorem frame0 (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snaps
       have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
       have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
       simp [h0, hm, hna, is_operator_eq]
+  | Range f l =>
+    simp only [decide_command]
+    simp only [readsA] at hp
+    split at hp
+    · rename_i hc
+      simp only [Option.some.injEq] at hp; subst hp
+      obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+      apply range_page_congr a s _ f l e he
+      · apply counter_load; unfold rangePageA; split <;> simp
+      · unfold rangePageA
+        rw [← hev]
+        by_cases hfe : f.val < e.val
+        · simp only [hfe, if_true]
+          rw [Snapshot.load_payments, pickRows_filter _ _ _ _ _ ⟨0, rangeA 0 f.val e.val, {}⟩ (by simp) rfl]
+          apply filter_slice
+          intro x _ hx
+          simp only [pidP, Bool.and_eq_true, decide_eq_true_eq] at hx
+          apply rangeA_holds_of 0 f.val e.val x.id.val (by scalar_tac) (by scalar_tac)
+          simp [Payment.row]
+        · simp only [hfe, if_false]
+          have : s.payments.val.filter (pidP f e) = [] := by
+            rw [List.filter_eq_nil_iff]; intro x _; simp only [pidP]; intro h
+            simp only [Bool.and_eq_true, decide_eq_true_eq] at h; scalar_tac
+          rw [this]
+          simp [Snapshot.load_payments, pickRows]
+    · rename_i hc
+      unfold range_page
+      by_cases h0 : l = 0#u32
+      · simp [h0]
+      have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+      by_cases hm : l > MAX_PAGE
+      · simp [h0, hm]
+      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
+      simp [h0, hm, hna, is_operator_eq]
+  | RefundRange f l =>
+    simp only [decide_command]
+    simp only [readsA] at hp
+    split at hp
+    · rename_i hc
+      simp only [Option.some.injEq] at hp; subst hp
+      obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+      have hrid : ∀ x : Refund, ridP f e x = true →
+          (rangeA 0 f.val e.val).holds (Snapshot.enc s) (Refund.row x) = true := by
+        intro x hx
+        simp only [ridP, Bool.and_eq_true, decide_eq_true_eq] at hx
+        apply rangeA_holds_of 0 f.val e.val x.id.val (by scalar_tac) (by scalar_tac)
+        simp [Refund.row]
+      apply refund_range_page_congr a s _ f l e he
+      · apply counter_load; unfold refundPageA; split <;> simp
+      · unfold refundPageA
+        rw [← hev]
+        by_cases hfe : f.val < e.val
+        · simp only [hfe, if_true]
+          rw [Snapshot.load_refunds, pickRows_filter _ _ _ _ _ ⟨1, rangeA 0 f.val e.val, {}⟩ (by simp) rfl]
+          exact filter_slice _ _ _ (fun x _ hx => hrid x hx)
+        · simp only [hfe, if_false]
+          have : s.refunds.val.filter (ridP f e) = [] := by
+            rw [List.filter_eq_nil_iff]; intro x _; simp only [ridP]; intro h
+            simp only [Bool.and_eq_true, decide_eq_true_eq] at h; scalar_tac
+          rw [this]
+          simp [Snapshot.load_refunds, pickRows]
+      · intro x hx
+        have hxr := (List.mem_filter.1 hx).2
+        have hfe : f.val < e.val := by
+          simp only [ridP, Bool.and_eq_true, decide_eq_true_eq] at hxr; scalar_tac
+        have hq0 : (refundPageA f.val (pageEndN f.val l.val)).find? (fun q => decide (q.table = 0)) =
+            some ⟨0, .isIn 0 1 (rangeA 0 f.val e.val) 1 {}, {}⟩ := by
+          unfold refundPageA; rw [← hev]; simp [hfe]
+        rw [Snapshot.load_payments, pickRows_filter _ _ _ _ _ _ hq0 rfl]
+        apply find_filter_kept
+        intro p hp
+        simp only [decide_eq_true_eq] at hp
+        rw [holds_in_1]
+        simp only [Payment.row, List.getElem?_cons_zero, Window.apply_default, List.any_eq_true, List.mem_filter]
+        exact ⟨x, ⟨(List.mem_filter.1 hx).1, hrid x hxr⟩, by simp [Refund.row, hp]⟩
+    · rename_i hc
+      unfold refund_range_page
+      by_cases h0 : l = 0#u32
+      · simp [h0]
+      have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+      by_cases hm : l > MAX_PAGE
+      · simp [h0, hm]
+      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
+      simp [h0, hm, hna, is_operator_eq]
 
 /-- Binds that agree on every value the first computation returns. -/
 theorem bind_congr_ok {α β : Type} (m : Result α) (f g : α → Result β) (h : ∀ x, m = ok x → f x = g x) :
@@ -625,6 +880,8 @@ theorem logged_frame (a : Principal) (c : Command) (plan : List (Read Val)) (s :
   | GetRef id => exact absurd (get_ref_writes a s id ws r hx) hne
   | View id => exact absurd (view_writes a s id ws r hx) hne
   | History p f l => exact absurd (history_page_writes a s p f l ws r hx) hne
+  | Range f l => exact absurd (range_page_writes a s f l ws r hx) hne
+  | RefundRange f l => exact absurd (refund_range_page_writes a s f l ws r hx) hne
 
 /-- **Frame.** On what a command's plan loads, `transition` (the decision
 and its history entry) gives what it gives on the whole tenant. -/

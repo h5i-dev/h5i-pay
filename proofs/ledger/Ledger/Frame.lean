@@ -340,6 +340,58 @@ theorem account_range_congr (a : Principal) (s s' : Snapshot) (f : U64) (l : U32
   unfold account_range
   simp only [he, hl, id_range_congr s s' f e h1, bind_ok]
 
+/-! ## Transfers by id (G6) -/
+
+def tidP (f e : U64) (x : Transfer) : Bool := decide (f ≤ x.id) && decide (x.id < e)
+
+def tidStepL (f e : U64) (l : List Transfer) (x : Transfer) : List Transfer :=
+  if tidP f e x then l ++ [x] else l
+
+theorem foldl_tidStepL (f e : U64) (l init : List Transfer) :
+    l.foldl (tidStepL f e) init = init ++ l.filter (tidP f e) := by
+  induction l generalizing init with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl_cons, ih, tidStepL, List.filter_cons]
+    split <;> simp
+
+theorem transfer_ids_spec (s : Snapshot) (f e : U64) :
+    transfer_ids s f e ⦃ v => v.val = s.transfers.val.filter (tidP f e) ⦄ := by
+  unfold transfer_ids transfer_ids_loop
+  have h := loop_fold s.transfers.val (fun v : alloc.vec.Vec Transfer => v.val) (tidStepL f e)
+    (fun v k => v.length + (s.transfers.length - k) ≤ Usize.max)
+    (fun x => transfer_ids_loop.body s f e x.1 x.2) ?_ (alloc.vec.Vec.new Transfer) 0#usize (by simp)
+    (by simp [alloc.vec.Vec.length])
+  · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_tidStepL]; simp)
+  · intro v j hj hv
+    unfold transfer_ids_loop.body
+    simp only [alloc.vec.Vec.length] at hj hv
+    simp only [alloc.vec.Vec.len]
+    split
+    · rename_i hlt
+      have hlt' : j.val < s.transfers.val.length := by scalar_tac
+      rw [vec_index_eq s.transfers j hlt']
+      simp only [bind_ok]
+      have hj1 : j.val + 1 ≤ Usize.max := by scalar_tac
+      by_cases h2 : f ≤ s.transfers.val[j.val].id <;> by_cases h3 : s.transfers.val[j.val].id < e <;>
+        simp only [h2, h3, if_true, if_false, bind_ok] <;> step* <;> simp only [FoldStep] <;>
+        refine ⟨hlt', ?_, by scalar_tac, by simp only [alloc.vec.Vec.length] at *; scalar_tac⟩ <;>
+        simp_all [tidStepL, tidP]
+    · simp only [WP.spec_ok, FoldStep, and_true]
+      scalar_tac
+
+theorem transfer_range_congr (a : Principal) (s s' : Snapshot) (f : U64) (l : U32) (e : U64)
+    (he : page_end f l = ok e)
+    (h1 : s'.transfers.val.filter (tidP f e) = s.transfers.val.filter (tidP f e)) :
+    transfer_range a s' f l = transfer_range a s f l := by
+  obtain ⟨v, hv⟩ := ok_of (transfer_ids_spec s f e)
+  obtain ⟨v', hv'⟩ := ok_of (transfer_ids_spec s' f e)
+  have e1 := post_of_ok (transfer_ids_spec s f e) hv
+  have e2 := post_of_ok (transfer_ids_spec s' f e) hv'
+  have hvv : v' = v := alloc.vec.Vec.ext _ _ (by rw [e1, e2, h1])
+  unfold transfer_range
+  simp only [he, hv, hv', hvv, bind_ok]
+
 /-! ## Slices kept through a batch -/
 
 /-- The accounts a batch names. -/
@@ -822,6 +874,40 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
           simp [Snapshot.load_accounts, pickRows]
     · rename_i hc
       unfold account_range
+      by_cases h0 : l = 0#u32
+      · simp [h0]
+      have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+      by_cases hm : l > MAX_PAGE
+      · simp [h0, hm]
+      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
+      simp [h0, hm, hna, is_operator_eq]
+  | TransferRange f l =>
+    simp only [transition]
+    simp only [readsA] at hp
+    split at hp
+    · rename_i hc
+      simp only [Option.some.injEq] at hp; subst hp
+      obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+      apply transfer_range_congr a s _ f l e he
+      unfold tidsA
+      rw [← hev]
+      by_cases hfe : f.val < e.val
+      · simp only [hfe, if_true]
+        rw [Snapshot.load_transfers, pickRows_filter _ _ _ _ _ ⟨1, rangeA 0 f.val e.val, {}⟩ (by simp) rfl]
+        apply filter_slice
+        intro x _ hx
+        simp only [tidP, Bool.and_eq_true, decide_eq_true_eq] at hx
+        apply rangeA_holds_of 0 f.val e.val x.id.val (by scalar_tac) (by scalar_tac)
+        simp [Transfer.row]
+      · simp only [hfe, if_false]
+        have : s.transfers.val.filter (tidP f e) = [] := by
+          rw [List.filter_eq_nil_iff]; intro x _; simp only [tidP]; intro h
+          simp only [Bool.and_eq_true, decide_eq_true_eq] at h; scalar_tac
+        rw [this]
+        simp [Snapshot.load_transfers, pickRows]
+    · rename_i hc
+      unfold transfer_range
       by_cases h0 : l = 0#u32
       · simp [h0]
       have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)

@@ -590,4 +590,35 @@ theorem history_page_writes (a : Principal) (s : Snapshot) (p f : U64) (l : U32)
       simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
   · simp at h
 
+theorem range_page_writes (a : Principal) (s : Snapshot) (f : U64) (l : U32) ws r
+    (h : range_page a s f l = ok (.Ok (ws, r))) : ws.val = [] := by
+  unfold range_page at h
+  simp only [is_operator_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  split at h
+  · obtain ⟨e, -, h⟩ := bind_tc_eq_ok.1 h
+    obtain ⟨nx, -, h⟩ := bind_tc_eq_ok.1 h
+    obtain ⟨v, -, h⟩ := bind_tc_eq_ok.1 h
+    simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
+  · simp at h
+
+theorem refund_range_page_writes (a : Principal) (s : Snapshot) (f : U64) (l : U32) ws r
+    (h : refund_range_page a s f l = ok (.Ok (ws, r))) : ws.val = [] := by
+  unfold refund_range_page at h
+  simp only [is_operator_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  split at h
+  · obtain ⟨e, -, h⟩ := bind_tc_eq_ok.1 h
+    obtain ⟨nx, -, h⟩ := bind_tc_eq_ok.1 h
+    obtain ⟨rs, -, h⟩ := bind_tc_eq_ok.1 h
+    obtain ⟨ps, -, h⟩ := bind_tc_eq_ok.1 h
+    simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
+  · simp at h
+
 end payment_domain.Commands

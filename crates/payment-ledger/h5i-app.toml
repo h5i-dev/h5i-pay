@@ -141,5 +141,11 @@ new = "fn journal_page(actor: &Principal, s: &Snapshot, account: u64, from: u64,
 # G4: a transfer declared read-only (it would run READ ONLY, unserialized).
 [[mutant]]
 name = "transfer_declared_read_only"
-old = " | Command::History { .. }\n    )"
-new = " | Command::History { .. } | Command::Transfer { .. }\n    )"
+old = "            | Command::TransferRange { .. }\n    )"
+new = "            | Command::TransferRange { .. }\n            | Command::Transfer { .. }\n    )"
+
+# G6: a TransferRange page that includes the next page's first transfer.
+[[mutant]]
+name = "transfer_range_past_end"
+old = "        if from <= t.id && t.id < end {"
+new = "        if from <= t.id && t.id <= end {"

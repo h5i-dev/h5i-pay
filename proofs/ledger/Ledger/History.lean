@@ -129,6 +129,7 @@ theorem every_change_logged (a : Principal) (s : Snapshot) (c : Command) ws r
   | Accounts o f l => rw [reads_nothing a s _ ws r h trivial]; exact .nil
   | Transfers acc f l => rw [reads_nothing a s _ ws r h trivial]; exact .nil
   | AccountRange f l => rw [reads_nothing a s _ ws r h trivial]; exact .nil
+  | TransferRange f l => rw [reads_nothing a s _ ws r h trivial]; exact .nil
   | History p f l => rw [reads_nothing a s _ ws r h trivial]; exact .nil
 
 /-! ## The history is only appended to -/
@@ -289,6 +290,7 @@ theorem hinv_step (a : Principal) (s : Snapshot) (c : Command) ws r
   | Accounts o f l => rw [reads_nothing a s _ ws r h trivial]; exact ⟨hh, by simp [applyAll]⟩
   | Transfers acc f l => rw [reads_nothing a s _ ws r h trivial]; exact ⟨hh, by simp [applyAll]⟩
   | AccountRange f l => rw [reads_nothing a s _ ws r h trivial]; exact ⟨hh, by simp [applyAll]⟩
+  | TransferRange f l => rw [reads_nothing a s _ ws r h trivial]; exact ⟨hh, by simp [applyAll]⟩
   | History p f l =>
     rw [reads_nothing a s _ ws r h trivial]; exact ⟨hh, by simp [applyAll]⟩
 

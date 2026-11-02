@@ -19,6 +19,8 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Reconciliation join | `payment_reconcile.Join.probe_spec`, `insert_spec`, `build_spec`, `lookup_spec`, `internal_code_spec`, `join_eq_reference`, `join_rows` | the extracted `crates/payment-reconcile/src/join.rs`, the single-thread hash join (`cpu_single`, and `cpu_parallel` per partition), equal row for row to the reference's counts and first external record |
 | History (G1) | `payment_ledger.History.every_change_logged`, `history_appended`; `payment_domain.Theorems.every_change_logged`, `history_appended` | the extracted `post`/`open` (ledger: each account row followed by its entry) and the extracted `transition` = `decide_command` + `logged` (payments: one entry per change of a payment); in every reachable state the history is only appended to, under fresh keys |
 | Operator reads (G4) | `payment_ledger.Theorems.operator_reads` | the extracted `transition`: `Transfers` (an account's journal page), `AccountRange` and `History` succeed only for operators and write nothing; their pages are covered by `Frame.frame` like every other command (`journal_page_congr`, `account_range_congr`) |
+| Read-only commands (G6, payments) | `payment_domain.ReadOnly.sound`, `payment_domain.Theorems.range_operator` | the extracted `read_only` and `transition` of the payment kernel: `Get`, `List`, `GetRefund`, `Refunds`, `GetRef`, `View`, `History`, `Range` and `RefundRange` write nothing when accepted; only operators read a `Range` or `RefundRange` page |
+| Reconciliation periods (G6) | `payment_reconcile.Period.join_period`, `rowCode_restrict`, `extCode_restrict` | the extracted single-thread join: on the internal and external rows whose keys are in any set `P`, every row gets the code the run on all rows gives it |
 | Read-only commands (G4) | `payment_ledger.ReadOnly.sound` | the extracted `read_only` and `transition`: every command `read_only` names writes nothing when accepted, for every actor and state (h5i-app's `H5iAppLib.ReadOnly.Sound`), so the engine may run it `SERIALIZABLE READ ONLY DEFERRABLE` |
 | Read plans | `payment_ledger.Plan.reads_abs`, `payment_ledger.Frame.frame`, `load_for_sound`; `payment_domain.Plan.reads_abs`, `payment_domain.Frame.frame`, `load_for_sound`; `*.Schema.decode_load` (generated) | the extracted `reads` of each kernel (`Store::load_for` runs it) and the extracted `transition`: on what each command's plan loads, `transition` gives its whole-tenant result |
 
@@ -65,6 +67,10 @@ the failing step lemma and cannot be proved without it.
 | ledger frame | `account_range_past_end` (G4) | `Frame.id_range_spec` |
 | ledger | `journal_open_to_users` (G4) | `Invariants.journal_page_writes` (and `journal_page_operator`) |
 | ledger | `transfer_declared_read_only` (G4) | `ReadOnly.sound` |
+| ledger frame | `transfer_range_past_end` (G6) | `Frame.transfer_ids_spec` |
+| payments plan | `range_plan_misses_refund_payments` (G6) | `Plan.reads_abs` |
+| payments | `range_open_to_users` (G6) | `Commands.range_page_writes` (the proof follows the operator check) |
+| payments | `create_declared_read_only` (G6) | `ReadOnly.decide_reads_nothing` |
 
 The plan mutants are caught where the extracted `reads` stops computing
 the plan `readsA` that `Frame.frame` is proved for; a wrong `readsA`
@@ -249,8 +255,30 @@ committed history is such a sequence.
   ledger journal (`Transfers`) is one page of at most 64 history entries
   of one account, and `AccountRange` one page of at most 64 account ids;
   the audit, `find_work` and `reconcile_inputs` read the ledger through
-  them. Whole-tenant *payments* snapshots remain where taken on purpose:
-  `reconcile_inputs` and the export (G6).
+  them. Since G6 the payment kernel's `Range` and `RefundRange` (one page
+  of at most 64 ids of payments, or of refunds with their payments) and the ledger's
+  `TransferRange` (at most 64 transfer ids) serve reconciliation and the
+  export, one period of at most 4096 ids per `POST /v1/reconcile`.
+  Whole-tenant snapshots remain only in `Orchestrator::find_work`
+  (`POST /v1/recover` for one tenant, an operator's repair call; the
+  scheduled recovery reads only unfinished payments), in
+  `reconcile_inputs` (kept as the whole-tenant reference the tests compare
+  periods with; no route calls it) and in the benchmark's row count.
+- **A reconciliation period is a range of ids, not of clock time.** The
+  result for a period equals the whole-tenant result restricted to the
+  keys with ids in it (`Period.join_period` for the single-thread join;
+  the other engines are tested against it, and the period's inputs are
+  tested to be exactly the whole run's rows in the period). Trusted: that
+  the shell reads every row of the period (all `Range` and `RefundRange` pages up to `to`
+  or the counter, both `TransferRange` kinds over the whole period, and
+  the PSP's lines with those ids), which the tests check against the
+  whole-tenant run. Pages are separate read-only transactions, so a
+  period read while payments change is not one instant: a payment changed
+  between two pages shows its state at its own page. A period is `closed`
+  only when ids past it existed; an open period can gain rows. The PSP
+  side: the Stripe connector has no way to select by our ids, so its
+  `settlement_report_range` still reads the whole report and filters it
+  (`created` filters by time would need times we do not store).
 - **The paged audit is per account, not one snapshot.** Each account is
   checked against its journal up to the `changes` its row had when read,
   in separate transactions. A transfer committed between two accounts'

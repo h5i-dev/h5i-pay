@@ -612,7 +612,21 @@ struct ReconcileQuery {
     /// per-request GPU context would cost more than the join. Large runs
     /// go to the nightly batch worker, which picks the GPU itself.
     engine: Option<String>,
+    /// The period (G6): ids `from` (default 0) to `to` (exclusive; default
+    /// and at most `from + MAX_PERIOD`) of the payments (captures) and
+    /// refunds to reconcile.
+    from: Option<u64>,
+    to: Option<u64>,
+    /// The exceptions to list in each section: from number
+    /// `exceptions_from` (default 0), at most `exceptions_limit` (default
+    /// 100, at most 1000).
+    exceptions_from: Option<u64>,
+    exceptions_limit: Option<u64>,
 }
+
+/// The default and the largest page of exceptions in a reconciliation reply.
+const EXCEPTIONS_PAGE: u64 = 100;
+const MAX_EXCEPTIONS_PAGE: u64 = 1000;
 
 const CODE_NAMES: [&str; rules::CODES] =
     ["matched", "amount_mismatch", "currency_mismatch", "status_mismatch", "missing_external", "duplicate_external", "duplicate_internal", "extra_external"];
@@ -626,43 +640,53 @@ fn describe(key: u64) -> Out {
     Out::obj([("kind", kind.into()), ("id", (key & ((1 << 56) - 1)).into())])
 }
 
-fn report_json(r: &payment_reconcile::Recon, rep: &Report) -> Out {
+/// One section of a reconciliation reply. The listed exceptions are the
+/// internal ones, then the external ones (without `duplicate_internal`
+/// lines, already listed on the internal side), numbered from 0; the page
+/// `[first, first + limit)` of them is returned, with the next page's
+/// start (`exceptions_next`, `null` after the last).
+fn report_json(r: &payment_reconcile::Recon, rep: &Report, first: u64, limit: u64) -> Out {
     let (ci, ce) = rep.counts();
     let counts = |c: [u64; rules::CODES]| Out::obj(CODE_NAMES.iter().zip(c).filter(|(_, n)| *n > 0).map(|(k, n)| (*k, n.into())));
+    let internal = rep.internal.iter().enumerate().filter(|(_, c)| **c != rules::MATCHED).map(|(i, c)| ("internal", *c, &r.internal[i]));
+    let external = rep
+        .external
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| **c != rules::MATCHED && **c != rules::DUPLICATE_INTERNAL)
+        .map(|(j, c)| ("external", *c, &r.external[j]));
+    let mut listed = 0u64;
     let mut exceptions = Vec::new();
-    for (i, c) in rep.internal.iter().enumerate() {
-        if *c != rules::MATCHED && exceptions.len() < 100 {
+    for (side, c, rec) in internal.chain(external) {
+        if listed >= first && listed - first < limit {
             exceptions.push(Out::obj([
-                ("side", "internal".into()),
-                ("code", CODE_NAMES[*c as usize].into()),
-                ("record", describe(r.internal[i].key)),
-                ("amount", r.internal[i].amount.into()),
+                ("side", side.into()),
+                ("code", CODE_NAMES[c as usize].into()),
+                ("record", describe(rec.key)),
+                ("amount", rec.amount.into()),
             ]));
         }
+        listed += 1;
     }
-    for (j, c) in rep.external.iter().enumerate() {
-        if *c != rules::MATCHED && *c != rules::DUPLICATE_INTERNAL && exceptions.len() < 100 {
-            exceptions.push(Out::obj([
-                ("side", "external".into()),
-                ("code", CODE_NAMES[*c as usize].into()),
-                ("record", describe(r.external[j].key)),
-                ("amount", r.external[j].amount.into()),
-            ]));
-        }
-    }
+    let next = first.saturating_add(limit);
     Out::obj([
         ("internal", (r.internal.len() as u64).into()),
         ("external", (r.external.len() as u64).into()),
         ("internal_codes", counts(ci)),
         ("external_codes", counts(ce)),
         ("exceptions", (rep.exceptions() as u64).into()),
+        ("listed_exceptions", listed.into()),
         ("first_exceptions", Out::Arr(exceptions)),
+        ("exceptions_next", if next < listed { next.into() } else { Out::Null }),
     ])
 }
 
 /// Compare the payment kernel with the PSP's settlement report and with the
-/// ledger journal. A report only: corrections are separate, audited ledger
-/// transfers. Operators only.
+/// ledger journal, for one period of ids (G6: at most
+/// `orchestrator::MAX_PERIOD`, read page by page; never the whole tenant).
+/// The result for a period is the whole-tenant result restricted to it. A
+/// report only: corrections are separate, audited ledger transfers.
+/// Operators only.
 async fn reconcile(State(st): State<AppState>, Authed(c): Authed, Query(q): Query<ReconcileQuery>) -> Response {
     check!(need(&c, scope::RECONCILE_READ));
     let actor = payments_actor(&c);
@@ -681,13 +705,31 @@ async fn reconcile(State(st): State<AppState>, Authed(c): Authed, Query(q): Quer
         "reference" => Engine::Reference,
         other => return reply(StatusCode::BAD_REQUEST, error_body(&format!("unknown engine {other}"))),
     };
-    let inputs = match o.reconcile_inputs(p.org).await {
+    let from = q.from.unwrap_or(0);
+    let max_to = from.saturating_add(crate::orchestrator::MAX_PERIOD);
+    let to = q.to.unwrap_or(max_to);
+    if to < from || to > max_to {
+        let msg = format!("a period is from ≤ to ≤ from + {}", crate::orchestrator::MAX_PERIOD);
+        return reply(StatusCode::BAD_REQUEST, error_body(&msg));
+    }
+    let first = q.exceptions_from.unwrap_or(0);
+    let limit = q.exceptions_limit.unwrap_or(EXCEPTIONS_PAGE);
+    if limit > MAX_EXCEPTIONS_PAGE {
+        return reply(StatusCode::BAD_REQUEST, error_body(&format!("exceptions_limit is at most {MAX_EXCEPTIONS_PAGE}")));
+    }
+    let inputs = match o.reconcile_period(p.org, from, to).await {
         Ok(i) => i,
         Err(e) => return orch_error(e),
     };
-    let run = |r: &payment_reconcile::Recon| engine.run(r).map(|rep| report_json(r, &rep));
+    let run = |r: &payment_reconcile::Recon| engine.run(r).map(|rep| report_json(r, &rep, first, limit));
+    let period = Out::obj([
+        ("from", from.into()),
+        ("to", to.into()),
+        ("closed", inputs.closed.into()),
+        ("next", if inputs.closed { to.into() } else { Out::Null }),
+    ]);
     match (run(&inputs.psp), run(&inputs.ledger)) {
-        (Ok(a), Ok(b)) => reply(StatusCode::OK, Out::obj([("psp", a), ("ledger", b)])),
+        (Ok(a), Ok(b)) => reply(StatusCode::OK, Out::obj([("period", period), ("psp", a), ("ledger", b)])),
         (Err(e), _) | (_, Err(e)) => reply(StatusCode::UNPROCESSABLE_ENTITY, error_body(&e.to_string())),
     }
 }

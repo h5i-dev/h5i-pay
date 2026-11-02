@@ -2,7 +2,7 @@
 #   h5i app prove crates/payment-domain
 [extract]
 crate = "."
-start-from = ["transition", "reads", "policy::check"]
+start-from = ["transition", "reads", "read_only", "policy::check"]
 schema = true
 include = ["h5i_app_sql"]
 
@@ -34,6 +34,10 @@ theorems = [
   "payment_domain.Schema.decode_load",
   "payment_domain.Frame.frame",
   "payment_domain.Frame.load_for_sound",
+  # G6: the read-only commands write nothing (h5i-app's obligation for
+  # `Kernel::read_only`); only operators read a `Range` page.
+  "payment_domain.ReadOnly.sound",
+  "payment_domain.Theorems.range_operator",
   "payment_domain.Commands.view_writes",
 ]
 
@@ -143,3 +147,21 @@ new = "        actor: operator_of(actor),"
 name = "history_entry_overwritten"
 old = "let after = changed(base, operator_of(actor), done, n + 1);"
 new = "let after = changed(base, operator_of(actor), done, n);"
+
+# G6: the RefundRange plan without the payments of the page's refunds.
+[[mutant]]
+name = "range_plan_misses_refund_payments"
+old = "                    out.push(rd_where(T_PAYMENTS, parents));\n"
+new = ""
+
+# G6: a merchant reading the tenant's Range pages.
+[[mutant]]
+name = "range_open_to_users"
+old = "    if !is_operator(actor) {\n        return Err(Error::Forbidden);\n    }\n    let end = page_end(from, limit);\n    let next = if end < s.counter.next_id { Some(end) } else { None };\n    Ok((Vec::new(), Reply::Range(payment_ids"
+new = "    if false {\n        return Err(Error::Forbidden);\n    }\n    let end = page_end(from, limit);\n    let next = if end < s.counter.next_id { Some(end) } else { None };\n    Ok((Vec::new(), Reply::Range(payment_ids"
+
+# G6: a write declared read-only.
+[[mutant]]
+name = "create_declared_read_only"
+old = "            | Command::RefundRange { .. }\n    )"
+new = "            | Command::RefundRange { .. }\n            | Command::Create { .. }\n    )"

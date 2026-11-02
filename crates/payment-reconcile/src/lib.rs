@@ -22,6 +22,7 @@
 pub mod rules;
 pub mod inputs;
 pub mod join;
+pub mod period;
 
 pub use rules::Record;
 use rules::*;

@@ -693,7 +693,10 @@ impl Orchestrator {
     }
 
     /// Internal records from the payment kernel and from the ledger journal,
-    /// and the PSP's settlement report, as reconciliation inputs.
+    /// and the PSP's settlement report, as reconciliation inputs, for the
+    /// whole tenant (one payments snapshot). `POST /v1/reconcile` uses
+    /// [`Orchestrator::reconcile_period`]; this is the whole-tenant run the
+    /// tests compare a period with.
     pub async fn reconcile_inputs(&self, tenant: u64) -> Result<ReconInputs> {
         let snap = self.payments.snapshot(TenantId(tenant)).await?;
         let internal = payment_reconcile::inputs::internal_records(&snap);
@@ -736,6 +739,136 @@ impl Orchestrator {
             ledger: payment_reconcile::Recon { internal: settled_internal, external: ledger_rows },
         })
     }
+
+    /// The payment kernel's reconciliation records of the whole tenant
+    /// ([`payment_reconcile::inputs::internal_records`]), read in `Range`
+    /// pages of `MAX_PAGE` ids, each its own read-only transaction, instead
+    /// of one snapshot (G6; the export). A page and the ones after it can
+    /// see payments the earlier pages did not: the result is not one
+    /// instant of the tenant, but every id below the counter as it was
+    /// when its page was read.
+    pub async fn internal_records_paged(&self, tenant: u64) -> Result<Vec<payment_reconcile::Record>> {
+        let mut out = Vec::new();
+        let mut at = 0;
+        loop {
+            let (rows, next) = self.records_page(tenant, at, d::MAX_PAGE).await?;
+            out.extend(rows);
+            match next {
+                Some(n) => at = n,
+                None => return Ok(out),
+            }
+        }
+    }
+
+    /// The payment kernel's reconciliation records with ids in
+    /// `[from, from + limit)`: a `Range` page (payments) and a
+    /// `RefundRange` page (refunds and their payments), and the first id
+    /// past the page if the counter is past it.
+    async fn records_page(&self, tenant: u64, from: u64, limit: u32) -> Result<(Vec<payment_reconcile::Record>, Option<u64>)> {
+        let op = self.op_p(tenant);
+        let ps = match self.pay(&op, d::Command::Range { from, limit }).await? {
+            Ok(d::Reply::Range(ps, _, _, _)) => ps,
+            Ok(r) => unreachable!("range replied {r:?}"),
+            Err(e) => return Err(OrchError::Payment(e)),
+        };
+        match self.pay(&op, d::Command::RefundRange { from, limit }).await? {
+            Ok(d::Reply::Range(_, rs, parents, next)) => Ok((payment_reconcile::inputs::records(&ps, &rs, &parents), next)),
+            Ok(r) => unreachable!("refund range replied {r:?}"),
+            Err(e) => Err(OrchError::Payment(e)),
+        }
+    }
+
+    /// The reconciliation inputs of one period, ids `[from, to)` (G6),
+    /// `to − from` at most [`MAX_PERIOD`]. Internal rows: the payment
+    /// kernel's `Range` and `RefundRange` pages (payments, and refunds with
+    /// their payments for the currency, by id). Ledger rows: the capture and
+    /// refund-settlement postings with those ids, by `TransferRange` (their
+    /// ids are contiguous per kind). PSP rows: the report's lines with those
+    /// ids. Each page is its own read-only transaction; every row with a key
+    /// in the period is read, so the result is the whole-tenant run
+    /// restricted to the period (`payment_reconcile::period`).
+    pub async fn reconcile_period(&self, tenant: u64, from: u64, to: u64) -> Result<PeriodInputs> {
+        use payment_reconcile::rules::{key, KIND_CAPTURE, KIND_REFUND};
+        use payment_reconcile::{inputs::SETTLED, Record};
+        if to < from || to - from > MAX_PERIOD || to > 1 << 56 {
+            return Err(OrchError::BadRequest(format!("a period is at most {MAX_PERIOD} ids below 2^56")));
+        }
+        let page = u64::from(d::MAX_PAGE);
+        let op_l = self.op_l(tenant);
+        let mut internal = Vec::new();
+        let mut closed = false;
+        let mut at = from;
+        while at < to {
+            let limit = page.min(to - at) as u32;
+            let (rows, next) = self.records_page(tenant, at, limit).await?;
+            internal.extend(rows);
+            at += u64::from(limit);
+            match next {
+                // No id past this page yet: the rest of the period is empty.
+                None => break,
+                Some(n) => closed = n >= to,
+            }
+        }
+        // The ledger's postings with ids in the period (all of them, also
+        // past the newest payment id: a posting there is an exception).
+        let mut ledger_rows = Vec::new();
+        for (posting, kind) in [(POST_CAPTURE, KIND_CAPTURE), (POST_REFUND_SETTLE, KIND_REFUND)] {
+            let mut at = from;
+            while at < to {
+                let limit = page.min(to - at) as u32;
+                let first = ledger::system_transfer_id(posting, at);
+                match self.ledger.execute(&op_l, &l::Command::TransferRange { from: first, limit }).await? {
+                    Ok(l::Reply::Transfers(ts, _)) => {
+                        for t in ts {
+                            let id = t.id & ((1 << 56) - 1);
+                            ledger_rows.push(Record { key: key(kind, id), amount: t.amount, currency: t.currency, status: SETTLED });
+                        }
+                    }
+                    Ok(r) => unreachable!("transfer range replied {r:?}"),
+                    Err(e) => return Err(OrchError::Ledger(e)),
+                }
+                at += u64::from(limit);
+            }
+        }
+        let report = self.psp.settlement_report_range(tenant, from, to).await.map_err(OrchError::Psp)?;
+        let external = report
+            .iter()
+            .map(|r| Record {
+                key: key(
+                    match r.kind {
+                        psp::SettlementKind::Capture => KIND_CAPTURE,
+                        psp::SettlementKind::Refund => KIND_REFUND,
+                    },
+                    r.id,
+                ),
+                amount: r.amount,
+                currency: r.currency,
+                status: SETTLED,
+            })
+            .collect();
+        let settled_internal: Vec<_> = internal.iter().copied().filter(|r| r.status == SETTLED).collect();
+        Ok(PeriodInputs {
+            psp: payment_reconcile::Recon { internal, external },
+            ledger: payment_reconcile::Recon { internal: settled_internal, external: ledger_rows },
+            closed,
+        })
+    }
+}
+
+/// The most ids one reconciliation period covers (`POST /v1/reconcile`,
+/// G6): 64 `Range` and 64 `RefundRange` pages of the payment kernel, 128 `TransferRange` pages
+/// of the ledger and one period of the PSP's report.
+pub const MAX_PERIOD: u64 = 4096;
+
+/// One reconciliation period (G6): the inputs whose ids are in
+/// `[from, to)`.
+pub struct PeriodInputs {
+    pub psp: payment_reconcile::Recon,
+    pub ledger: payment_reconcile::Recon,
+    /// Whether ids past `to` existed when the period was read. If not, the
+    /// period is still open: payments and refunds created later can get ids
+    /// in it, and a later run of it can find more rows.
+    pub closed: bool,
 }
 
 pub struct CheckoutParams {

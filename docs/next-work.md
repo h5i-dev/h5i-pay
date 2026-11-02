@@ -246,7 +246,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    (state exactly what the marker means if its timing changes). Measure
    at 10k/100k with 8 and 32 clients, interleaving the old and new builds
    on the same host load.
-6. [ ] **`POST /v1/reconcile` without a whole-tenant load.** It loads both
+6. [x] **`POST /v1/reconcile` without a whole-tenant load.** Done (PROGRESS.md "G6"). It loads both
    kernels' full snapshots and the PSP report (~600 ms at 100k payments).
    Make it incremental or bounded: reconcile a time window or a settlement
    period (the PSP report is per period), read paged, stream through the

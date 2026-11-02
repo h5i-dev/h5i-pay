@@ -388,6 +388,8 @@ theorem decide_shape (a : Principal) (s : Snapshot) (c : Command) ws r
     · rw [hws]; exact shape_nil
     · rw [hws]; refine ⟨by simp, by simp [isHistW], ?_⟩; intro x y hx hy; simp at hx hy; rw [hx, hy]
   | History p f l => rw [history_page_writes a s p f l ws r h]; exact shape_nil
+  | Range f l => rw [range_page_writes a s f l ws r h]; exact shape_nil
+  | RefundRange f l => rw [refund_range_page_writes a s f l ws r h]; exact shape_nil
 
 /-- **What a successful `transition` writes.** Nothing (the command wrote
 nothing), or what `decide_command` wrote without its payment row, then the

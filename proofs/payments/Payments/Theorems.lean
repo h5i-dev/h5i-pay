@@ -227,6 +227,8 @@ theorem effect0 (a : Principal) (s : Snapshot) (c : Command) ws r
         rw [(findPay_mem hp).2]; exact hp
       exact ⟨inv_put _ p _ hinv hp' hs, stepped_put _ p _ hp' hs⟩
   | History p f l => exact nothing (history_page_writes a s p f l ws r h)
+  | Range f l => exact nothing (range_page_writes a s f l ws r h)
+  | RefundRange f l => exact nothing (refund_range_page_writes a s f l ws r h)
 
 /-! ## The history entry, as a state change (G1) -/
 
@@ -592,6 +594,8 @@ theorem records0 (a : Principal) (s : Snapshot) (c : Command) ws r
     · rw [hws]; exact records_nil _
     · rw [hws]; intro w hw o ho; simp at hw; subst hw; simp [Write.recorded] at ho; rw [← ho]
   | History p f l => rw [history_page_writes a s p f l ws r h]; exact records_nil _
+  | Range f l => rw [range_page_writes a s f l ws r h]; exact records_nil _
+  | RefundRange f l => rw [refund_range_page_writes a s f l ws r h]; exact records_nil _
 
 /-- The payment row a logged change writes is its base row: the only one
 the decision wrote, or the row as it was. -/
@@ -738,6 +742,8 @@ theorem clears0 (a : Principal) (s : Snapshot) (c : Command) ws r
   | View id => rw [view_writes a s id ws r h]; exact clears_nil
   | MarkPosted id cap seen => exact absurd rfl (hc id cap seen)
   | History p f l => rw [history_page_writes a s p f l ws r h]; exact clears_nil
+  | Range f l => rw [range_page_writes a s f l ws r h]; exact clears_nil
+  | RefundRange f l => rw [refund_range_page_writes a s f l ws r h]; exact clears_nil
 
 theorem changes_clear_ledger_done (a : Principal) (s : Snapshot) (c : Command) ws r
     (hc : ∀ id cap seen, c ≠ .MarkPosted id cap seen) (h : transition a s c = .ok (.Ok (ws, r))) :
