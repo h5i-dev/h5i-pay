@@ -50,7 +50,7 @@ def payment_ledger.Principal.opId (a : Principal) : U64 :=
 /-- "An operator, or the user `u`", said with the actor itself. -/
 theorem operator_or_user_iff (a : Principal) (u : U64) :
     (a.operator = true ∨ u = a.user) ↔ ((∃ o, a.actor = .Operator o) ∨ a.actor = .User u) := by
-  rcases a with ⟨org, act⟩
+  rcases a with ⟨org, act, t⟩
   cases act <;> simp [Principal.operator, Principal.user] <;> exact eq_comm
 
 namespace payment_ledger.Spec
@@ -63,9 +63,11 @@ structure St where
   /-- Per-owner account counters; they only number accounts for paging
   (`Accounts`), and no theorem here is about them. -/
   owners : List OwnerCounter
+  /-- The accounts' history (G1): appended to by every change of an account. -/
+  history : List HistoryEntry
 
 def Snapshot.toSt (s : Snapshot) : St :=
-  ⟨s.ledger.next_account.val, s.accounts.val, s.transfers.val, s.owners.val⟩
+  ⟨s.ledger.next_account.val, s.accounts.val, s.transfers.val, s.owners.val, s.history.val⟩
 
 def findAcc (s : St) (id : Nat) : Option Account :=
   s.accounts.find? (fun a => a.id.val = id)
@@ -92,6 +94,7 @@ def applyWrite (s : St) : Write → St
   | .PutTransfer t => { s with transfers := H5iAppLib.upsert (·.id) t s.transfers }
   | .SetLedger l => { s with next := l.next_account.val }
   | .PutOwner c => { s with owners := H5iAppLib.upsert (·.owner) c s.owners }
+  | .PutHistory h => { s with history := H5iAppLib.upsert (fun y => (y.account, y.n)) h s.history }
 
 def applyAll (s : St) (ws : List Write) : St := ws.foldl applyWrite s
 
@@ -106,13 +109,13 @@ structure Inv (s : St) : Prop where
   balanced : ∀ c, debits c s = journal c s ∧ credits c s = journal c s
   limits : ∀ a ∈ s.accounts, Limited a
 
-def init : St := ⟨0, [], [], []⟩
+def init : St := ⟨0, [], [], [], []⟩
 
-/-- Rows in a loaded snapshot leave room for one maximal batch (3 · 8192
+/-- Rows in a loaded snapshot leave room for one maximal batch (5 · 8192
 writes) below `usize::MAX`. An assumption about memory, not about the
 ledger: on a 64-bit machine no snapshot comes near 2^64 rows. -/
 def HasRoom (s : Snapshot) : Prop :=
-  s.accounts.length + s.transfers.length + s.owners.length + 3 * 8192 < Usize.max
+  s.accounts.length + s.transfers.length + s.owners.length + s.history.length + 5 * 8192 < Usize.max
 
 /-- The states reachable from an empty ledger by successful commands of any
 callers, in any order. -/

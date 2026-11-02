@@ -32,16 +32,21 @@ impl Kernel for LedgerApp {
     fn apply(snap: &k::Snapshot, ws: &Vec<k::Write>) -> k::Snapshot {
         k::apply(snap, ws)
     }
+
+    /// The transaction's clock, for the history (G1).
+    fn stamp(actor: &mut k::Principal, now: h5i_app_core::Timestamp) {
+        actor.at = now.0;
+    }
 }
 
 /// User `user` of tenant `org`.
 pub fn user(org: u64, user: u64) -> k::Principal {
-    k::Principal { org, actor: k::Actor::User(user) }
+    k::Principal { org, actor: k::Actor::User(user), at: 0 }
 }
 
 /// Operator `id` of tenant `org`.
 pub fn operator(org: u64, id: u64) -> k::Principal {
-    k::Principal { org, actor: k::Actor::Operator(id) }
+    k::Principal { org, actor: k::Actor::Operator(id), at: 0 }
 }
 
 // The `accounts`, `transfers` and `ledger` tables, from the kernel's `schema!`.
@@ -61,6 +66,11 @@ impl Store<LedgerApp> for LedgerStore {
         ddl.extend(crate::numbering("accounts", "owner", "owner_counters"));
         ddl.push("DROP INDEX IF EXISTS accounts_owner".into());
         ddl.push("CREATE INDEX IF NOT EXISTS accounts_owner_seq ON accounts (tenant_id, owner, seq)".into());
+        // G1: each account's count of history entries; older accounts start
+        // at 0 (their history begins with their next change). The history
+        // table itself is `schema_ddl`'s, append-only.
+        ddl.push(crate::add_column("accounts", "changes", "BIGINT NOT NULL DEFAULT 0"));
+        ddl.extend(crate::append_only_history());
         ddl
     }
 
@@ -111,7 +121,9 @@ impl Store<LedgerApp> for LedgerStore {
                 Lock::Keys(keys)
             }
             // Reads write nothing; they need no queue.
-            k::Command::Account { .. } | k::Command::Accounts { .. } | k::Command::Transfers => Lock::None,
+            k::Command::Account { .. } | k::Command::Accounts { .. } | k::Command::Transfers | k::Command::History { .. } => {
+                Lock::None
+            }
         }
     }
 }
@@ -148,6 +160,15 @@ pub enum CommandJson {
         limit: Option<u32>,
     },
     Transfers,
+    /// A page of an account's history (operators only, G1), from entry
+    /// `from` (default 0), at most `limit` (default and maximum `k::MAX_PAGE`).
+    History {
+        account: u64,
+        #[serde(default)]
+        from: u64,
+        #[serde(default)]
+        limit: Option<u32>,
+    },
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy, Debug)]
@@ -181,6 +202,7 @@ impl CommandJson {
                 k::Command::Accounts { owner: owner.unwrap_or(k::user_of(actor)), from, limit: limit.unwrap_or(k::MAX_PAGE) }
             }
             CommandJson::Transfers => k::Command::Transfers,
+            CommandJson::History { account, from, limit } => k::Command::History { account, from, limit: limit.unwrap_or(k::MAX_PAGE) },
         }
     }
 }
@@ -237,6 +259,25 @@ pub fn account_json(a: &k::Account) -> Out {
         ("debits", a.debits.into()),
         ("credits", a.credits.into()),
         ("seq", a.seq.into()),
+        ("changes", a.changes.into()),
+    ])
+}
+
+/// One history entry (G1). `at` is microseconds since the Unix epoch, the
+/// transaction's clock.
+pub fn history_json(h: &k::HistoryEntry) -> Out {
+    Out::obj([
+        ("account", h.account.into()),
+        ("n", h.n.into()),
+        ("actor", Out::obj([("kind", if h.by_operator { "operator" } else { "user" }.into()), ("id", h.actor.into())])),
+        ("at", h.at.into()),
+        ("command", if h.command == k::CMD_OPEN { "open" } else { "post" }.into()),
+        ("transfer", if h.command == k::CMD_OPEN { Out::Null } else { h.transfer.into() }),
+        ("code", u64::from(h.code).into()),
+        ("debits_before", h.debits_before.into()),
+        ("debits_after", h.debits_after.into()),
+        ("credits_before", h.credits_before.into()),
+        ("credits_after", h.credits_after.into()),
     ])
 }
 
@@ -290,6 +331,10 @@ impl h5i_app_http::Api<LedgerApp> for LedgerStore {
                 ("next", next.map_or(Out::Null, Out::from)),
             ]),
             k::Reply::Transfers(ts) => Out::Arr(ts.iter().map(transfer_json).collect()),
+            k::Reply::History(hs, next) => Out::obj([
+                ("history", Out::Arr(hs.iter().map(history_json).collect())),
+                ("next", next.map_or(Out::Null, Out::from)),
+            ]),
         }
     }
 
@@ -314,6 +359,30 @@ enum StoredReply {
     /// Before SEC-02's operator column; decoded with operator 0.
     Transfers(Vec<(u64, u64, u64, u64, u32, u32)>),
     TransfersBy(Vec<(u64, u64, u64, u64, u32, u32, u64)>),
+    /// G1: a history page.
+    History(Vec<StoredEntry>, Option<u64>),
+}
+
+/// A history entry in a stored reply.
+type StoredEntry = (u64, u64, bool, u64, u64, u32, u64, u32, [u64; 4]);
+
+fn store_entry(h: &k::HistoryEntry) -> StoredEntry {
+    (
+        h.account,
+        h.n,
+        h.by_operator,
+        h.actor,
+        h.at,
+        h.command,
+        h.transfer,
+        h.code,
+        [h.debits_before, h.debits_after, h.credits_before, h.credits_after],
+    )
+}
+
+fn load_entry(e: StoredEntry) -> k::HistoryEntry {
+    let (account, n, by_operator, actor, at, command, transfer, code, [debits_before, debits_after, credits_before, credits_after]) = e;
+    k::HistoryEntry { account, n, by_operator, actor, at, command, transfer, code, debits_before, debits_after, credits_before, credits_after }
 }
 
 /// An account in a stored reply. Replies stored before F3 are arrays
@@ -330,6 +399,8 @@ struct StoredAccount {
     credits: u64,
     #[serde(default)]
     seq: u64,
+    #[serde(default)]
+    changes: u64,
 }
 
 fn store_account(a: &k::Account) -> StoredAccount {
@@ -343,6 +414,7 @@ fn store_account(a: &k::Account) -> StoredAccount {
         debits: a.debits,
         credits: a.credits,
         seq: a.seq,
+        changes: a.changes,
     }
 }
 
@@ -357,6 +429,7 @@ fn load_account(a: StoredAccount) -> k::Account {
         debits: a.debits,
         credits: a.credits,
         seq: a.seq,
+        changes: a.changes,
     }
 }
 
@@ -383,6 +456,7 @@ impl ReplyCodec<LedgerApp> for LedgerStore {
             k::Reply::Transfers(ts) => {
                 StoredReply::TransfersBy(ts.iter().map(|t| (t.id, t.debit, t.credit, t.amount, t.currency, t.code, t.operator)).collect())
             }
+            k::Reply::History(hs, next) => StoredReply::History(hs.iter().map(store_entry).collect(), *next),
         };
         serde_json::to_vec(&stored).expect("stored replies serialize")
     }
@@ -406,6 +480,7 @@ impl ReplyCodec<LedgerApp> for LedgerStore {
                     .map(|(id, debit, credit, amount, currency, code, operator)| k::Transfer { id, debit, credit, amount, currency, code, operator })
                     .collect(),
             ),
+            StoredReply::History(hs, next) => k::Reply::History(hs.into_iter().map(load_entry).collect(), next),
         })
     }
 }

@@ -290,6 +290,7 @@ structure Payment where
   operator : Std.U64
   ledger_done : Bool
   seq : Std.U64
+  changes : Std.U64
 
 /-- [payment_domain::Refund]
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 95:12-98:13
@@ -323,6 +324,28 @@ structure PspRef where
 structure MerchantCounter where
   merchant : Std.U64
   next : Std.U64
+
+/-- [payment_domain::HistoryEntry]
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 95:12-98:13
+    Visibility: public -/
+structure HistoryEntry where
+  payment : Std.U64
+  n : Std.U64
+  by_operator : Bool
+  actor : Std.U64
+  «at» : Std.U64
+  command : Std.U32
+  result : Std.U32
+  event : Std.U64
+  refund : Std.U64
+  status_before : Std.U32
+  status_after : Std.U32
+  captured_before : Std.U64
+  captured_after : Std.U64
+  refunded_before : Std.U64
+  refunded_after : Std.U64
+  pending_before : Std.U64
+  pending_after : Std.U64
 
 /-- [payment_domain::Counter]
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 95:12-98:13
@@ -360,6 +383,11 @@ structure Counter where
     Visibility: public -/
 @[global_simps, irreducible] def MerchantCounter.TABLE : Std.U32 := 5#u32
 
+/-- [payment_domain::{payment_domain::HistoryEntry}::TABLE]
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 135:12-135:60
+    Visibility: public -/
+@[global_simps, irreducible] def HistoryEntry.TABLE : Std.U32 := 6#u32
+
 /-- [payment_domain::{payment_domain::Payment}::KEY_LEN]
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
@@ -389,6 +417,11 @@ structure Counter where
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def MerchantCounter.KEY_LEN : Std.U32 := 1#u32
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::KEY_LEN]
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 136:12-136:62
+    Visibility: public -/
+@[global_simps, irreducible] def HistoryEntry.KEY_LEN : Std.U32 := 2#u32
 
 /-- [payment_domain::{payment_domain::Payment}::to_row]:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 138:12-143:13
@@ -422,7 +455,9 @@ def Payment.to_row
   let v12 ← Bool.Insts.H5i_app_sqlColumn.to_val self.ledger_done
   let out12 ← alloc.vec.Vec.push out11 v12
   let v13 ← U64.Insts.H5i_app_sqlColumn.to_val self.seq
-  alloc.vec.Vec.push out12 v13
+  let out13 ← alloc.vec.Vec.push out12 v13
+  let v14 ← U64.Insts.H5i_app_sqlColumn.to_val self.changes
+  alloc.vec.Vec.push out13 v14
 
 /-- [payment_domain::{payment_domain::Refund}::to_row]:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 138:12-143:13
@@ -473,6 +508,46 @@ def MerchantCounter.to_row
   let v1 ← U64.Insts.H5i_app_sqlColumn.to_val self.next
   alloc.vec.Vec.push out v1
 
+/-- [payment_domain::{payment_domain::HistoryEntry}::to_row]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 138:12-143:13
+    Visibility: public -/
+def HistoryEntry.to_row
+  (self : HistoryEntry) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
+  let v ← U64.Insts.H5i_app_sqlColumn.to_val self.payment
+  let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Val) v
+  let v1 ← U64.Insts.H5i_app_sqlColumn.to_val self.n
+  let out1 ← alloc.vec.Vec.push out v1
+  let v2 ← Bool.Insts.H5i_app_sqlColumn.to_val self.by_operator
+  let out2 ← alloc.vec.Vec.push out1 v2
+  let v3 ← U64.Insts.H5i_app_sqlColumn.to_val self.actor
+  let out3 ← alloc.vec.Vec.push out2 v3
+  let v4 ← U64.Insts.H5i_app_sqlColumn.to_val self.at
+  let out4 ← alloc.vec.Vec.push out3 v4
+  let v5 ← U32.Insts.H5i_app_sqlColumn.to_val self.command
+  let out5 ← alloc.vec.Vec.push out4 v5
+  let v6 ← U32.Insts.H5i_app_sqlColumn.to_val self.result
+  let out6 ← alloc.vec.Vec.push out5 v6
+  let v7 ← U64.Insts.H5i_app_sqlColumn.to_val self.event
+  let out7 ← alloc.vec.Vec.push out6 v7
+  let v8 ← U64.Insts.H5i_app_sqlColumn.to_val self.refund
+  let out8 ← alloc.vec.Vec.push out7 v8
+  let v9 ← U32.Insts.H5i_app_sqlColumn.to_val self.status_before
+  let out9 ← alloc.vec.Vec.push out8 v9
+  let v10 ← U32.Insts.H5i_app_sqlColumn.to_val self.status_after
+  let out10 ← alloc.vec.Vec.push out9 v10
+  let v11 ← U64.Insts.H5i_app_sqlColumn.to_val self.captured_before
+  let out11 ← alloc.vec.Vec.push out10 v11
+  let v12 ← U64.Insts.H5i_app_sqlColumn.to_val self.captured_after
+  let out12 ← alloc.vec.Vec.push out11 v12
+  let v13 ← U64.Insts.H5i_app_sqlColumn.to_val self.refunded_before
+  let out13 ← alloc.vec.Vec.push out12 v13
+  let v14 ← U64.Insts.H5i_app_sqlColumn.to_val self.refunded_after
+  let out14 ← alloc.vec.Vec.push out13 v14
+  let v15 ← U64.Insts.H5i_app_sqlColumn.to_val self.pending_before
+  let out15 ← alloc.vec.Vec.push out14 v15
+  let v16 ← U64.Insts.H5i_app_sqlColumn.to_val self.pending_after
+  alloc.vec.Vec.push out15 v16
+
 /-- [payment_domain::{payment_domain::Counter}::to_row]:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
@@ -519,7 +594,8 @@ def Payment.from_row
   let i12 ← i11 + 1#usize
   let i13 ← i12 + 1#usize
   let i14 ← i13 + 1#usize
-  if i != i14
+  let i15 ← i14 + 1#usize
+  if i != i15
   then ok none
   else
     let v ←
@@ -536,128 +612,139 @@ def Payment.from_row
       match o1 with
       | none => ok none
       | some x1 =>
-        let i15 ← i1 + 1#usize
+        let i16 ← i1 + 1#usize
         let v2 ←
           alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
-            h5i_app_sql.Val) row i15
+            h5i_app_sql.Val) row i16
         let o2 ← U64.Insts.H5i_app_sqlColumn.from_val v2
         match o2 with
         | none => ok none
         | some x2 =>
-          let i16 ← i15 + 1#usize
+          let i17 ← i16 + 1#usize
           let v3 ←
             alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
-              h5i_app_sql.Val) row i16
+              h5i_app_sql.Val) row i17
           let o3 ← U32.Insts.H5i_app_sqlColumn.from_val v3
           match o3 with
           | none => ok none
           | some x3 =>
-            let i17 ← i16 + 1#usize
+            let i18 ← i17 + 1#usize
             let v4 ←
               alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
-                h5i_app_sql.Val) row i17
+                h5i_app_sql.Val) row i18
             let o4 ← U32.Insts.H5i_app_sqlColumn.from_val v4
             match o4 with
             | none => ok none
             | some x4 =>
-              let i18 ← i17 + 1#usize
+              let i19 ← i18 + 1#usize
               let v5 ←
                 alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
-                  h5i_app_sql.Val) row i18
+                  h5i_app_sql.Val) row i19
               let o5 ← Bool.Insts.H5i_app_sqlColumn.from_val v5
               match o5 with
               | none => ok none
               | some x5 =>
-                let i19 ← i18 + 1#usize
+                let i20 ← i19 + 1#usize
                 let v6 ←
                   alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
-                    h5i_app_sql.Val) row i19
+                    h5i_app_sql.Val) row i20
                 let o6 ← U64.Insts.H5i_app_sqlColumn.from_val v6
                 match o6 with
                 | none => ok none
                 | some x6 =>
-                  let i20 ← i19 + 1#usize
+                  let i21 ← i20 + 1#usize
                   let v7 ←
                     alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
-                      h5i_app_sql.Val) row i20
+                      h5i_app_sql.Val) row i21
                   let o7 ← U64.Insts.H5i_app_sqlColumn.from_val v7
                   match o7 with
                   | none => ok none
                   | some x7 =>
-                    let i21 ← i20 + 1#usize
+                    let i22 ← i21 + 1#usize
                     let v8 ←
                       alloc.vec.Vec.index
                         (core.slice.index.SliceIndexUsizeSlice h5i_app_sql.Val)
-                        row i21
+                        row i22
                     let o8 ← U64.Insts.H5i_app_sqlColumn.from_val v8
                     match o8 with
                     | none => ok none
                     | some x8 =>
-                      let i22 ← i21 + 1#usize
+                      let i23 ← i22 + 1#usize
                       let v9 ←
                         alloc.vec.Vec.index
                           (core.slice.index.SliceIndexUsizeSlice
-                          h5i_app_sql.Val) row i22
+                          h5i_app_sql.Val) row i23
                       let o9 ← U64.Insts.H5i_app_sqlColumn.from_val v9
                       match o9 with
                       | none => ok none
                       | some x9 =>
-                        let i23 ← i22 + 1#usize
+                        let i24 ← i23 + 1#usize
                         let v10 ←
                           alloc.vec.Vec.index
                             (core.slice.index.SliceIndexUsizeSlice
-                            h5i_app_sql.Val) row i23
+                            h5i_app_sql.Val) row i24
                         let o10 ← U64.Insts.H5i_app_sqlColumn.from_val v10
                         match o10 with
                         | none => ok none
                         | some x10 =>
-                          let i24 ← i23 + 1#usize
+                          let i25 ← i24 + 1#usize
                           let v11 ←
                             alloc.vec.Vec.index
                               (core.slice.index.SliceIndexUsizeSlice
-                              h5i_app_sql.Val) row i24
+                              h5i_app_sql.Val) row i25
                           let o11 ← U64.Insts.H5i_app_sqlColumn.from_val v11
                           match o11 with
                           | none => ok none
                           | some x11 =>
-                            let i25 ← i24 + 1#usize
+                            let i26 ← i25 + 1#usize
                             let v12 ←
                               alloc.vec.Vec.index
                                 (core.slice.index.SliceIndexUsizeSlice
-                                h5i_app_sql.Val) row i25
+                                h5i_app_sql.Val) row i26
                             let o12 ←
                               Bool.Insts.H5i_app_sqlColumn.from_val v12
                             match o12 with
                             | none => ok none
                             | some x12 =>
-                              let i26 ← i25 + 1#usize
+                              let i27 ← i26 + 1#usize
                               let v13 ←
                                 alloc.vec.Vec.index
                                   (core.slice.index.SliceIndexUsizeSlice
-                                  h5i_app_sql.Val) row i26
+                                  h5i_app_sql.Val) row i27
                               let o13 ←
                                 U64.Insts.H5i_app_sqlColumn.from_val v13
                               match o13 with
                               | none => ok none
                               | some x13 =>
-                                let _ ← i26 + 1#usize
-                                ok (some
-                                  {
-                                    id := x,
-                                    merchant := x1,
-                                    amount := x2,
-                                    currency := x3,
-                                    status := x4,
-                                    manual_capture := x5,
-                                    attempts := x6,
-                                    authorized := x7,
-                                    captured := x8,
-                                    refunded := x9,
-                                    refund_pending := x10,
-                                    operator := x11,
-                                    ledger_done := x12,
-                                    seq := x13
-                                  })
+                                let i28 ← i27 + 1#usize
+                                let v14 ←
+                                  alloc.vec.Vec.index
+                                    (core.slice.index.SliceIndexUsizeSlice
+                                    h5i_app_sql.Val) row i28
+                                let o14 ←
+                                  U64.Insts.H5i_app_sqlColumn.from_val v14
+                                match o14 with
+                                | none => ok none
+                                | some x14 =>
+                                  let _ ← i28 + 1#usize
+                                  ok (some
+                                    {
+                                      id := x,
+                                      merchant := x1,
+                                      amount := x2,
+                                      currency := x3,
+                                      status := x4,
+                                      manual_capture := x5,
+                                      attempts := x6,
+                                      authorized := x7,
+                                      captured := x8,
+                                      refunded := x9,
+                                      refund_pending := x10,
+                                      operator := x11,
+                                      ledger_done := x12,
+                                      seq := x13,
+                                      changes := x14
+                                    })
 
 /-- [payment_domain::{payment_domain::Refund}::from_row]:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 146:12-167:13
@@ -822,6 +909,202 @@ def MerchantCounter.from_row
       | some x1 =>
         let _ ← i1 + 1#usize
         ok (some { merchant := x, next := x1 })
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::from_row]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 146:12-167:13
+    Visibility: public -/
+def HistoryEntry.from_row
+  (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option HistoryEntry) := do
+  let i := alloc.vec.Vec.len row
+  let i1 ← 0#usize + 1#usize
+  let i2 ← i1 + 1#usize
+  let i3 ← i2 + 1#usize
+  let i4 ← i3 + 1#usize
+  let i5 ← i4 + 1#usize
+  let i6 ← i5 + 1#usize
+  let i7 ← i6 + 1#usize
+  let i8 ← i7 + 1#usize
+  let i9 ← i8 + 1#usize
+  let i10 ← i9 + 1#usize
+  let i11 ← i10 + 1#usize
+  let i12 ← i11 + 1#usize
+  let i13 ← i12 + 1#usize
+  let i14 ← i13 + 1#usize
+  let i15 ← i14 + 1#usize
+  let i16 ← i15 + 1#usize
+  let i17 ← i16 + 1#usize
+  if i != i17
+  then ok none
+  else
+    let v ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
+        h5i_app_sql.Val) row 0#usize
+    let o ← U64.Insts.H5i_app_sqlColumn.from_val v
+    match o with
+    | none => ok none
+    | some x =>
+      let v1 ←
+        alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
+          h5i_app_sql.Val) row i1
+      let o1 ← U64.Insts.H5i_app_sqlColumn.from_val v1
+      match o1 with
+      | none => ok none
+      | some x1 =>
+        let i18 ← i1 + 1#usize
+        let v2 ←
+          alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
+            h5i_app_sql.Val) row i18
+        let o2 ← Bool.Insts.H5i_app_sqlColumn.from_val v2
+        match o2 with
+        | none => ok none
+        | some x2 =>
+          let i19 ← i18 + 1#usize
+          let v3 ←
+            alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
+              h5i_app_sql.Val) row i19
+          let o3 ← U64.Insts.H5i_app_sqlColumn.from_val v3
+          match o3 with
+          | none => ok none
+          | some x3 =>
+            let i20 ← i19 + 1#usize
+            let v4 ←
+              alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
+                h5i_app_sql.Val) row i20
+            let o4 ← U64.Insts.H5i_app_sqlColumn.from_val v4
+            match o4 with
+            | none => ok none
+            | some x4 =>
+              let i21 ← i20 + 1#usize
+              let v5 ←
+                alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
+                  h5i_app_sql.Val) row i21
+              let o5 ← U32.Insts.H5i_app_sqlColumn.from_val v5
+              match o5 with
+              | none => ok none
+              | some x5 =>
+                let i22 ← i21 + 1#usize
+                let v6 ←
+                  alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
+                    h5i_app_sql.Val) row i22
+                let o6 ← U32.Insts.H5i_app_sqlColumn.from_val v6
+                match o6 with
+                | none => ok none
+                | some x6 =>
+                  let i23 ← i22 + 1#usize
+                  let v7 ←
+                    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice
+                      h5i_app_sql.Val) row i23
+                  let o7 ← U64.Insts.H5i_app_sqlColumn.from_val v7
+                  match o7 with
+                  | none => ok none
+                  | some x7 =>
+                    let i24 ← i23 + 1#usize
+                    let v8 ←
+                      alloc.vec.Vec.index
+                        (core.slice.index.SliceIndexUsizeSlice h5i_app_sql.Val)
+                        row i24
+                    let o8 ← U64.Insts.H5i_app_sqlColumn.from_val v8
+                    match o8 with
+                    | none => ok none
+                    | some x8 =>
+                      let i25 ← i24 + 1#usize
+                      let v9 ←
+                        alloc.vec.Vec.index
+                          (core.slice.index.SliceIndexUsizeSlice
+                          h5i_app_sql.Val) row i25
+                      let o9 ← U32.Insts.H5i_app_sqlColumn.from_val v9
+                      match o9 with
+                      | none => ok none
+                      | some x9 =>
+                        let i26 ← i25 + 1#usize
+                        let v10 ←
+                          alloc.vec.Vec.index
+                            (core.slice.index.SliceIndexUsizeSlice
+                            h5i_app_sql.Val) row i26
+                        let o10 ← U32.Insts.H5i_app_sqlColumn.from_val v10
+                        match o10 with
+                        | none => ok none
+                        | some x10 =>
+                          let i27 ← i26 + 1#usize
+                          let v11 ←
+                            alloc.vec.Vec.index
+                              (core.slice.index.SliceIndexUsizeSlice
+                              h5i_app_sql.Val) row i27
+                          let o11 ← U64.Insts.H5i_app_sqlColumn.from_val v11
+                          match o11 with
+                          | none => ok none
+                          | some x11 =>
+                            let i28 ← i27 + 1#usize
+                            let v12 ←
+                              alloc.vec.Vec.index
+                                (core.slice.index.SliceIndexUsizeSlice
+                                h5i_app_sql.Val) row i28
+                            let o12 ←
+                              U64.Insts.H5i_app_sqlColumn.from_val v12
+                            match o12 with
+                            | none => ok none
+                            | some x12 =>
+                              let i29 ← i28 + 1#usize
+                              let v13 ←
+                                alloc.vec.Vec.index
+                                  (core.slice.index.SliceIndexUsizeSlice
+                                  h5i_app_sql.Val) row i29
+                              let o13 ←
+                                U64.Insts.H5i_app_sqlColumn.from_val v13
+                              match o13 with
+                              | none => ok none
+                              | some x13 =>
+                                let i30 ← i29 + 1#usize
+                                let v14 ←
+                                  alloc.vec.Vec.index
+                                    (core.slice.index.SliceIndexUsizeSlice
+                                    h5i_app_sql.Val) row i30
+                                let o14 ←
+                                  U64.Insts.H5i_app_sqlColumn.from_val v14
+                                match o14 with
+                                | none => ok none
+                                | some x14 =>
+                                  let i31 ← i30 + 1#usize
+                                  let v15 ←
+                                    alloc.vec.Vec.index
+                                      (core.slice.index.SliceIndexUsizeSlice
+                                      h5i_app_sql.Val) row i31
+                                  let o15 ←
+                                    U64.Insts.H5i_app_sqlColumn.from_val v15
+                                  match o15 with
+                                  | none => ok none
+                                  | some x15 =>
+                                    let i32 ← i31 + 1#usize
+                                    let v16 ←
+                                      alloc.vec.Vec.index
+                                        (core.slice.index.SliceIndexUsizeSlice
+                                        h5i_app_sql.Val) row i32
+                                    let o16 ←
+                                      U64.Insts.H5i_app_sqlColumn.from_val v16
+                                    match o16 with
+                                    | none => ok none
+                                    | some x16 =>
+                                      let _ ← i32 + 1#usize
+                                      ok (some
+                                        {
+                                          payment := x,
+                                          n := x1,
+                                          by_operator := x2,
+                                          actor := x3,
+                                          «at» := x4,
+                                          command := x5,
+                                          result := x6,
+                                          event := x7,
+                                          refund := x8,
+                                          status_before := x9,
+                                          status_after := x10,
+                                          captured_before := x11,
+                                          captured_after := x12,
+                                          refunded_before := x13,
+                                          refunded_after := x14,
+                                          pending_before := x15,
+                                          pending_after := x16
+                                        })
 
 /-- [payment_domain::{payment_domain::Payment}::from_rows]: loop body 0:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 174:16-180:17
@@ -1143,6 +1426,60 @@ def MerchantCounter.from_rows
   then ok (some out)
   else ok none
 
+/-- [payment_domain::{payment_domain::HistoryEntry}::from_rows]: loop body 0:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 174:16-180:17
+    Visibility: public -/
+@[rust_loop_body]
+def HistoryEntry.from_rows_loop.body
+  (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val))
+  (out : alloc.vec.Vec HistoryEntry) (ok1 : Bool) (i : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec HistoryEntry) × Bool × Std.Usize)
+    ((alloc.vec.Vec HistoryEntry) × Bool))
+  := do
+  let i1 := alloc.vec.Vec.len rows
+  if i < i1
+  then
+    let v ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice (alloc.vec.Vec
+        h5i_app_sql.Val)) rows i
+    let o ← HistoryEntry.from_row v
+    let (out1, ok2) ←
+      match o with
+      | none => ok (out, false)
+      | some x => do
+                  let out2 ← alloc.vec.Vec.push out x
+                  ok (out2, ok1)
+    let i2 ← i + 1#usize
+    ok (cont (out1, ok2, i2))
+  else ok (done (out, ok1))
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::from_rows]: loop 0:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 174:16-180:17
+    Visibility: public -/
+@[rust_loop]
+def HistoryEntry.from_rows_loop
+  (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val))
+  (out : alloc.vec.Vec HistoryEntry) (ok1 : Bool) (i : Std.Usize) :
+  Result ((alloc.vec.Vec HistoryEntry) × Bool)
+  := do
+  loop
+    (fun (out1, ok2, i1) => HistoryEntry.from_rows_loop.body rows out1 ok2 i1)
+    (out, ok1, i)
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::from_rows]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 170:12-186:13
+    Visibility: public -/
+def HistoryEntry.from_rows
+  (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
+  Result (Option (alloc.vec.Vec HistoryEntry))
+  := do
+  let (out, ok1) ←
+    HistoryEntry.from_rows_loop rows (alloc.vec.Vec.new HistoryEntry) true
+      0#usize
+  if ok1
+  then ok (some out)
+  else ok none
+
 /-- [payment_domain::{payment_domain::Payment}::sql_put]:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
@@ -1185,6 +1522,13 @@ def MerchantCounter.sql_put
   (self : MerchantCounter) : Result h5i_app_sql.Write := do
   let v ← MerchantCounter.to_row self
   ok (h5i_app_sql.Write.Put MerchantCounter.TABLE MerchantCounter.KEY_LEN v)
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::sql_put]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 189:12-191:13
+    Visibility: public -/
+def HistoryEntry.sql_put (self : HistoryEntry) : Result h5i_app_sql.Write := do
+  let v ← HistoryEntry.to_row self
+  ok (h5i_app_sql.Write.Put HistoryEntry.TABLE HistoryEntry.KEY_LEN v)
 
 /-- [payment_domain::{payment_domain::Counter}::from_one]:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 204:12-212:13
@@ -1437,8 +1781,60 @@ def MerchantCounter.put
   := do
   MerchantCounter.put_loop v x 0#usize
 
+/-- [payment_domain::{payment_domain::HistoryEntry}::put]: loop body 0:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 220:16-228:13
+    Visibility: public -/
+@[rust_loop_body]
+def HistoryEntry.put_loop.body
+  (v : alloc.vec.Vec HistoryEntry) (x : HistoryEntry) (i : Std.Usize) :
+  Result (ControlFlow Std.Usize (alloc.vec.Vec HistoryEntry))
+  := do
+  let i1 := alloc.vec.Vec.len v
+  if i < i1
+  then
+    let he ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice HistoryEntry)
+        v i
+    if he.payment = x.payment
+    then
+      if he.n = x.n
+      then
+        let (_, index_mut_back) ←
+          alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice
+            HistoryEntry) v i
+        let v1 := index_mut_back x
+        ok (done v1)
+      else let i2 ← i + 1#usize
+           ok (cont i2)
+    else let i2 ← i + 1#usize
+         ok (cont i2)
+  else let v1 ← alloc.vec.Vec.push v x
+       ok (done v1)
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::put]: loop 0:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 220:16-228:13
+    Visibility: public -/
+@[rust_loop]
+def HistoryEntry.put_loop
+  (v : alloc.vec.Vec HistoryEntry) (x : HistoryEntry) (i : Std.Usize) :
+  Result (alloc.vec.Vec HistoryEntry)
+  := do
+  loop
+    (fun i1 => HistoryEntry.put_loop.body v x i1)
+    i
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::put]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 218:12-228:13
+    Visibility: public -/
+@[reducible]
+def HistoryEntry.put
+  (v : alloc.vec.Vec HistoryEntry) (x : HistoryEntry) :
+  Result (alloc.vec.Vec HistoryEntry)
+  := do
+  HistoryEntry.put_loop v x 0#usize
+
 /-- [payment_domain::{impl core::clone::Clone for payment_domain::Payment}::clone]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 102:13-102:18
+    Source: 'crates/payment-domain/src/lib.rs', lines 115:13-115:18
     Visibility: public -/
 def Payment.Insts.CoreCloneClone.clone (self : Payment) : Result Payment := do
   ok self
@@ -1493,7 +1889,7 @@ def Payment.del
   Payment.del_loop v id (alloc.vec.Vec.new Payment) 0#usize
 
 /-- [payment_domain::{impl core::clone::Clone for payment_domain::Refund}::clone]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 125:13-125:18
+    Source: 'crates/payment-domain/src/lib.rs', lines 141:13-141:18
     Visibility: public -/
 def Refund.Insts.CoreCloneClone.clone (self : Refund) : Result Refund := do
   ok self
@@ -1548,7 +1944,7 @@ def Refund.del
   Refund.del_loop v id (alloc.vec.Vec.new Refund) 0#usize
 
 /-- [payment_domain::{impl core::clone::Clone for payment_domain::Event}::clone]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 135:13-135:18
+    Source: 'crates/payment-domain/src/lib.rs', lines 151:13-151:18
     Visibility: public -/
 def Event.Insts.CoreCloneClone.clone (self : Event) : Result Event := do
   ok self
@@ -1601,7 +1997,7 @@ def Event.del
   Event.del_loop v id (alloc.vec.Vec.new Event) 0#usize
 
 /-- [payment_domain::{impl core::clone::Clone for payment_domain::PspRef}::clone]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 143:13-143:18
+    Source: 'crates/payment-domain/src/lib.rs', lines 159:13-159:18
     Visibility: public -/
 def PspRef.Insts.CoreCloneClone.clone (self : PspRef) : Result PspRef := do
   let i ← lift (core.clone.impls.CloneU64.clone self.payment)
@@ -1659,7 +2055,7 @@ def PspRef.del
   PspRef.del_loop v payment (alloc.vec.Vec.new PspRef) 0#usize
 
 /-- [payment_domain::{impl core::clone::Clone for payment_domain::MerchantCounter}::clone]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 157:13-157:18
+    Source: 'crates/payment-domain/src/lib.rs', lines 173:13-173:18
     Visibility: public -/
 def MerchantCounter.Insts.CoreCloneClone.clone
   (self : MerchantCounter) : Result MerchantCounter := do
@@ -1715,6 +2111,69 @@ def MerchantCounter.del
   := do
   MerchantCounter.del_loop v merchant (alloc.vec.Vec.new MerchantCounter)
     0#usize
+
+/-- [payment_domain::{impl core::clone::Clone for payment_domain::HistoryEntry}::clone]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 184:13-184:18
+    Visibility: public -/
+def HistoryEntry.Insts.CoreCloneClone.clone
+  (self : HistoryEntry) : Result HistoryEntry := do
+  ok self
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::del]: loop body 0:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 234:16-239:17
+    Visibility: public -/
+@[rust_loop_body]
+def HistoryEntry.del_loop.body
+  (v : alloc.vec.Vec HistoryEntry) (payment : Std.U64) (n : Std.U64)
+  (out : alloc.vec.Vec HistoryEntry) (i : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec HistoryEntry) × Std.Usize)
+    (alloc.vec.Vec HistoryEntry))
+  := do
+  let i1 := alloc.vec.Vec.len v
+  if i < i1
+  then
+    let he ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice HistoryEntry)
+        v i
+    let out1 ←
+      if he.payment = payment
+      then
+        if he.n = n
+        then ok out
+        else
+          do
+          let he1 ← HistoryEntry.Insts.CoreCloneClone.clone he
+          alloc.vec.Vec.push out he1
+      else
+        do
+        let he1 ← HistoryEntry.Insts.CoreCloneClone.clone he
+        alloc.vec.Vec.push out he1
+    let i2 ← i + 1#usize
+    ok (cont (out1, i2))
+  else ok (done out)
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::del]: loop 0:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 234:16-239:17
+    Visibility: public -/
+@[rust_loop]
+def HistoryEntry.del_loop
+  (v : alloc.vec.Vec HistoryEntry) (payment : Std.U64) (n : Std.U64)
+  (out : alloc.vec.Vec HistoryEntry) (i : Std.Usize) :
+  Result (alloc.vec.Vec HistoryEntry)
+  := do
+  loop
+    (fun (out1, i1) => HistoryEntry.del_loop.body v payment n out1 i1)
+    (out, i)
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::del]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 231:12-241:13
+    Visibility: public -/
+@[reducible]
+def HistoryEntry.del
+  (v : alloc.vec.Vec HistoryEntry) (payment : Std.U64) (n : Std.U64) :
+  Result (alloc.vec.Vec HistoryEntry)
+  := do
+  HistoryEntry.del_loop v payment n (alloc.vec.Vec.new HistoryEntry) 0#usize
 
 /-- [payment_domain::{payment_domain::Payment}::del_where]: loop body 0:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 247:16-252:17
@@ -1973,6 +2432,59 @@ def MerchantCounter.del_where
   MerchantCounter.del_where_loop v col val (alloc.vec.Vec.new MerchantCounter)
     0#usize
 
+/-- [payment_domain::{payment_domain::HistoryEntry}::del_where]: loop body 0:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 247:16-252:17
+    Visibility: public -/
+@[rust_loop_body]
+def HistoryEntry.del_where_loop.body
+  (v : alloc.vec.Vec HistoryEntry) (col : Std.U32) (val : h5i_app_sql.Val)
+  (out : alloc.vec.Vec HistoryEntry) (i : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec HistoryEntry) × Std.Usize)
+    (alloc.vec.Vec HistoryEntry))
+  := do
+  let i1 := alloc.vec.Vec.len v
+  if i < i1
+  then
+    let he ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice HistoryEntry)
+        v i
+    let v1 ← HistoryEntry.to_row he
+    let b ← h5i_app_sql.has_col v1 col val
+    let out1 ←
+      if b
+      then ok out
+      else
+        do
+        let he1 ← HistoryEntry.Insts.CoreCloneClone.clone he
+        alloc.vec.Vec.push out he1
+    let i2 ← i + 1#usize
+    ok (cont (out1, i2))
+  else ok (done out)
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::del_where]: loop 0:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 247:16-252:17
+    Visibility: public -/
+@[rust_loop]
+def HistoryEntry.del_where_loop
+  (v : alloc.vec.Vec HistoryEntry) (col : Std.U32) (val : h5i_app_sql.Val)
+  (out : alloc.vec.Vec HistoryEntry) (i : Std.Usize) :
+  Result (alloc.vec.Vec HistoryEntry)
+  := do
+  loop
+    (fun (out1, i1) => HistoryEntry.del_where_loop.body v col val out1 i1)
+    (out, i)
+
+/-- [payment_domain::{payment_domain::HistoryEntry}::del_where]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 244:12-254:13
+    Visibility: public -/
+@[reducible]
+def HistoryEntry.del_where
+  (v : alloc.vec.Vec HistoryEntry) (col : Std.U32) (val : h5i_app_sql.Val) :
+  Result (alloc.vec.Vec HistoryEntry)
+  := do
+  HistoryEntry.del_where_loop v col val (alloc.vec.Vec.new HistoryEntry)
+    0#usize
+
 /-- [payment_domain::{payment_domain::Payment}::sql_del]:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 257:12-261:13
     Visibility: public -/
@@ -2014,6 +2526,17 @@ def MerchantCounter.sql_del
   let key ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Val) v
   ok (h5i_app_sql.Write.Del MerchantCounter.TABLE key)
 
+/-- [payment_domain::{payment_domain::HistoryEntry}::sql_del]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 257:12-261:13
+    Visibility: public -/
+def HistoryEntry.sql_del
+  (payment : Std.U64) (n : Std.U64) : Result h5i_app_sql.Write := do
+  let v ← U64.Insts.H5i_app_sqlColumn.to_val payment
+  let key ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Val) v
+  let v1 ← U64.Insts.H5i_app_sqlColumn.to_val n
+  let key1 ← alloc.vec.Vec.push key v1
+  ok (h5i_app_sql.Write.Del HistoryEntry.TABLE key1)
+
 /-- [payment_domain::{payment_domain::Payment}::sql_del_where]:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 264:12-266:13
     Visibility: public -/
@@ -2049,6 +2572,13 @@ def MerchantCounter.sql_del_where
   (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.DelWhere MerchantCounter.TABLE col val)
 
+/-- [payment_domain::{payment_domain::HistoryEntry}::sql_del_where]:
+    Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 264:12-266:13
+    Visibility: public -/
+def HistoryEntry.sql_del_where
+  (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
+  ok (h5i_app_sql.Write.DelWhere HistoryEntry.TABLE col val)
+
 /-- [payment_domain::Snapshot]
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 278:8-280:9
     Visibility: public -/
@@ -2059,6 +2589,7 @@ structure Snapshot where
   events : alloc.vec.Vec Event
   refs : alloc.vec.Vec PspRef
   merchants : alloc.vec.Vec MerchantCounter
+  history : alloc.vec.Vec HistoryEntry
 
 /-- [payment_domain::Rows]
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 284:8-286:9
@@ -2070,6 +2601,7 @@ structure Rows where
   events : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)
   refs : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)
   merchants : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)
+  history : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)
 
 /-- [payment_domain::decode]:
     Source: '/cargo/registry/src/index.crates.io-1949cf8c6b5b557f/h5i-app-schema-0.5.2/src/lib.rs', lines 289:8-297:9
@@ -2099,18 +2631,23 @@ def decode (r : Rows) : Result (Option Snapshot) := do
             match o5 with
             | none => ok none
             | some x5 =>
-              ok (some
-                {
-                  counter := x,
-                  payments := x1,
-                  refunds := x2,
-                  events := x3,
-                  refs := x4,
-                  merchants := x5
-                })
+              let o6 ← HistoryEntry.from_rows r.history
+              match o6 with
+              | none => ok none
+              | some x6 =>
+                ok (some
+                  {
+                    counter := x,
+                    payments := x1,
+                    refunds := x2,
+                    events := x3,
+                    refs := x4,
+                    merchants := x5,
+                    history := x6
+                  })
 
 /-- [payment_domain::Write]
-    Source: 'crates/payment-domain/src/lib.rs', lines 219:0-226:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 263:0-271:1
     Visibility: public -/
 @[discriminant isize]
 inductive Write where
@@ -2120,9 +2657,10 @@ inductive Write where
 | PutRef : PspRef → Write
 | SetCounter : Counter → Write
 | PutMerchant : MerchantCounter → Write
+| PutHistory : HistoryEntry → Write
 
 /-- [payment_domain::apply_write]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1033:0-1042:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1359:0-1369:1 -/
 def apply_write (s : Snapshot) (w : Write) : Result Snapshot := do
   match w with
   | Write.PutPayment p =>
@@ -2140,15 +2678,18 @@ def apply_write (s : Snapshot) (w : Write) : Result Snapshot := do
   | Write.PutMerchant c =>
     let v ← MerchantCounter.put s.merchants c
     ok { s with merchants := v }
+  | Write.PutHistory h =>
+    let v ← HistoryEntry.put s.history h
+    ok { s with history := v }
 
 /-- [payment_domain::{impl core::clone::Clone for payment_domain::Counter}::clone]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 150:13-150:18
+    Source: 'crates/payment-domain/src/lib.rs', lines 166:13-166:18
     Visibility: public -/
 def Counter.Insts.CoreCloneClone.clone (self : Counter) : Result Counter := do
   ok self
 
 /-- [payment_domain::{impl core::clone::Clone for payment_domain::Write}::clone]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 218:9-218:14
+    Source: 'crates/payment-domain/src/lib.rs', lines 262:9-262:14
     Visibility: public -/
 def Write.Insts.CoreCloneClone.clone (self : Write) : Result Write := do
   match self with
@@ -2170,9 +2711,19 @@ def Write.Insts.CoreCloneClone.clone (self : Write) : Result Write := do
   | Write.PutMerchant __self_0 =>
     let mc ← MerchantCounter.Insts.CoreCloneClone.clone __self_0
     ok (Write.PutMerchant mc)
+  | Write.PutHistory __self_0 =>
+    let he ← HistoryEntry.Insts.CoreCloneClone.clone __self_0
+    ok (Write.PutHistory he)
+
+/-- Trait implementation: [payment_domain::{impl core::clone::Clone for payment_domain::HistoryEntry}]
+    Source: 'crates/payment-domain/src/lib.rs', lines 184:13-184:18 -/
+@[reducible]
+def HistoryEntry.Insts.CoreCloneClone : core.clone.Clone HistoryEntry := {
+  clone := HistoryEntry.Insts.CoreCloneClone.clone
+}
 
 /-- Trait implementation: [payment_domain::{impl core::clone::Clone for payment_domain::MerchantCounter}]
-    Source: 'crates/payment-domain/src/lib.rs', lines 157:13-157:18 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 173:13-173:18 -/
 @[reducible]
 def MerchantCounter.Insts.CoreCloneClone : core.clone.Clone MerchantCounter
   := {
@@ -2180,35 +2731,35 @@ def MerchantCounter.Insts.CoreCloneClone : core.clone.Clone MerchantCounter
 }
 
 /-- Trait implementation: [payment_domain::{impl core::clone::Clone for payment_domain::PspRef}]
-    Source: 'crates/payment-domain/src/lib.rs', lines 143:13-143:18 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 159:13-159:18 -/
 @[reducible]
 def PspRef.Insts.CoreCloneClone : core.clone.Clone PspRef := {
   clone := PspRef.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [payment_domain::{impl core::clone::Clone for payment_domain::Event}]
-    Source: 'crates/payment-domain/src/lib.rs', lines 135:13-135:18 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 151:13-151:18 -/
 @[reducible]
 def Event.Insts.CoreCloneClone : core.clone.Clone Event := {
   clone := Event.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [payment_domain::{impl core::clone::Clone for payment_domain::Refund}]
-    Source: 'crates/payment-domain/src/lib.rs', lines 125:13-125:18 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 141:13-141:18 -/
 @[reducible]
 def Refund.Insts.CoreCloneClone : core.clone.Clone Refund := {
   clone := Refund.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [payment_domain::{impl core::clone::Clone for payment_domain::Payment}]
-    Source: 'crates/payment-domain/src/lib.rs', lines 102:13-102:18 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 115:13-115:18 -/
 @[reducible]
 def Payment.Insts.CoreCloneClone : core.clone.Clone Payment := {
   clone := Payment.Insts.CoreCloneClone.clone
 }
 
 /-- [payment_domain::{impl core::clone::Clone for payment_domain::Snapshot}::clone]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 89:13-89:18
+    Source: 'crates/payment-domain/src/lib.rs', lines 101:13-101:18
     Visibility: public -/
 def Snapshot.Insts.CoreCloneClone.clone
   (self : Snapshot) : Result Snapshot := do
@@ -2220,6 +2771,8 @@ def Snapshot.Insts.CoreCloneClone.clone
   let v4 ←
     alloc.vec.CloneVec.clone MerchantCounter.Insts.CoreCloneClone
       self.merchants
+  let v5 ←
+    alloc.vec.CloneVec.clone HistoryEntry.Insts.CoreCloneClone self.history
   ok
     {
       counter := c,
@@ -2227,7 +2780,8 @@ def Snapshot.Insts.CoreCloneClone.clone
       refunds := v1,
       events := v2,
       refs := v3,
-      merchants := v4
+      merchants := v4,
+      history := v5
     }
 
 /-- [payment_domain::apply]: loop body 0:
@@ -2269,7 +2823,7 @@ def apply (snap : Snapshot) (ws : alloc.vec.Vec Write) : Result Snapshot := do
   apply_loop ws s 0#usize
 
 /-- [payment_domain::sql_write]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1045:0-1054:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1372:0-1382:1 -/
 def sql_write
   (w : Write) (out : alloc.vec.Vec h5i_app_sql.Write) :
   Result (alloc.vec.Vec h5i_app_sql.Write)
@@ -2289,6 +2843,9 @@ def sql_write
     alloc.vec.Vec.push out w1
   | Write.PutMerchant c =>
     let w1 ← MerchantCounter.sql_put c
+    alloc.vec.Vec.push out w1
+  | Write.PutHistory h =>
+    let w1 ← HistoryEntry.sql_put h
     alloc.vec.Vec.push out w1
 
 /-- [payment_domain::sql_writes]: loop body 0:
@@ -2333,7 +2890,7 @@ def sql_writes
   sql_writes_loop ws (alloc.vec.Vec.new h5i_app_sql.Write) 0#usize
 
 /-- [payment_domain::Actor]
-    Source: 'crates/payment-domain/src/lib.rs', lines 34:0-41:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 42:0-49:1
     Visibility: public -/
 @[discriminant isize]
 inductive Actor where
@@ -2341,14 +2898,15 @@ inductive Actor where
 | Operator : Std.U64 → Actor
 
 /-- [payment_domain::Principal]
-    Source: 'crates/payment-domain/src/lib.rs', lines 45:0-48:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 53:0-60:1
     Visibility: public -/
 structure Principal where
   org : Std.U64
   actor : Actor
+  «at» : Std.U64
 
 /-- [payment_domain::is_operator]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 51:0-56:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 63:0-68:1
     Visibility: public -/
 def is_operator (actor : Principal) : Result Bool := do
   match actor.actor with
@@ -2356,7 +2914,7 @@ def is_operator (actor : Principal) : Result Bool := do
   | Actor.Operator _ => ok true
 
 /-- [payment_domain::user_of]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 59:0-64:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 71:0-76:1
     Visibility: public -/
 def user_of (actor : Principal) : Result Std.U64 := do
   match actor.actor with
@@ -2364,7 +2922,7 @@ def user_of (actor : Principal) : Result Std.U64 := do
   | Actor.Operator _ => ok 0#u64
 
 /-- [payment_domain::operator_of]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 67:0-72:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 79:0-84:1
     Visibility: public -/
 def operator_of (actor : Principal) : Result Std.U64 := do
   match actor.actor with
@@ -2372,57 +2930,57 @@ def operator_of (actor : Principal) : Result Std.U64 := do
   | Actor.Operator o => ok o
 
 /-- [payment_domain::CREATED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 74:0-74:27
+    Source: 'crates/payment-domain/src/lib.rs', lines 86:0-86:27
     Visibility: public -/
 @[global_simps, irreducible] def CREATED : Std.U32 := 0#u32
 
 /-- [payment_domain::PROCESSING]
-    Source: 'crates/payment-domain/src/lib.rs', lines 75:0-75:30
+    Source: 'crates/payment-domain/src/lib.rs', lines 87:0-87:30
     Visibility: public -/
 @[global_simps, irreducible] def PROCESSING : Std.U32 := 1#u32
 
 /-- [payment_domain::AUTHORIZED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 76:0-76:30
+    Source: 'crates/payment-domain/src/lib.rs', lines 88:0-88:30
     Visibility: public -/
 @[global_simps, irreducible] def AUTHORIZED : Std.U32 := 2#u32
 
 /-- [payment_domain::CAPTURED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 77:0-77:28
+    Source: 'crates/payment-domain/src/lib.rs', lines 89:0-89:28
     Visibility: public -/
 @[global_simps, irreducible] def CAPTURED : Std.U32 := 3#u32
 
 /-- [payment_domain::CANCELED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 78:0-78:28
+    Source: 'crates/payment-domain/src/lib.rs', lines 90:0-90:28
     Visibility: public -/
 @[global_simps, irreducible] def CANCELED : Std.U32 := 4#u32
 
 /-- [payment_domain::FAILED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 79:0-79:26
+    Source: 'crates/payment-domain/src/lib.rs', lines 91:0-91:26
     Visibility: public -/
 @[global_simps, irreducible] def FAILED : Std.U32 := 5#u32
 
 /-- [payment_domain::REFUND_PENDING]
-    Source: 'crates/payment-domain/src/lib.rs', lines 81:0-81:34
+    Source: 'crates/payment-domain/src/lib.rs', lines 93:0-93:34
     Visibility: public -/
 @[global_simps, irreducible] def REFUND_PENDING : Std.U32 := 0#u32
 
 /-- [payment_domain::REFUND_SUCCEEDED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 82:0-82:36
+    Source: 'crates/payment-domain/src/lib.rs', lines 94:0-94:36
     Visibility: public -/
 @[global_simps, irreducible] def REFUND_SUCCEEDED : Std.U32 := 1#u32
 
 /-- [payment_domain::REFUND_FAILED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 83:0-83:33
+    Source: 'crates/payment-domain/src/lib.rs', lines 95:0-95:33
     Visibility: public -/
 @[global_simps, irreducible] def REFUND_FAILED : Std.U32 := 2#u32
 
 /-- [payment_domain::MAX_PAGE]
-    Source: 'crates/payment-domain/src/lib.rs', lines 165:0-165:29
+    Source: 'crates/payment-domain/src/lib.rs', lines 206:0-206:29
     Visibility: public -/
 @[global_simps, irreducible] def MAX_PAGE : Std.U32 := 64#u32
 
 /-- [payment_domain::PspResult]
-    Source: 'crates/payment-domain/src/lib.rs', lines 169:0-176:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 210:0-217:1
     Visibility: public -/
 @[discriminant isize]
 inductive PspResult where
@@ -2434,7 +2992,7 @@ inductive PspResult where
 | RefundFailed : Std.U64 → PspResult
 
 /-- [payment_domain::Command]
-    Source: 'crates/payment-domain/src/lib.rs', lines 179:0-216:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 220:0-260:1
     Visibility: public -/
 @[discriminant isize]
 inductive Command where
@@ -2452,9 +3010,10 @@ inductive Command where
 | GetRef : Std.U64 → Command
 | View : Std.U64 → Command
 | MarkPosted : Std.U64 → Std.U64 → alloc.vec.Vec Refund → Command
+| History : Std.U64 → Std.U64 → Std.U32 → Command
 
 /-- [payment_domain::Reply]
-    Source: 'crates/payment-domain/src/lib.rs', lines 229:0-248:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 274:0-295:1
     Visibility: public -/
 @[discriminant isize]
 inductive Reply where
@@ -2473,9 +3032,10 @@ inductive Reply where
   alloc.vec.Vec Refund →
   Option (alloc.vec.Vec Std.U8) →
   Reply
+| History : alloc.vec.Vec HistoryEntry → Option Std.U64 → Reply
 
 /-- [payment_domain::Error]
-    Source: 'crates/payment-domain/src/lib.rs', lines 251:0-267:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 298:0-314:1
     Visibility: public -/
 @[discriminant isize]
 inductive Error where
@@ -2491,18 +3051,18 @@ inductive Error where
 | BadPage : Error
 
 /-- [payment_domain::one]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 271:0-275:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 318:0-322:1 -/
 def one (a : Write) : Result (alloc.vec.Vec Write) := do
   alloc.vec.Vec.push (alloc.vec.Vec.new Write) a
 
 /-- [payment_domain::two]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 277:0-282:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 324:0-329:1 -/
 def two (a : Write) (b : Write) : Result (alloc.vec.Vec Write) := do
   let ws ← alloc.vec.Vec.push (alloc.vec.Vec.new Write) a
   alloc.vec.Vec.push ws b
 
 /-- [payment_domain::three]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 284:0-290:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 331:0-337:1 -/
 def three
   (a : Write) (b : Write) (c : Write) : Result (alloc.vec.Vec Write) := do
   let ws ← alloc.vec.Vec.push (alloc.vec.Vec.new Write) a
@@ -2510,7 +3070,7 @@ def three
   alloc.vec.Vec.push ws1 c
 
 /-- [payment_domain::merchant_next]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 295:4-302:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 342:4-349:1
     Visibility: public -/
 @[rust_loop_body]
 def merchant_next_loop.body
@@ -2530,7 +3090,7 @@ def merchant_next_loop.body
   else ok (done 0#u64)
 
 /-- [payment_domain::merchant_next]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 295:4-302:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 342:4-349:1
     Visibility: public -/
 @[rust_loop]
 def merchant_next_loop
@@ -2542,7 +3102,7 @@ def merchant_next_loop
     i
 
 /-- [payment_domain::merchant_next]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 293:0-302:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 340:0-349:1
     Visibility: public -/
 @[reducible]
 def merchant_next
@@ -2552,7 +3112,7 @@ def merchant_next
   merchant_next_loop cs merchant 0#usize
 
 /-- [payment_domain::page_end]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 306:0-313:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 353:0-360:1
     Visibility: public -/
 def page_end («from» : Std.U64) (limit : Std.U32) : Result Std.U64 := do
   let n ← lift (UScalar.cast .U64 limit)
@@ -2562,7 +3122,7 @@ def page_end («from» : Std.U64) (limit : Std.U32) : Result Std.U64 := do
   else «from» + n
 
 /-- [payment_domain::find_payment]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 317:4-324:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 364:4-371:1
     Visibility: public -/
 @[rust_loop_body]
 def find_payment_loop.body
@@ -2581,7 +3141,7 @@ def find_payment_loop.body
   else ok (done none)
 
 /-- [payment_domain::find_payment]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 317:4-324:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 364:4-371:1
     Visibility: public -/
 @[rust_loop]
 def find_payment_loop
@@ -2593,7 +3153,7 @@ def find_payment_loop
     i
 
 /-- [payment_domain::find_payment]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 315:0-324:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 362:0-371:1
     Visibility: public -/
 @[reducible]
 def find_payment
@@ -2601,7 +3161,7 @@ def find_payment
   find_payment_loop ps id 0#usize
 
 /-- [payment_domain::find_refund]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 328:4-335:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 375:4-382:1
     Visibility: public -/
 @[rust_loop_body]
 def find_refund_loop.body
@@ -2620,7 +3180,7 @@ def find_refund_loop.body
   else ok (done none)
 
 /-- [payment_domain::find_refund]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 328:4-335:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 375:4-382:1
     Visibility: public -/
 @[rust_loop]
 def find_refund_loop
@@ -2632,7 +3192,7 @@ def find_refund_loop
     i
 
 /-- [payment_domain::find_refund]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 326:0-335:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 373:0-382:1
     Visibility: public -/
 @[reducible]
 def find_refund
@@ -2640,7 +3200,7 @@ def find_refund
   find_refund_loop rs id 0#usize
 
 /-- [payment_domain::find_event]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 339:4-346:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 386:4-393:1
     Visibility: public -/
 @[rust_loop_body]
 def find_event_loop.body
@@ -2659,7 +3219,7 @@ def find_event_loop.body
   else ok (done none)
 
 /-- [payment_domain::find_event]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 339:4-346:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 386:4-393:1
     Visibility: public -/
 @[rust_loop]
 def find_event_loop
@@ -2671,7 +3231,7 @@ def find_event_loop
     i
 
 /-- [payment_domain::find_event]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 337:0-346:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 384:0-393:1
     Visibility: public -/
 @[reducible]
 def find_event
@@ -2679,7 +3239,7 @@ def find_event
   find_event_loop es id 0#usize
 
 /-- [payment_domain::may_manage]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 349:0-351:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 396:0-398:1
     Visibility: public -/
 def may_manage (actor : Principal) (p : Payment) : Result Bool := do
   let b ← is_operator actor
@@ -2689,7 +3249,7 @@ def may_manage (actor : Principal) (p : Payment) : Result Bool := do
        ok (p.merchant = i)
 
 /-- [payment_domain::with_status]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 355:0-372:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 402:0-420:1 -/
 def with_status
   (p : Payment) (status : Std.U32) (authorized : Std.U64) (captured : Std.U64)
   (op : Std.U64) :
@@ -2700,7 +3260,7 @@ def with_status
     }
 
 /-- [payment_domain::with_refunds]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 375:0-392:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 423:0-441:1 -/
 def with_refunds
   (p : Payment) (refunded : Std.U64) (refund_pending : Std.U64) (op : Std.U64)
   :
@@ -2709,7 +3269,7 @@ def with_refunds
   ok { p with refunded, refund_pending, operator := op, ledger_done := false }
 
 /-- [payment_domain::create]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 394:0-426:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 443:0-476:1 -/
 def create
   (actor : Principal) (s : Snapshot) (amount : Std.U64) (currency : Std.U32)
   (manual_capture : Bool) :
@@ -2745,13 +3305,14 @@ def create
               refund_pending := 0#u64,
               operator := i,
               ledger_done := false,
-              seq := n
+              seq := n,
+              changes := 0#u64
             }) (Write.SetCounter { next_id := i1 }) (Write.PutMerchant
             { merchant, next := i2 })
         ok (core.result.Result.Ok (v, Reply.Created s.counter.next_id))
 
 /-- [payment_domain::begin_authorize]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 428:0-459:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 478:0-510:1 -/
 def begin_authorize
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -2793,7 +3354,7 @@ def begin_authorize
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::cancel]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 461:0-478:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 512:0-529:1 -/
 def cancel
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -2819,7 +3380,7 @@ def cancel
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::request_refund]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 480:0-513:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 531:0-564:1 -/
 def request_refund
   (actor : Principal) (s : Snapshot) (id : Std.U64) (amount : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -2871,7 +3432,7 @@ def request_refund
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::record_authorized]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 515:0-527:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 566:0-578:1 -/
 def record_authorized
   (p : Payment) (amount : Std.U64) (op : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -2894,7 +3455,7 @@ def record_authorized
     else ok (core.result.Result.Err Error.InvalidTransition)
 
 /-- [payment_domain::record_declined]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 529:0-537:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 580:0-588:1 -/
 def record_declined
   (p : Payment) (op : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -2910,7 +3471,7 @@ def record_declined
     else ok (core.result.Result.Err Error.InvalidTransition)
 
 /-- [payment_domain::record_captured]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 539:0-558:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 590:0-609:1 -/
 def record_captured
   (p : Payment) (amount : Std.U64) (op : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -2948,7 +3509,7 @@ def record_captured
       else ok (core.result.Result.Err Error.InvalidTransition)
 
 /-- [payment_domain::record_canceled]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 560:0-568:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 611:0-619:1 -/
 def record_canceled
   (p : Payment) (op : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -2977,7 +3538,7 @@ def record_canceled
         else ok (core.result.Result.Err Error.InvalidTransition)
 
 /-- [payment_domain::record_refund]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 570:0-599:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 621:0-650:1 -/
 def record_refund
   (s : Snapshot) (p : Payment) (refund : Std.U64) (succeeded : Bool)
   (op : Std.U64) :
@@ -3033,7 +3594,7 @@ def record_refund
           else ok (core.result.Result.Err Error.InvalidTransition)
 
 /-- [payment_domain::record]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 602:0-618:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 653:0-669:1
     Visibility: public -/
 def record
   (actor : Principal) (s : Snapshot) (id : Std.U64) (result : PspResult) :
@@ -3057,7 +3618,7 @@ def record
   else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_domain::append]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 622:4-625:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 673:4-676:5 -/
 @[rust_loop_body]
 def append_loop.body
   (more : alloc.vec.Vec Write) (ws : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -3076,7 +3637,7 @@ def append_loop.body
   else ok (done ws)
 
 /-- [payment_domain::append]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 622:4-625:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 673:4-676:5 -/
 @[rust_loop]
 def append_loop
   (ws : alloc.vec.Vec Write) (more : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -3087,7 +3648,7 @@ def append_loop
     (ws, i)
 
 /-- [payment_domain::append]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 620:0-626:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 671:0-677:1 -/
 @[reducible]
 def append
   (ws : alloc.vec.Vec Write) (more : alloc.vec.Vec Write) :
@@ -3096,7 +3657,7 @@ def append
   append_loop ws more 0#usize
 
 /-- [payment_domain::event]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 630:0-650:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 681:0-701:1
     Visibility: public -/
 def event
   (actor : Principal) (s : Snapshot) (event1 : Std.U64) (id : Std.U64)
@@ -3139,7 +3700,7 @@ def event
   else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_domain::get]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 652:0-663:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 703:0-714:1 -/
 def get
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3154,7 +3715,7 @@ def get
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::get_refund]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 665:0-679:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 716:0-730:1 -/
 def get_refund
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3173,7 +3734,7 @@ def get_refund
       else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::find_ref]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 683:4-690:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 734:4-741:1
     Visibility: public -/
 @[rust_loop_body]
 def find_ref_loop.body
@@ -3193,7 +3754,7 @@ def find_ref_loop.body
   else ok (done none)
 
 /-- [payment_domain::find_ref]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 683:4-690:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 734:4-741:1
     Visibility: public -/
 @[rust_loop]
 def find_ref_loop
@@ -3205,7 +3766,7 @@ def find_ref_loop
     i
 
 /-- [payment_domain::find_ref]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 681:0-690:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 732:0-741:1
     Visibility: public -/
 @[reducible]
 def find_ref
@@ -3215,7 +3776,7 @@ def find_ref
   find_ref_loop rs payment 0#usize
 
 /-- [payment_domain::same_bytes]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 697:4-704:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 748:4-755:1 -/
 @[rust_loop_body]
 def same_bytes_loop.body
   (a : alloc.vec.Vec Std.U8) (b : alloc.vec.Vec Std.U8) (i : Std.Usize) :
@@ -3235,7 +3796,7 @@ def same_bytes_loop.body
   else ok (done true)
 
 /-- [payment_domain::same_bytes]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 697:4-704:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 748:4-755:1 -/
 @[rust_loop]
 def same_bytes_loop
   (a : alloc.vec.Vec Std.U8) (b : alloc.vec.Vec Std.U8) (i : Std.Usize) :
@@ -3246,7 +3807,7 @@ def same_bytes_loop
     i
 
 /-- [payment_domain::same_bytes]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 692:0-704:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 743:0-755:1 -/
 def same_bytes
   (a : alloc.vec.Vec Std.U8) (b : alloc.vec.Vec Std.U8) : Result Bool := do
   let i := alloc.vec.Vec.len a
@@ -3256,7 +3817,7 @@ def same_bytes
   else same_bytes_loop a b 0#usize
 
 /-- [payment_domain::attach_ref]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 706:0-723:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 757:0-774:1 -/
 def attach_ref
   (actor : Principal) (s : Snapshot) (payment : Std.U64)
   (reference : alloc.vec.Vec Std.U8) :
@@ -3286,7 +3847,7 @@ def attach_ref
   else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_domain::get_ref]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 725:0-739:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 776:0-790:1 -/
 def get_ref
   (actor : Principal) (s : Snapshot) (payment : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3307,7 +3868,7 @@ def get_ref
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::refunds_for]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 745:4-750:5
+    Source: 'crates/payment-domain/src/lib.rs', lines 796:4-801:5
     Visibility: public -/
 @[rust_loop_body]
 def refunds_for_loop.body
@@ -3330,7 +3891,7 @@ def refunds_for_loop.body
   else ok (done out)
 
 /-- [payment_domain::refunds_for]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 745:4-750:5
+    Source: 'crates/payment-domain/src/lib.rs', lines 796:4-801:5
     Visibility: public -/
 @[rust_loop]
 def refunds_for_loop
@@ -3343,7 +3904,7 @@ def refunds_for_loop
     (out, i)
 
 /-- [payment_domain::refunds_for]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 742:0-752:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 793:0-803:1
     Visibility: public -/
 @[reducible]
 def refunds_for
@@ -3353,7 +3914,7 @@ def refunds_for
   refunds_for_loop rs payment (alloc.vec.Vec.new Refund) 0#usize
 
 /-- [payment_domain::refunds_of]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 754:0-765:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 805:0-816:1 -/
 def refunds_of
   (actor : Principal) (s : Snapshot) (payment : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3370,7 +3931,7 @@ def refunds_of
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::view]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 767:0-782:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 818:0-833:1 -/
 def view
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3393,7 +3954,7 @@ def view
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::same_refund]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 785:0-787:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 836:0-838:1
     Visibility: public -/
 def same_refund (a : Refund) (b : Refund) : Result Bool := do
   if a.id = b.id
@@ -3406,7 +3967,7 @@ def same_refund (a : Refund) (b : Refund) : Result Bool := do
   else ok false
 
 /-- [payment_domain::has_same]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 790:0-795:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 841:0-846:1 -/
 def has_same (ys : alloc.vec.Vec Refund) (x : Refund) : Result Bool := do
   let o ← find_refund ys x.id
   match o with
@@ -3414,7 +3975,7 @@ def has_same (ys : alloc.vec.Vec Refund) (x : Refund) : Result Bool := do
   | some y => same_refund x y
 
 /-- [payment_domain::covers]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 801:4-806:5
+    Source: 'crates/payment-domain/src/lib.rs', lines 852:4-857:5
     Visibility: public -/
 @[rust_loop_body]
 def covers_loop.body
@@ -3436,7 +3997,7 @@ def covers_loop.body
   else ok (done all)
 
 /-- [payment_domain::covers]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 801:4-806:5
+    Source: 'crates/payment-domain/src/lib.rs', lines 852:4-857:5
     Visibility: public -/
 @[rust_loop]
 def covers_loop
@@ -3449,7 +4010,7 @@ def covers_loop
     (all, i)
 
 /-- [payment_domain::covers]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 798:0-808:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 849:0-859:1
     Visibility: public -/
 @[reducible]
 def covers
@@ -3457,12 +4018,12 @@ def covers
   covers_loop xs ys true 0#usize
 
 /-- [payment_domain::with_ledger_done]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 811:0-828:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 862:0-880:1 -/
 def with_ledger_done (p : Payment) (op : Std.U64) : Result Payment := do
   ok { p with operator := op, ledger_done := true }
 
 /-- [payment_domain::mark_posted]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 830:0-851:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 882:0-903:1 -/
 def mark_posted
   (actor : Principal) (s : Snapshot) (id : Std.U64) (captured : Std.U64)
   (seen : alloc.vec.Vec Refund) :
@@ -3564,7 +4125,7 @@ def mark_posted
   else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_domain::merchant_range]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-864:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-916:5 -/
 @[rust_loop_body]
 def merchant_range_loop.body
   (s : Snapshot) (merchant : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -3592,7 +4153,7 @@ def merchant_range_loop.body
   else ok (done out)
 
 /-- [payment_domain::merchant_range]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-864:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-916:5 -/
 @[rust_loop]
 def merchant_range_loop
   (s : Snapshot) (merchant : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -3605,7 +4166,7 @@ def merchant_range_loop
     (out, i)
 
 /-- [payment_domain::merchant_range]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 855:0-866:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 907:0-918:1 -/
 @[reducible]
 def merchant_range
   (s : Snapshot) (merchant : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -3616,7 +4177,7 @@ def merchant_range
     0#usize
 
 /-- [payment_domain::list]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 868:0-878:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 920:0-930:1 -/
 def list
   (actor : Principal) (s : Snapshot) (merchant : Std.U64) («from» : Std.U64)
   (limit : Std.U32) :
@@ -3653,10 +4214,91 @@ def list
           ok (core.result.Result.Ok (alloc.vec.Vec.new Write, Reply.Payments v
             next))
 
-/-- [payment_domain::transition]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 882:0-899:1
+/-- [payment_domain::history_range]: loop body 0:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-943:5 -/
+@[rust_loop_body]
+def history_range_loop.body
+  (s : Snapshot) (payment : Std.U64) («from» : Std.U64) («end» : Std.U64)
+  (out : alloc.vec.Vec HistoryEntry) (i : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec HistoryEntry) × Std.Usize)
+    (alloc.vec.Vec HistoryEntry))
+  := do
+  let i1 := alloc.vec.Vec.len s.history
+  if i < i1
+  then
+    let h ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice HistoryEntry)
+        s.history i
+    let out1 ←
+      if h.payment = payment
+      then
+        if «from» <= h.n
+        then if h.n < «end»
+             then alloc.vec.Vec.push out h
+             else ok out
+        else ok out
+      else ok out
+    let i2 ← i + 1#usize
+    ok (cont (out1, i2))
+  else ok (done out)
+
+/-- [payment_domain::history_range]: loop 0:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-943:5 -/
+@[rust_loop]
+def history_range_loop
+  (s : Snapshot) (payment : Std.U64) («from» : Std.U64) («end» : Std.U64)
+  (out : alloc.vec.Vec HistoryEntry) (i : Std.Usize) :
+  Result (alloc.vec.Vec HistoryEntry)
+  := do
+  loop
+    (fun (out1, i1) => history_range_loop.body s payment «from» «end» out1
+      i1)
+    (out, i)
+
+/-- [payment_domain::history_range]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 934:0-945:1 -/
+@[reducible]
+def history_range
+  (s : Snapshot) (payment : Std.U64) («from» : Std.U64) («end» : Std.U64) :
+  Result (alloc.vec.Vec HistoryEntry)
+  := do
+  history_range_loop s payment «from» «end» (alloc.vec.Vec.new
+    HistoryEntry) 0#usize
+
+/-- [payment_domain::history_page]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 947:0-962:1 -/
+def history_page
+  (actor : Principal) (s : Snapshot) (payment : Std.U64) («from» : Std.U64)
+  (limit : Std.U32) :
+  Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
+  := do
+  if limit = 0#u32
+  then ok (core.result.Result.Err Error.BadPage)
+  else
+    if limit > MAX_PAGE
+    then ok (core.result.Result.Err Error.BadPage)
+    else
+      let b ← is_operator actor
+      if b
+      then
+        let o ← find_payment s.payments payment
+        match o with
+        | none => ok (core.result.Result.Err Error.NotFound)
+        | some p =>
+          let «end» ← page_end «from» limit
+          let next ←
+            if «end» < p.changes
+            then ok (some «end»)
+            else ok none
+          let v ← history_range s payment «from» «end»
+          ok (core.result.Result.Ok (alloc.vec.Vec.new Write, Reply.History v
+            next))
+      else ok (core.result.Result.Err Error.Forbidden)
+
+/-- [payment_domain::decide_command]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 966:0-984:1
     Visibility: public -/
-def transition
+def decide_command
   (actor : Principal) (s : Snapshot) (cmd : Command) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
   := do
@@ -3679,95 +4321,507 @@ def transition
   | Command.View id => view actor s id
   | Command.MarkPosted payment captured refunds =>
     mark_posted actor s payment captured refunds
+  | Command.History payment «from» limit =>
+    history_page actor s payment «from» limit
+
+/-- [payment_domain::CMD_CREATE]
+    Source: 'crates/payment-domain/src/lib.rs', lines 989:0-989:30
+    Visibility: public -/
+@[global_simps, irreducible] def CMD_CREATE : Std.U32 := 1#u32
+
+/-- [payment_domain::CMD_BEGIN_AUTHORIZE]
+    Source: 'crates/payment-domain/src/lib.rs', lines 990:0-990:39
+    Visibility: public -/
+@[global_simps, irreducible] def CMD_BEGIN_AUTHORIZE : Std.U32 := 2#u32
+
+/-- [payment_domain::CMD_CANCEL]
+    Source: 'crates/payment-domain/src/lib.rs', lines 991:0-991:30
+    Visibility: public -/
+@[global_simps, irreducible] def CMD_CANCEL : Std.U32 := 3#u32
+
+/-- [payment_domain::CMD_REQUEST_REFUND]
+    Source: 'crates/payment-domain/src/lib.rs', lines 992:0-992:38
+    Visibility: public -/
+@[global_simps, irreducible] def CMD_REQUEST_REFUND : Std.U32 := 4#u32
+
+/-- [payment_domain::CMD_RECORD]
+    Source: 'crates/payment-domain/src/lib.rs', lines 993:0-993:30
+    Visibility: public -/
+@[global_simps, irreducible] def CMD_RECORD : Std.U32 := 5#u32
+
+/-- [payment_domain::CMD_EVENT]
+    Source: 'crates/payment-domain/src/lib.rs', lines 994:0-994:29
+    Visibility: public -/
+@[global_simps, irreducible] def CMD_EVENT : Std.U32 := 6#u32
+
+/-- [payment_domain::CMD_ATTACH_REF]
+    Source: 'crates/payment-domain/src/lib.rs', lines 995:0-995:34
+    Visibility: public -/
+@[global_simps, irreducible] def CMD_ATTACH_REF : Std.U32 := 7#u32
+
+/-- [payment_domain::CMD_MARK_POSTED]
+    Source: 'crates/payment-domain/src/lib.rs', lines 996:0-996:35
+    Visibility: public -/
+@[global_simps, irreducible] def CMD_MARK_POSTED : Std.U32 := 8#u32
+
+/-- [payment_domain::RES_NONE]
+    Source: 'crates/payment-domain/src/lib.rs', lines 998:0-998:28
+    Visibility: public -/
+@[global_simps, irreducible] def RES_NONE : Std.U32 := 0#u32
+
+/-- [payment_domain::RES_AUTHORIZED]
+    Source: 'crates/payment-domain/src/lib.rs', lines 999:0-999:34
+    Visibility: public -/
+@[global_simps, irreducible] def RES_AUTHORIZED : Std.U32 := 1#u32
+
+/-- [payment_domain::RES_DECLINED]
+    Source: 'crates/payment-domain/src/lib.rs', lines 1000:0-1000:32
+    Visibility: public -/
+@[global_simps, irreducible] def RES_DECLINED : Std.U32 := 2#u32
+
+/-- [payment_domain::RES_CAPTURED]
+    Source: 'crates/payment-domain/src/lib.rs', lines 1001:0-1001:32
+    Visibility: public -/
+@[global_simps, irreducible] def RES_CAPTURED : Std.U32 := 3#u32
+
+/-- [payment_domain::RES_CANCELED]
+    Source: 'crates/payment-domain/src/lib.rs', lines 1002:0-1002:32
+    Visibility: public -/
+@[global_simps, irreducible] def RES_CANCELED : Std.U32 := 4#u32
+
+/-- [payment_domain::RES_REFUND_SUCCEEDED]
+    Source: 'crates/payment-domain/src/lib.rs', lines 1003:0-1003:40
+    Visibility: public -/
+@[global_simps, irreducible] def RES_REFUND_SUCCEEDED : Std.U32 := 5#u32
+
+/-- [payment_domain::RES_REFUND_FAILED]
+    Source: 'crates/payment-domain/src/lib.rs', lines 1004:0-1004:37
+    Visibility: public -/
+@[global_simps, irreducible] def RES_REFUND_FAILED : Std.U32 := 6#u32
+
+/-- [payment_domain::NO_STATUS]
+    Source: 'crates/payment-domain/src/lib.rs', lines 1006:0-1006:31
+    Visibility: public -/
+@[global_simps, irreducible] def NO_STATUS : Std.U32 := 255#u32
+
+/-- [payment_domain::result_code]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1009:0-1018:1 -/
+def result_code (r : PspResult) : Result (Std.U32 × Std.U64) := do
+  match r with
+  | PspResult.Authorized _ => ok (RES_AUTHORIZED, 0#u64)
+  | PspResult.Declined => ok (RES_DECLINED, 0#u64)
+  | PspResult.Captured _ => ok (RES_CAPTURED, 0#u64)
+  | PspResult.Canceled => ok (RES_CANCELED, 0#u64)
+  | PspResult.RefundSucceeded refund => ok (RES_REFUND_SUCCEEDED, refund)
+  | PspResult.RefundFailed refund => ok (RES_REFUND_FAILED, refund)
+
+/-- [payment_domain::what_of]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1022:0-1040:1 -/
+def what_of
+  (s : Snapshot) (cmd : Command) :
+  Result (Std.U32 × Std.U32 × Std.U64 × Std.U64)
+  := do
+  match cmd with
+  | Command.Create _ _ _ => ok (CMD_CREATE, RES_NONE, 0#u64, 0#u64)
+  | Command.BeginAuthorize _ =>
+    ok (CMD_BEGIN_AUTHORIZE, RES_NONE, 0#u64, 0#u64)
+  | Command.Cancel _ => ok (CMD_CANCEL, RES_NONE, 0#u64, 0#u64)
+  | Command.RequestRefund _ _ =>
+    ok (CMD_REQUEST_REFUND, RES_NONE, 0#u64, s.counter.next_id)
+  | Command.Record _ result =>
+    let (r, refund) ← result_code result
+    ok (CMD_RECORD, r, 0#u64, refund)
+  | Command.Event ev _ result =>
+    let (r, refund) ← result_code result
+    ok (CMD_EVENT, r, ev, refund)
+  | Command.AttachRef _ _ => ok (CMD_ATTACH_REF, RES_NONE, 0#u64, 0#u64)
+  | Command.Get _ => ok (0#u32, RES_NONE, 0#u64, 0#u64)
+  | Command.List _ _ _ => ok (0#u32, RES_NONE, 0#u64, 0#u64)
+  | Command.GetRefund _ => ok (0#u32, RES_NONE, 0#u64, 0#u64)
+  | Command.Refunds _ => ok (0#u32, RES_NONE, 0#u64, 0#u64)
+  | Command.GetRef _ => ok (0#u32, RES_NONE, 0#u64, 0#u64)
+  | Command.View _ => ok (0#u32, RES_NONE, 0#u64, 0#u64)
+  | Command.MarkPosted _ _ _ => ok (CMD_MARK_POSTED, RES_NONE, 0#u64, 0#u64)
+  | Command.History _ _ _ => ok (0#u32, RES_NONE, 0#u64, 0#u64)
+
+/-- [payment_domain::subject]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1044:0-1055:1 -/
+def subject (cmd : Command) : Result (Option Std.U64) := do
+  match cmd with
+  | Command.Create _ _ _ => ok none
+  | Command.BeginAuthorize id => ok (some id)
+  | Command.Cancel id => ok (some id)
+  | Command.RequestRefund payment _ => ok (some payment)
+  | Command.Record payment _ => ok (some payment)
+  | Command.Event _ payment _ => ok (some payment)
+  | Command.AttachRef payment _ => ok (some payment)
+  | Command.Get _ => ok none
+  | Command.List _ _ _ => ok none
+  | Command.GetRefund _ => ok none
+  | Command.Refunds _ => ok none
+  | Command.GetRef _ => ok none
+  | Command.View _ => ok none
+  | Command.MarkPosted payment _ _ => ok (some payment)
+  | Command.History _ _ _ => ok none
+
+/-- [payment_domain::actor_id]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1059:0-1064:1
+    Visibility: public -/
+def actor_id (actor : Principal) : Result Std.U64 := do
+  match actor.actor with
+  | Actor.User u => ok u
+  | Actor.Operator o => ok o
+
+/-- [payment_domain::last_payment]: loop body 0:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1070:4-1076:5 -/
+@[rust_loop_body]
+def last_payment_loop.body
+  (ws : alloc.vec.Vec Write) (out : Option Payment) (i : Std.Usize) :
+  Result (ControlFlow ((Option Payment) × Std.Usize) (Option Payment))
+  := do
+  let i1 := alloc.vec.Vec.len ws
+  if i < i1
+  then
+    let w ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Write) ws i
+    let out1 ←
+      match w with
+      | Write.PutPayment p => ok (some p)
+      | Write.PutRefund _ => ok out
+      | Write.PutEvent _ => ok out
+      | Write.PutRef _ => ok out
+      | Write.SetCounter _ => ok out
+      | Write.PutMerchant _ => ok out
+      | Write.PutHistory _ => ok out
+    let i2 ← i + 1#usize
+    ok (cont (out1, i2))
+  else ok (done out)
+
+/-- [payment_domain::last_payment]: loop 0:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1070:4-1076:5 -/
+@[rust_loop]
+def last_payment_loop
+  (ws : alloc.vec.Vec Write) (out : Option Payment) (i : Std.Usize) :
+  Result (Option Payment)
+  := do
+  loop
+    (fun (out1, i1) => last_payment_loop.body ws out1 i1)
+    (out, i)
+
+/-- [payment_domain::last_payment]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1067:0-1078:1 -/
+@[reducible]
+def last_payment (ws : alloc.vec.Vec Write) : Result (Option Payment) := do
+  last_payment_loop ws none 0#usize
+
+/-- [payment_domain::others]: loop body 0:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1084:4-1091:5 -/
+@[rust_loop_body]
+def others_loop.body
+  (ws : alloc.vec.Vec Write) (out : alloc.vec.Vec Write) (i : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec Write) × Std.Usize) (alloc.vec.Vec
+    Write))
+  := do
+  let i1 := alloc.vec.Vec.len ws
+  if i < i1
+  then
+    let w ←
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Write) ws i
+    let out1 ←
+      match w with
+      | Write.PutPayment _ => ok out
+      | Write.PutRefund _ =>
+        do
+        let w1 ← Write.Insts.CoreCloneClone.clone w
+        alloc.vec.Vec.push out w1
+      | Write.PutEvent _ =>
+        do
+        let w1 ← Write.Insts.CoreCloneClone.clone w
+        alloc.vec.Vec.push out w1
+      | Write.PutRef _ =>
+        do
+        let w1 ← Write.Insts.CoreCloneClone.clone w
+        alloc.vec.Vec.push out w1
+      | Write.SetCounter _ =>
+        do
+        let w1 ← Write.Insts.CoreCloneClone.clone w
+        alloc.vec.Vec.push out w1
+      | Write.PutMerchant _ =>
+        do
+        let w1 ← Write.Insts.CoreCloneClone.clone w
+        alloc.vec.Vec.push out w1
+      | Write.PutHistory _ => ok out
+    let i2 ← i + 1#usize
+    ok (cont (out1, i2))
+  else ok (done out)
+
+/-- [payment_domain::others]: loop 0:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1084:4-1091:5 -/
+@[rust_loop]
+def others_loop
+  (ws : alloc.vec.Vec Write) (out : alloc.vec.Vec Write) (i : Std.Usize) :
+  Result (alloc.vec.Vec Write)
+  := do
+  loop
+    (fun (out1, i1) => others_loop.body ws out1 i1)
+    (out, i)
+
+/-- [payment_domain::others]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1081:0-1093:1 -/
+@[reducible]
+def others (ws : alloc.vec.Vec Write) : Result (alloc.vec.Vec Write) := do
+  others_loop ws (alloc.vec.Vec.new Write) 0#usize
+
+/-- [payment_domain::keeps_mark]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1096:0-1101:1 -/
+def keeps_mark (cmd : Command) : Result Bool := do
+  match cmd with
+  | Command.Create _ _ _ => ok false
+  | Command.BeginAuthorize _ => ok false
+  | Command.Cancel _ => ok false
+  | Command.RequestRefund _ _ => ok false
+  | Command.Record _ _ => ok false
+  | Command.Event _ _ _ => ok false
+  | Command.AttachRef _ _ => ok false
+  | Command.Get _ => ok false
+  | Command.List _ _ _ => ok false
+  | Command.GetRefund _ => ok false
+  | Command.Refunds _ => ok false
+  | Command.GetRef _ => ok false
+  | Command.View _ => ok false
+  | Command.MarkPosted _ _ _ => ok true
+  | Command.History _ _ _ => ok false
+
+/-- [payment_domain::changed]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1105:0-1123:1 -/
+def changed
+  (p : Payment) (op : Std.U64) (done1 : Bool) (changes : Std.U64) :
+  Result Payment
+  := do
+  ok { p with operator := op, ledger_done := done1, changes }
+
+/-- [payment_domain::logged]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1131:0-1194:1 -/
+def logged
+  (actor : Principal) (s : Snapshot) (cmd : Command) (ws : alloc.vec.Vec Write)
+  (reply : Reply) :
+  Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
+  := do
+  let (command, result, event1, refund) ← what_of s cmd
+  let last ← last_payment ws
+  let o ← subject cmd
+  match o with
+  | none =>
+    match last with
+    | none => ok (core.result.Result.Err Error.Corrupt)
+    | some p =>
+      if p.id != s.counter.next_id
+      then ok (core.result.Result.Err Error.Corrupt)
+      else
+        if 0#u64 = core.num.U64.MAX
+        then ok (core.result.Result.Err Error.Overflow)
+        else
+          let b ← keeps_mark cmd
+          let done1 ← if b
+                        then ok p.ledger_done
+                        else ok false
+          let i ← operator_of actor
+          let i1 ← 0#u64 + 1#u64
+          let after ← changed p i done1 i1
+          let b1 ← is_operator actor
+          let i2 ← actor_id actor
+          let out ← others ws
+          let out1 ← alloc.vec.Vec.push out (Write.PutPayment after)
+          let out2 ←
+            alloc.vec.Vec.push out1 (Write.PutHistory
+              {
+                payment := after.id,
+                n := 0#u64,
+                by_operator := b1,
+                actor := i2,
+                «at» := actor.at,
+                command,
+                result,
+                event := event1,
+                refund,
+                status_before := NO_STATUS,
+                status_after := after.status,
+                captured_before := after.captured,
+                captured_after := after.captured,
+                refunded_before := after.refunded,
+                refunded_after := after.refunded,
+                pending_before := after.refund_pending,
+                pending_after := after.refund_pending
+              })
+          ok (core.result.Result.Ok (out2, reply))
+  | some id =>
+    let o1 ← find_payment s.payments id
+    match o1 with
+    | none => ok (core.result.Result.Err Error.NotFound)
+    | some old =>
+      let base ← match last with
+                   | none => ok old
+                   | some p => ok p
+      if base.id != id
+      then ok (core.result.Result.Err Error.Corrupt)
+      else
+        if old.changes = core.num.U64.MAX
+        then ok (core.result.Result.Err Error.Overflow)
+        else
+          let b ← keeps_mark cmd
+          let done1 ← if b
+                        then ok base.ledger_done
+                        else ok false
+          let i ← operator_of actor
+          let i1 ← old.changes + 1#u64
+          let after ← changed base i done1 i1
+          let b1 ← is_operator actor
+          let i2 ← actor_id actor
+          let out ← others ws
+          let out1 ← alloc.vec.Vec.push out (Write.PutPayment after)
+          let out2 ←
+            alloc.vec.Vec.push out1 (Write.PutHistory
+              {
+                payment := after.id,
+                n := old.changes,
+                by_operator := b1,
+                actor := i2,
+                «at» := actor.at,
+                command,
+                result,
+                event := event1,
+                refund,
+                status_before := old.status,
+                status_after := after.status,
+                captured_before := old.captured,
+                captured_after := after.captured,
+                refunded_before := old.refunded,
+                refunded_after := after.refunded,
+                pending_before := old.refund_pending,
+                pending_after := after.refund_pending
+              })
+          ok (core.result.Result.Ok (out2, reply))
+
+/-- [payment_domain::transition]:
+    Source: 'crates/payment-domain/src/lib.rs', lines 1199:0-1210:1
+    Visibility: public -/
+def transition
+  (actor : Principal) (s : Snapshot) (cmd : Command) :
+  Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
+  := do
+  let r ← decide_command actor s cmd
+  match r with
+  | core.result.Result.Ok p =>
+    let (ws, reply) := p
+    let i := alloc.vec.Vec.len ws
+    if i = 0#usize
+    then ok r
+    else logged actor s cmd ws reply
+  | core.result.Result.Err _ => ok r
 
 /-- [payment_domain::T_PAYMENTS]
-    Source: 'crates/payment-domain/src/lib.rs', lines 904:0-904:30
+    Source: 'crates/payment-domain/src/lib.rs', lines 1215:0-1215:30
     Visibility: public -/
 @[global_simps, irreducible] def T_PAYMENTS : Std.U32 := 0#u32
 
 /-- [payment_domain::T_REFUNDS]
-    Source: 'crates/payment-domain/src/lib.rs', lines 905:0-905:29
+    Source: 'crates/payment-domain/src/lib.rs', lines 1216:0-1216:29
     Visibility: public -/
 @[global_simps, irreducible] def T_REFUNDS : Std.U32 := 1#u32
 
 /-- [payment_domain::T_EVENTS]
-    Source: 'crates/payment-domain/src/lib.rs', lines 906:0-906:28
+    Source: 'crates/payment-domain/src/lib.rs', lines 1217:0-1217:28
     Visibility: public -/
 @[global_simps, irreducible] def T_EVENTS : Std.U32 := 2#u32
 
 /-- [payment_domain::T_REFS]
-    Source: 'crates/payment-domain/src/lib.rs', lines 907:0-907:26
+    Source: 'crates/payment-domain/src/lib.rs', lines 1218:0-1218:26
     Visibility: public -/
 @[global_simps, irreducible] def T_REFS : Std.U32 := 3#u32
 
 /-- [payment_domain::T_COUNTER]
-    Source: 'crates/payment-domain/src/lib.rs', lines 908:0-908:29
+    Source: 'crates/payment-domain/src/lib.rs', lines 1219:0-1219:29
     Visibility: public -/
 @[global_simps, irreducible] def T_COUNTER : Std.U32 := 4#u32
 
 /-- [payment_domain::T_MERCHANTS]
-    Source: 'crates/payment-domain/src/lib.rs', lines 909:0-909:31
+    Source: 'crates/payment-domain/src/lib.rs', lines 1220:0-1220:31
     Visibility: public -/
 @[global_simps, irreducible] def T_MERCHANTS : Std.U32 := 5#u32
 
+/-- [payment_domain::T_HISTORY]
+    Source: 'crates/payment-domain/src/lib.rs', lines 1221:0-1221:29
+    Visibility: public -/
+@[global_simps, irreducible] def T_HISTORY : Std.U32 := 6#u32
+
 /-- [payment_domain::PAYMENT_ID]
-    Source: 'crates/payment-domain/src/lib.rs', lines 911:0-911:30
+    Source: 'crates/payment-domain/src/lib.rs', lines 1223:0-1223:30
     Visibility: public -/
 @[global_simps, irreducible] def PAYMENT_ID : Std.U32 := 0#u32
 
 /-- [payment_domain::PAYMENT_MERCHANT]
-    Source: 'crates/payment-domain/src/lib.rs', lines 912:0-912:36
+    Source: 'crates/payment-domain/src/lib.rs', lines 1224:0-1224:36
     Visibility: public -/
 @[global_simps, irreducible] def PAYMENT_MERCHANT : Std.U32 := 1#u32
 
 /-- [payment_domain::PAYMENT_SEQ]
-    Source: 'crates/payment-domain/src/lib.rs', lines 913:0-913:32
+    Source: 'crates/payment-domain/src/lib.rs', lines 1225:0-1225:32
     Visibility: public -/
 @[global_simps, irreducible] def PAYMENT_SEQ : Std.U32 := 13#u32
 
 /-- [payment_domain::MERCHANT_KEY]
-    Source: 'crates/payment-domain/src/lib.rs', lines 914:0-914:32
+    Source: 'crates/payment-domain/src/lib.rs', lines 1226:0-1226:32
     Visibility: public -/
 @[global_simps, irreducible] def MERCHANT_KEY : Std.U32 := 0#u32
 
 /-- [payment_domain::REFUND_ID]
-    Source: 'crates/payment-domain/src/lib.rs', lines 915:0-915:29
+    Source: 'crates/payment-domain/src/lib.rs', lines 1227:0-1227:29
     Visibility: public -/
 @[global_simps, irreducible] def REFUND_ID : Std.U32 := 0#u32
 
 /-- [payment_domain::REFUND_PAYMENT]
-    Source: 'crates/payment-domain/src/lib.rs', lines 916:0-916:34
+    Source: 'crates/payment-domain/src/lib.rs', lines 1228:0-1228:34
     Visibility: public -/
 @[global_simps, irreducible] def REFUND_PAYMENT : Std.U32 := 1#u32
 
 /-- [payment_domain::EVENT_ID]
-    Source: 'crates/payment-domain/src/lib.rs', lines 917:0-917:28
+    Source: 'crates/payment-domain/src/lib.rs', lines 1229:0-1229:28
     Visibility: public -/
 @[global_simps, irreducible] def EVENT_ID : Std.U32 := 0#u32
 
 /-- [payment_domain::REF_PAYMENT]
-    Source: 'crates/payment-domain/src/lib.rs', lines 918:0-918:31
+    Source: 'crates/payment-domain/src/lib.rs', lines 1230:0-1230:31
     Visibility: public -/
 @[global_simps, irreducible] def REF_PAYMENT : Std.U32 := 0#u32
 
+/-- [payment_domain::HISTORY_PAYMENT]
+    Source: 'crates/payment-domain/src/lib.rs', lines 1231:0-1231:35
+    Visibility: public -/
+@[global_simps, irreducible] def HISTORY_PAYMENT : Std.U32 := 0#u32
+
+/-- [payment_domain::HISTORY_N]
+    Source: 'crates/payment-domain/src/lib.rs', lines 1232:0-1232:29
+    Visibility: public -/
+@[global_simps, irreducible] def HISTORY_N : Std.U32 := 1#u32
+
 /-- [payment_domain::v_int]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 920:0-922:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1234:0-1236:1 -/
 def v_int (x : Std.U64) : Result h5i_app_sql.Val := do
   U64.Insts.H5i_app_sqlColumn.to_val x
 
 /-- [payment_domain::p_eq]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 924:0-926:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1238:0-1240:1 -/
 def p_eq (col : Std.U32) (v : h5i_app_sql.Val) : Result h5i_app_sql.Pred := do
   ok (h5i_app_sql.Pred.Eq col v)
 
 /-- [payment_domain::p_or]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 928:0-930:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1242:0-1244:1 -/
 def p_or
   (a : h5i_app_sql.Pred) (b : h5i_app_sql.Pred) : Result h5i_app_sql.Pred := do
   ok (h5i_app_sql.Pred.Or a b)
 
 /-- [payment_domain::seq_range]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 936:4-939:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1250:4-1253:5 -/
 @[rust_loop_body]
 def seq_range_loop.body
   (col : Std.U32) («end» : Std.U64) (p : h5i_app_sql.Pred) (x : Std.U64) :
@@ -3783,7 +4837,7 @@ def seq_range_loop.body
   else ok (done p)
 
 /-- [payment_domain::seq_range]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 936:4-939:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1250:4-1253:5 -/
 @[rust_loop]
 def seq_range_loop
   (col : Std.U32) («end» : Std.U64) (p : h5i_app_sql.Pred) (x : Std.U64) :
@@ -3794,7 +4848,7 @@ def seq_range_loop
     (p, x)
 
 /-- [payment_domain::seq_range]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 933:0-941:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1247:0-1255:1 -/
 def seq_range
   (col : Std.U32) («from» : Std.U64) («end» : Std.U64) :
   Result h5i_app_sql.Pred
@@ -3805,14 +4859,14 @@ def seq_range
   seq_range_loop col «end» p x
 
 /-- [payment_domain::rd_where]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 943:0-945:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1257:0-1259:1 -/
 def rd_where
   (table : Std.U32) (pred : h5i_app_sql.Pred) : Result h5i_app_sql.Read := do
   let w ← h5i_app_sql.whole
   ok { table, pred, window := w }
 
 /-- [payment_domain::result_reads]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 948:0-954:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1262:0-1268:1 -/
 def result_reads
   (result : PspResult) (out : alloc.vec.Vec h5i_app_sql.Read) :
   Result (alloc.vec.Vec h5i_app_sql.Read)
@@ -3834,7 +4888,7 @@ def result_reads
     alloc.vec.Vec.push out r
 
 /-- [payment_domain::reads]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 960:0-1030:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 1274:0-1356:1
     Visibility: public -/
 def reads
   (actor : Principal) (cmd : Command) :
@@ -4001,6 +5055,30 @@ def reads
     let r1 ← rd_where T_REFUNDS p1
     let out1 ← alloc.vec.Vec.push out r1
     ok (some out1)
+  | Command.History payment «from» limit =>
+    if limit != 0#u32
+    then
+      if limit <= MAX_PAGE
+      then
+        let b ← is_operator actor
+        if b
+        then
+          let v ← v_int payment
+          let p ← p_eq PAYMENT_ID v
+          let r ← rd_where T_PAYMENTS p
+          let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+          let «end» ← page_end «from» limit
+          if «from» < «end»
+          then
+            let range ← seq_range HISTORY_N «from» «end»
+            let p1 ← p_eq HISTORY_PAYMENT v
+            let r1 ← rd_where T_HISTORY (h5i_app_sql.Pred.And p1 range)
+            let out1 ← alloc.vec.Vec.push out r1
+            ok (some out1)
+          else ok (some out)
+        else ok (some (alloc.vec.Vec.new h5i_app_sql.Read))
+      else ok (some (alloc.vec.Vec.new h5i_app_sql.Read))
+    else ok (some (alloc.vec.Vec.new h5i_app_sql.Read))
 
 /-- [payment_domain::policy::KINDS]
     Source: 'crates/payment-domain/src/policy.rs', lines 14:0-14:27

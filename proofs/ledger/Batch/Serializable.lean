@@ -44,12 +44,12 @@ theorem Serial.toSt {a : Principal} {s s' : Snapshot} {l : List TransferReq} {ws
   | nil s => rfl
   | cons _ _ h3 _ ih => rw [ih, h3]; simp [applyAll, List.foldl_append]
 
-/-- Every transfer writes nothing (a replay) or three rows. -/
+/-- Every transfer writes nothing (a replay) or five rows. -/
 theorem transfer_writes_le (a : Principal) (s : Snapshot) (t : TransferReq) ws r
-    (h : transfer a s t = ok (.Ok (ws, r))) : ws.length ≤ 3 := by
+    (h : transfer a s t = ok (.Ok (ws, r))) : ws.length ≤ 5 := by
   rcases post_of_ok (transfer_spec a s t) h ws r rfl with
-    ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hws⟩ <;>
-    simp [alloc.vec.Vec.length, hws]
+    ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hws⟩ <;>
+    simp [alloc.vec.Vec.length, hws, postWrites]
 
 @[step] theorem append_spec (ws more : alloc.vec.Vec Write) (h : ws.length + more.length ≤ Usize.max) :
     append ws more ⦃ v => v.val = ws.val ++ more.val ⦄ := by
@@ -77,14 +77,14 @@ theorem transfer_writes_le (a : Principal) (s : Snapshot) (t : TransferReq) ws r
 theorem batch_loop_spec (a : Principal) (s : Snapshot) (ts : alloc.vec.Vec TransferReq)
     (cur : Snapshot) (ws : alloc.vec.Vec Write) (i : Usize) (hi : i.val ≤ ts.length)
     (hser : Serial a s (ts.val.take i.val) ws.val cur)
-    (hsz : Snapshot.size cur + 3 * (ts.length - i.val) < Usize.max)
-    (hws : ws.length + 3 * (ts.length - i.val) ≤ Usize.max) :
+    (hsz : Snapshot.size cur + 5 * (ts.length - i.val) < Usize.max)
+    (hws : ws.length + 5 * (ts.length - i.val) ≤ Usize.max) :
     batch_loop a ts cur ws i ⦃ r => ∀ ws' rep, r = .Ok (ws', rep) → ∃ s', Serial a s ts.val ws'.val s' ⦄ := by
   unfold batch_loop
   apply loop.spec_decr_nat (measure := fun (x : Snapshot × alloc.vec.Vec Write × Usize) => ts.length - x.2.2.val)
     (inv := fun x => x.2.2.val ≤ ts.length ∧ Serial a s (ts.val.take x.2.2.val) x.2.1.val x.1 ∧
-      Snapshot.size x.1 + 3 * (ts.length - x.2.2.val) < Usize.max ∧
-      x.2.1.length + 3 * (ts.length - x.2.2.val) ≤ Usize.max)
+      Snapshot.size x.1 + 5 * (ts.length - x.2.2.val) < Usize.max ∧
+      x.2.1.length + 5 * (ts.length - x.2.2.val) ≤ Usize.max)
   · rintro ⟨c, w, j⟩ ⟨hj, hs, hc, hw⟩
     simp only at hj hs hc hw
     dsimp only
@@ -134,9 +134,9 @@ theorem batch_loop_spec (a : Principal) (s : Snapshot) (ts : alloc.vec.Vec Trans
 
 /-- **Batch serializability.** A committed batch is a serial run of its
 transfers, each as a separate `Transfer` command, in order. The size bound
-says the tenant's tables are not within 3 · 8192 rows of `usize::MAX`. -/
+says the tenant's tables are not within 5 · 8192 rows of `usize::MAX`. -/
 theorem batch_serial (a : Principal) (s : Snapshot) (ts : alloc.vec.Vec TransferReq) ws r
-    (hsz : Snapshot.size s + 3 * 8192 < Usize.max)
+    (hsz : Snapshot.size s + 5 * 8192 < Usize.max)
     (h : transition a s (.Batch ts) = ok (.Ok (ws, r))) :
     ∃ s', Serial a s ts.val ws.val s' := by
   simp only [transition, batch] at h

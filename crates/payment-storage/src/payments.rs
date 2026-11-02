@@ -31,16 +31,21 @@ impl Kernel for PaymentsApp {
     fn apply(snap: &k::Snapshot, ws: &Vec<k::Write>) -> k::Snapshot {
         k::apply(snap, ws)
     }
+
+    /// The transaction's clock, for the history (G1).
+    fn stamp(actor: &mut k::Principal, now: h5i_app_core::Timestamp) {
+        actor.at = now.0;
+    }
 }
 
 /// User `user` (a merchant) of tenant `org`.
 pub fn user(org: u64, user: u64) -> k::Principal {
-    k::Principal { org, actor: k::Actor::User(user) }
+    k::Principal { org, actor: k::Actor::User(user), at: 0 }
 }
 
 /// Operator `id` of tenant `org`.
 pub fn operator(org: u64, id: u64) -> k::Principal {
-    k::Principal { org, actor: k::Actor::Operator(id) }
+    k::Principal { org, actor: k::Actor::Operator(id), at: 0 }
 }
 
 payment_domain::payment_tables!(PaymentsApp);
@@ -80,6 +85,11 @@ impl Store<PaymentsApp> for PaymentsStore {
         ddl.push("CREATE INDEX IF NOT EXISTS payments_refunding ON payments (tenant_id, id) WHERE refund_pending > 0".into());
         // Room in each heap page for HOT updates of its rows.
         ddl.push(crate::fillfactor("payments", 70));
+        // G1: each payment's count of history entries; older payments start
+        // at 0 (their history begins with their next change). The history
+        // table itself is `schema_ddl`'s, append-only.
+        ddl.push(crate::add_column("payments", "changes", "BIGINT NOT NULL DEFAULT 0"));
+        ddl.extend(crate::append_only_history());
         ddl
     }
 
@@ -131,7 +141,8 @@ impl Store<PaymentsApp> for PaymentsStore {
             | k::Command::GetRefund { .. }
             | k::Command::Refunds { .. }
             | k::Command::GetRef { .. }
-            | k::Command::View { .. } => Lock::None,
+            | k::Command::View { .. }
+            | k::Command::History { .. } => Lock::None,
         }
     }
 }
@@ -173,6 +184,57 @@ pub fn payment_json(p: &k::Payment) -> Out {
         ("operator", p.operator.into()),
         ("ledger_done", p.ledger_done.into()),
         ("seq", p.seq.into()),
+        ("changes", p.changes.into()),
+    ])
+}
+
+pub fn command_name(c: u32) -> &'static str {
+    match c {
+        k::CMD_CREATE => "create",
+        k::CMD_BEGIN_AUTHORIZE => "begin_authorize",
+        k::CMD_CANCEL => "cancel",
+        k::CMD_REQUEST_REFUND => "request_refund",
+        k::CMD_RECORD => "record",
+        k::CMD_EVENT => "event",
+        k::CMD_ATTACH_REF => "attach_ref",
+        k::CMD_MARK_POSTED => "mark_posted",
+        _ => "unknown",
+    }
+}
+
+pub fn result_name(r: u32) -> Option<&'static str> {
+    match r {
+        k::RES_AUTHORIZED => Some("authorized"),
+        k::RES_DECLINED => Some("declined"),
+        k::RES_CAPTURED => Some("captured"),
+        k::RES_CANCELED => Some("canceled"),
+        k::RES_REFUND_SUCCEEDED => Some("refund_succeeded"),
+        k::RES_REFUND_FAILED => Some("refund_failed"),
+        _ => None,
+    }
+}
+
+/// One history entry (G1). `at` is microseconds since the Unix epoch, the
+/// transaction's clock.
+pub fn history_json(h: &k::HistoryEntry) -> Out {
+    let status = |s: u32| if s == k::NO_STATUS { Out::Null } else { status_name(s).into() };
+    Out::obj([
+        ("payment", h.payment.into()),
+        ("n", h.n.into()),
+        ("actor", Out::obj([("kind", if h.by_operator { "operator" } else { "user" }.into()), ("id", h.actor.into())])),
+        ("at", h.at.into()),
+        ("command", command_name(h.command).into()),
+        ("result", result_name(h.result).map_or(Out::Null, Out::from)),
+        ("event", if h.command == k::CMD_EVENT { h.event.into() } else { Out::Null }),
+        ("refund", if h.command == k::CMD_REQUEST_REFUND || h.result >= k::RES_REFUND_SUCCEEDED { h.refund.into() } else { Out::Null }),
+        ("status_before", status(h.status_before)),
+        ("status_after", status(h.status_after)),
+        ("captured_before", h.captured_before.into()),
+        ("captured_after", h.captured_after.into()),
+        ("refunded_before", h.refunded_before.into()),
+        ("refunded_after", h.refunded_after.into()),
+        ("refund_pending_before", h.pending_before.into()),
+        ("refund_pending_after", h.pending_after.into()),
     ])
 }
 
@@ -221,6 +283,15 @@ enum CommandJson {
     GetRefund { id: u64 },
     Refunds { payment: u64 },
     View { id: u64 },
+    /// A page of a payment's history (operators only, G1), from entry
+    /// `from` (default 0), at most `limit` (default and maximum `k::MAX_PAGE`).
+    History {
+        payment: u64,
+        #[serde(default)]
+        from: u64,
+        #[serde(default)]
+        limit: Option<u32>,
+    },
 }
 
 /// Decode a client's payment command, with defaults from the caller.
@@ -233,6 +304,7 @@ pub fn decode_for(actor: &k::Principal, body: serde_json::Value) -> Result<k::Co
         CommandJson::GetRefund { id } => k::Command::GetRefund { id },
         CommandJson::Refunds { payment } => k::Command::Refunds { payment },
         CommandJson::View { id } => k::Command::View { id },
+        CommandJson::History { payment, from, limit } => k::Command::History { payment, from, limit: limit.unwrap_or(k::MAX_PAGE) },
     })
 }
 
@@ -262,6 +334,10 @@ impl h5i_app_http::Api<PaymentsApp> for PaymentsStore {
                 ("payment", payment_json(p)),
                 ("refunds", Out::Arr(rs.iter().map(refund_json).collect())),
                 ("psp_reference", r.as_ref().map_or(Out::Null, Out::str)),
+            ]),
+            k::Reply::History(hs, next) => Out::obj([
+                ("history", Out::Arr(hs.iter().map(history_json).collect())),
+                ("next", next.map_or(Out::Null, Out::from)),
             ]),
         }
     }
@@ -293,6 +369,8 @@ struct StoredPayment {
     ledger_done: bool,
     #[serde(default)]
     seq: u64,
+    #[serde(default)]
+    changes: u64,
 }
 
 fn store_payment(p: &k::Payment) -> StoredPayment {
@@ -311,6 +389,7 @@ fn store_payment(p: &k::Payment) -> StoredPayment {
         operator: p.operator,
         ledger_done: p.ledger_done,
         seq: p.seq,
+        changes: p.changes,
     }
 }
 
@@ -330,6 +409,7 @@ fn load_payment(p: StoredPayment) -> k::Payment {
         operator: p.operator,
         ledger_done: p.ledger_done,
         seq: p.seq,
+        changes: p.changes,
     }
 }
 
@@ -367,6 +447,50 @@ enum StoredReply {
     Refunds(Vec<StoredRefund>),
     Ref(Vec<u8>),
     View(StoredPayment, Vec<StoredRefund>, Option<Vec<u8>>),
+    /// G1: a history page, entries as tuples.
+    History(Vec<StoredEntry>, Option<u64>),
+}
+
+/// A history entry in a stored reply.
+type StoredEntry = (u64, u64, bool, u64, u64, u32, u32, u64, u64, [u32; 2], [u64; 6]);
+
+fn store_entry(h: &k::HistoryEntry) -> StoredEntry {
+    (
+        h.payment,
+        h.n,
+        h.by_operator,
+        h.actor,
+        h.at,
+        h.command,
+        h.result,
+        h.event,
+        h.refund,
+        [h.status_before, h.status_after],
+        [h.captured_before, h.captured_after, h.refunded_before, h.refunded_after, h.pending_before, h.pending_after],
+    )
+}
+
+fn load_entry(e: StoredEntry) -> k::HistoryEntry {
+    let (payment, n, by_operator, actor, at, command, result, event, refund, [status_before, status_after], a) = e;
+    k::HistoryEntry {
+        payment,
+        n,
+        by_operator,
+        actor,
+        at,
+        command,
+        result,
+        event,
+        refund,
+        status_before,
+        status_after,
+        captured_before: a[0],
+        captured_after: a[1],
+        refunded_before: a[2],
+        refunded_after: a[3],
+        pending_before: a[4],
+        pending_after: a[5],
+    }
 }
 
 impl ReplyCodec<PaymentsApp> for PaymentsStore {
@@ -395,6 +519,7 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
             k::Reply::View(p, rs, r) => {
                 StoredReply::View(store_payment(p), rs.iter().map(store_refund).collect(), r.clone())
             }
+            k::Reply::History(hs, next) => StoredReply::History(hs.iter().map(store_entry).collect(), *next),
         };
         serde_json::to_vec(&stored).expect("stored replies serialize")
     }
@@ -413,6 +538,7 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
             StoredReply::Refunds(rs) => k::Reply::Refunds(rs.into_iter().map(load_refund).collect()),
             StoredReply::Ref(b) => k::Reply::Ref(b),
             StoredReply::View(p, rs, r) => k::Reply::View(load_payment(p), rs.into_iter().map(load_refund).collect(), r),
+            StoredReply::History(hs, next) => k::Reply::History(hs.into_iter().map(load_entry).collect(), next),
         })
     }
 }

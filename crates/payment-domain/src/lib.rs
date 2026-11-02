@@ -25,7 +25,15 @@
 // The kernel is written in the Rust subset Charon and Aeneas translate:
 // `&Vec` parameters, `Vec::new` + `push`, explicit index loops and spelled-out
 // branches are deliberate, so these style lints are off for this crate.
-#![allow(clippy::ptr_arg, clippy::vec_init_then_push, clippy::if_same_then_else, clippy::len_zero, clippy::manual_range_contains)]
+#![allow(
+    clippy::ptr_arg,
+    clippy::vec_init_then_push,
+    clippy::if_same_then_else,
+    clippy::len_zero,
+    clippy::manual_range_contains,
+    clippy::single_match,
+    clippy::match_like_matches_macro
+)]
 
 pub mod policy;
 
@@ -40,11 +48,15 @@ pub enum Actor {
     Operator(u64),
 }
 
-/// Who is calling: the tenant and who acts in it.
+/// Who is calling: the tenant and who acts in it, and when.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Principal {
     pub org: u64,
     pub actor: Actor,
+    /// The transaction's clock, in microseconds since the Unix epoch: the
+    /// engine stamps it from PostgreSQL's `transaction_timestamp()` before
+    /// every attempt (`Kernel::stamp`). Recorded in the history (G1).
+    pub at: u64,
 }
 
 /// Is the caller one of the tenant's operators?
@@ -94,6 +106,7 @@ h5i_app_schema::schema! {
         events: Vec<Event>,
         refs: Vec<PspRef>,
         merchants: Vec<MerchantCounter>,
+        history: Vec<HistoryEntry>,
     }
 
     /// A payment. Amounts are minor units of `currency` (ISO 4217 numeric).
@@ -120,6 +133,9 @@ h5i_app_schema::schema! {
         /// The payment's number among its merchant's payments (0, 1, …):
         /// the key `List` pages by.
         seq: u64,
+        /// How many history entries the payment has: the next entry's `n`
+        /// (G1). Every command that changes the payment adds one.
+        changes: u64,
     }
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -158,6 +174,31 @@ h5i_app_schema::schema! {
     pub struct MerchantCounter in "merchant_counters" {
         key { merchant: u64 }
         next: u64,
+    }
+
+    /// One change of a payment (G1): entry `n` of payment `payment`, written
+    /// by `transition` with the change itself, never updated or deleted.
+    /// Who (`by_operator`, `actor`: the user or operator id), when (`at`,
+    /// the transaction's clock), what (`command`, `result`, `event`,
+    /// `refund`), and the payment's status and amounts before and after.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct HistoryEntry in "history" {
+        key { payment: u64, n: u64 }
+        by_operator: bool,
+        actor: u64,
+        at: u64,
+        command: u32,
+        result: u32,
+        event: u64,
+        refund: u64,
+        status_before: u32,
+        status_after: u32,
+        captured_before: u64,
+        captured_after: u64,
+        refunded_before: u64,
+        refunded_after: u64,
+        pending_before: u64,
+        pending_after: u64,
     }
 }
 
@@ -213,6 +254,9 @@ pub enum Command {
     /// recording it). Marks the payment `ledger_done` if that is still its
     /// state; if it changed meanwhile, nothing is written (`Stale`).
     MarkPosted { payment: u64, captured: u64, refunds: Vec<Refund> },
+    /// One page of a payment's history (operators only): its entries
+    /// numbered `from` to `from + limit - 1`, `limit` at most `MAX_PAGE`.
+    History { payment: u64, from: u64, limit: u32 },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -223,6 +267,7 @@ pub enum Write {
     PutRef(PspRef),
     SetCounter(Counter),
     PutMerchant(MerchantCounter),
+    PutHistory(HistoryEntry),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -245,6 +290,8 @@ pub enum Reply {
     Ref(Vec<u8>),
     /// A payment, its refunds, and its PSP reference if it has one.
     View(Payment, Vec<Refund>, Option<Vec<u8>>),
+    /// A page of a payment's history, and where the next page starts.
+    History(Vec<HistoryEntry>, Option<u64>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -368,6 +415,7 @@ fn with_status(p: Payment, status: u32, authorized: u64, captured: u64, op: u64)
         operator: op,
         ledger_done: false,
         seq: p.seq,
+        changes: p.changes,
     }
 }
 
@@ -388,6 +436,7 @@ fn with_refunds(p: Payment, refunded: u64, refund_pending: u64, op: u64) -> Paym
         operator: op,
         ledger_done: false,
         seq: p.seq,
+        changes: p.changes,
     }
 }
 
@@ -419,6 +468,7 @@ fn create(actor: &Principal, s: &Snapshot, amount: u64, currency: u32, manual_ca
         operator: operator_of(actor),
         ledger_done: false,
         seq: n,
+        changes: 0,
     };
     let c2 = Counter { next_id: c.next_id + 1 };
     let m2 = MerchantCounter { merchant, next: n + 1 };
@@ -451,6 +501,7 @@ fn begin_authorize(actor: &Principal, s: &Snapshot, id: u64) -> Outcome {
                     operator: operator_of(actor),
                     ledger_done: false,
                     seq: p.seq,
+                    changes: p.changes,
                 };
                 Ok((one(Write::PutPayment(p2)), Reply::Payment(p2)))
             }
@@ -824,6 +875,7 @@ fn with_ledger_done(p: Payment, op: u64) -> Payment {
         operator: op,
         ledger_done: true,
         seq: p.seq,
+        changes: p.changes,
     }
 }
 
@@ -877,9 +929,41 @@ fn list(actor: &Principal, s: &Snapshot, merchant: u64, from: u64, limit: u32) -
     Ok((Vec::new(), Reply::Payments(merchant_range(s, merchant, from, end), next)))
 }
 
-/// The payment logic: a command's writes and reply, or a refusal that
-/// commits nothing.
-pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
+/// `payment`'s history entries numbered `from` up to (not including)
+/// `end`, in table order.
+fn history_range(s: &Snapshot, payment: u64, from: u64, end: u64) -> Vec<HistoryEntry> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < s.history.len() {
+        let h = s.history[i];
+        if h.payment == payment && from <= h.n && h.n < end {
+            out.push(h);
+        }
+        i += 1;
+    }
+    out
+}
+
+fn history_page(actor: &Principal, s: &Snapshot, payment: u64, from: u64, limit: u32) -> Outcome {
+    if limit == 0 || limit > MAX_PAGE {
+        return Err(Error::BadPage);
+    }
+    if !is_operator(actor) {
+        return Err(Error::Forbidden);
+    }
+    match find_payment(&s.payments, payment) {
+        None => Err(Error::NotFound),
+        Some(p) => {
+            let end = page_end(from, limit);
+            let next = if end < p.changes { Some(end) } else { None };
+            Ok((Vec::new(), Reply::History(history_range(s, payment, from, end), next)))
+        }
+    }
+}
+
+/// What the commands decide, before the history entry is added
+/// (`transition`): writes and reply, or a refusal that commits nothing.
+pub fn decide_command(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
     match cmd {
         Command::Create { amount, currency, manual_capture } => create(actor, s, *amount, *currency, *manual_capture),
         Command::BeginAuthorize { id } => begin_authorize(actor, s, *id),
@@ -895,6 +979,233 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
         Command::GetRef { payment } => get_ref(actor, s, *payment),
         Command::View { id } => view(actor, s, *id),
         Command::MarkPosted { payment, captured, refunds } => mark_posted(actor, s, *payment, *captured, refunds),
+        Command::History { payment, from, limit } => history_page(actor, s, *payment, *from, *limit),
+    }
+}
+
+// ------------------------------------------------------------------ history
+
+/// `HistoryEntry::command`: which command made the change.
+pub const CMD_CREATE: u32 = 1;
+pub const CMD_BEGIN_AUTHORIZE: u32 = 2;
+pub const CMD_CANCEL: u32 = 3;
+pub const CMD_REQUEST_REFUND: u32 = 4;
+pub const CMD_RECORD: u32 = 5;
+pub const CMD_EVENT: u32 = 6;
+pub const CMD_ATTACH_REF: u32 = 7;
+pub const CMD_MARK_POSTED: u32 = 8;
+/// `HistoryEntry::result`: the PSP result a `Record` or `Event` carried.
+pub const RES_NONE: u32 = 0;
+pub const RES_AUTHORIZED: u32 = 1;
+pub const RES_DECLINED: u32 = 2;
+pub const RES_CAPTURED: u32 = 3;
+pub const RES_CANCELED: u32 = 4;
+pub const RES_REFUND_SUCCEEDED: u32 = 5;
+pub const RES_REFUND_FAILED: u32 = 6;
+/// `HistoryEntry::status_before` of a payment's first entry (`Create`).
+pub const NO_STATUS: u32 = 255;
+
+/// A PSP result's code, and the refund it names (0 if none).
+fn result_code(r: &PspResult) -> (u32, u64) {
+    match r {
+        PspResult::Authorized { .. } => (RES_AUTHORIZED, 0),
+        PspResult::Declined => (RES_DECLINED, 0),
+        PspResult::Captured { .. } => (RES_CAPTURED, 0),
+        PspResult::Canceled => (RES_CANCELED, 0),
+        PspResult::RefundSucceeded { refund } => (RES_REFUND_SUCCEEDED, *refund),
+        PspResult::RefundFailed { refund } => (RES_REFUND_FAILED, *refund),
+    }
+}
+
+/// What a command is, for its history entry: (command, result, event,
+/// refund). A refund request names the refund it creates (the counter).
+fn what_of(s: &Snapshot, cmd: &Command) -> (u32, u32, u64, u64) {
+    match cmd {
+        Command::Create { .. } => (CMD_CREATE, RES_NONE, 0, 0),
+        Command::BeginAuthorize { .. } => (CMD_BEGIN_AUTHORIZE, RES_NONE, 0, 0),
+        Command::Cancel { .. } => (CMD_CANCEL, RES_NONE, 0, 0),
+        Command::RequestRefund { .. } => (CMD_REQUEST_REFUND, RES_NONE, 0, s.counter.next_id),
+        Command::Record { result, .. } => {
+            let (r, refund) = result_code(result);
+            (CMD_RECORD, r, 0, refund)
+        }
+        Command::Event { event: ev, result, .. } => {
+            let (r, refund) = result_code(result);
+            (CMD_EVENT, r, *ev, refund)
+        }
+        Command::AttachRef { .. } => (CMD_ATTACH_REF, RES_NONE, 0, 0),
+        Command::MarkPosted { .. } => (CMD_MARK_POSTED, RES_NONE, 0, 0),
+        _ => (0, RES_NONE, 0, 0),
+    }
+}
+
+/// The payment an existing-payment command changes; `None` for `Create`
+/// (and for reads, which write nothing).
+fn subject(cmd: &Command) -> Option<u64> {
+    match cmd {
+        Command::BeginAuthorize { id } => Some(*id),
+        Command::Cancel { id } => Some(*id),
+        Command::RequestRefund { payment, .. } => Some(*payment),
+        Command::Record { payment, .. } => Some(*payment),
+        Command::Event { payment, .. } => Some(*payment),
+        Command::AttachRef { payment, .. } => Some(*payment),
+        Command::MarkPosted { payment, .. } => Some(*payment),
+        _ => None,
+    }
+}
+
+/// The id the history records for the acting principal: the user's or
+/// the operator's (`HistoryEntry::by_operator` says which).
+pub fn actor_id(actor: &Principal) -> u64 {
+    match actor.actor {
+        Actor::User(u) => u,
+        Actor::Operator(o) => o,
+    }
+}
+
+/// The last payment row `ws` writes, if any.
+fn last_payment(ws: &Vec<Write>) -> Option<Payment> {
+    let mut out = None;
+    let mut i = 0;
+    while i < ws.len() {
+        match &ws[i] {
+            Write::PutPayment(p) => out = Some(*p),
+            _ => {}
+        }
+        i += 1;
+    }
+    out
+}
+
+/// `ws` without its payment and history writes.
+fn others(ws: &Vec<Write>) -> Vec<Write> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < ws.len() {
+        match &ws[i] {
+            Write::PutPayment(_) => {}
+            Write::PutHistory(_) => {}
+            w => out.push(w.clone()),
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Only `MarkPosted` writes a payment marked `ledger_done` (F2).
+fn keeps_mark(cmd: &Command) -> bool {
+    match cmd {
+        Command::MarkPosted { .. } => true,
+        _ => false,
+    }
+}
+
+/// `p` as entry `n + 1` of its history leaves it: written by `actor`, the
+/// ledger marker kept only by `MarkPosted`.
+fn changed(p: Payment, op: u64, done: bool, changes: u64) -> Payment {
+    Payment {
+        id: p.id,
+        merchant: p.merchant,
+        amount: p.amount,
+        currency: p.currency,
+        status: p.status,
+        manual_capture: p.manual_capture,
+        attempts: p.attempts,
+        authorized: p.authorized,
+        captured: p.captured,
+        refunded: p.refunded,
+        refund_pending: p.refund_pending,
+        operator: op,
+        ledger_done: done,
+        seq: p.seq,
+        changes,
+    }
+}
+
+/// Add the history entry to what a command decided: the payment row it
+/// wrote (or, if it wrote none, its row as it was) with `changes` bumped,
+/// and entry `n` (the old `changes`; 0 for a new payment) saying who, when,
+/// what, and the status and amounts before and after. Every other write is
+/// kept. `transition` calls this for every non-empty write set, so no
+/// change goes unrecorded (`Theorems.every_change_logged`).
+fn logged(actor: &Principal, s: &Snapshot, cmd: &Command, ws: &Vec<Write>, reply: Reply) -> Outcome {
+    let (command, result, event, refund) = what_of(s, cmd);
+    let last = last_payment(ws);
+    let (before, base) = match subject(cmd) {
+        None => match last {
+            None => return Err(Error::Corrupt),
+            Some(p) => {
+                if p.id != s.counter.next_id {
+                    return Err(Error::Corrupt);
+                }
+                (None, p)
+            }
+        },
+        Some(id) => match find_payment(&s.payments, id) {
+            None => return Err(Error::NotFound),
+            Some(old) => {
+                let base = match last {
+                    None => old,
+                    Some(p) => p,
+                };
+                if base.id != id {
+                    return Err(Error::Corrupt);
+                }
+                (Some(old), base)
+            }
+        },
+    };
+    let n = match before {
+        None => 0,
+        Some(old) => old.changes,
+    };
+    if n == u64::MAX {
+        return Err(Error::Overflow);
+    }
+    let done = keeps_mark(cmd) && base.ledger_done;
+    let after = changed(base, operator_of(actor), done, n + 1);
+    let (status_before, b) = match before {
+        None => (NO_STATUS, after),
+        Some(old) => (old.status, old),
+    };
+    let h = HistoryEntry {
+        payment: after.id,
+        n,
+        by_operator: is_operator(actor),
+        actor: actor_id(actor),
+        at: actor.at,
+        command,
+        result,
+        event,
+        refund,
+        status_before,
+        status_after: after.status,
+        captured_before: b.captured,
+        captured_after: after.captured,
+        refunded_before: b.refunded,
+        refunded_after: after.refunded,
+        pending_before: b.refund_pending,
+        pending_after: after.refund_pending,
+    };
+    let mut out = others(ws);
+    out.push(Write::PutPayment(after));
+    out.push(Write::PutHistory(h));
+    Ok((out, reply))
+}
+
+/// The payment logic: a command's writes and reply, or a refusal that
+/// commits nothing. Every write set that changes anything carries exactly
+/// one history entry, for the payment it changes, naming the caller.
+pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
+    match decide_command(actor, s, cmd) {
+        Err(e) => Err(e),
+        Ok((ws, reply)) => {
+            if ws.len() == 0 {
+                Ok((ws, reply))
+            } else {
+                logged(actor, s, cmd, &ws, reply)
+            }
+        }
     }
 }
 
@@ -907,6 +1218,7 @@ pub const T_EVENTS: u32 = 2;
 pub const T_REFS: u32 = 3;
 pub const T_COUNTER: u32 = 4;
 pub const T_MERCHANTS: u32 = 5;
+pub const T_HISTORY: u32 = 6;
 /// Column numbers: key columns first, then fields in declaration order.
 pub const PAYMENT_ID: u32 = 0;
 pub const PAYMENT_MERCHANT: u32 = 1;
@@ -916,6 +1228,8 @@ pub const REFUND_ID: u32 = 0;
 pub const REFUND_PAYMENT: u32 = 1;
 pub const EVENT_ID: u32 = 0;
 pub const REF_PAYMENT: u32 = 0;
+pub const HISTORY_PAYMENT: u32 = 0;
+pub const HISTORY_N: u32 = 1;
 
 fn v_int(x: u64) -> h5i_app_sql::Val {
     h5i_app_sql::Column::to_val(&x)
@@ -1025,6 +1339,18 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
             out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));
             out.push(rd_where(T_REFUNDS, p_eq(REFUND_PAYMENT, v_int(*payment))));
         }
+        Command::History { payment, from, limit } => {
+            // Refused pages read nothing.
+            if *limit != 0 && *limit <= MAX_PAGE && is_operator(actor) {
+                out.push(rd_where(T_PAYMENTS, p_eq(PAYMENT_ID, v_int(*payment))));
+                let end = page_end(*from, *limit);
+                if *from < end {
+                    let range = seq_range(HISTORY_N, *from, end);
+                    let pred = h5i_app_sql::Pred::And(Box::new(p_eq(HISTORY_PAYMENT, v_int(*payment))), Box::new(range));
+                    out.push(rd_where(T_HISTORY, pred));
+                }
+            }
+        }
     }
     Some(out)
 }
@@ -1038,6 +1364,7 @@ fn apply_write(s: &mut Snapshot, w: Write) {
         Write::PutRef(r) => PspRef::put(&mut s.refs, r),
         Write::SetCounter(c) => s.counter = c,
         Write::PutMerchant(c) => MerchantCounter::put(&mut s.merchants, c),
+        Write::PutHistory(h) => HistoryEntry::put(&mut s.history, h),
     }
 }
 
@@ -1050,6 +1377,7 @@ fn sql_write(w: &Write, out: &mut Vec<h5i_app_sql::Write>) {
         Write::PutRef(r) => out.push(r.sql_put()),
         Write::SetCounter(c) => out.push(c.sql_put()),
         Write::PutMerchant(c) => out.push(c.sql_put()),
+        Write::PutHistory(h) => out.push(h.sql_put()),
     }
 }
 
@@ -1057,9 +1385,9 @@ fn sql_write(w: &Write, out: &mut Vec<h5i_app_sql::Write>) {
 mod tests {
     use super::*;
 
-    const OP: Principal = Principal { org: 1, actor: Actor::Operator(9) };
-    const M: Principal = Principal { org: 1, actor: Actor::User(7) };
-    const OTHER: Principal = Principal { org: 1, actor: Actor::User(8) };
+    const OP: Principal = Principal { org: 1, actor: Actor::Operator(9), at: 5 };
+    const M: Principal = Principal { org: 1, actor: Actor::User(7), at: 3 };
+    const OTHER: Principal = Principal { org: 1, actor: Actor::User(8), at: 0 };
 
     fn run(s: &Snapshot, a: Principal, c: Command) -> (Snapshot, Result<Reply, Error>) {
         match transition(&a, s, &c) {
@@ -1155,7 +1483,7 @@ mod tests {
 
     #[test]
     fn rows_name_the_operator_who_wrote_them() {
-        let op2 = Principal { org: 1, actor: Actor::Operator(2) };
+        let op2 = Principal { org: 1, actor: Actor::Operator(2), at: 0 };
         let (s, id) = captured(100);
         // `captured` recorded as operator 9; the merchant's refund request as a user.
         assert_eq!(pay(&s, id).operator, 9);
@@ -1166,7 +1494,7 @@ mod tests {
         assert_eq!((pay(&s, id).operator, find_refund(&s.refunds, rid).unwrap().operator), (2, 2));
         assert_eq!(find_event(&s.events, 5).unwrap().operator, 2);
         // A user is never an operator, whatever its id.
-        let u9 = Principal { org: 1, actor: Actor::User(9) };
+        let u9 = Principal { org: 1, actor: Actor::User(9), at: 0 };
         assert_eq!(run(&s, u9, Command::Record { payment: id, result: PspResult::Canceled }).1, Err(Error::Forbidden));
     }
 
@@ -1229,6 +1557,52 @@ mod tests {
         assert_eq!(page(&s, M, 7, 0, 0), Err(Error::BadPage));
         assert_eq!(page(&s, M, 7, 0, MAX_PAGE + 1), Err(Error::BadPage));
         assert_eq!(page(&s, M, 7, u64::MAX, 2), Ok((vec![], None)));
+    }
+
+    #[test]
+    fn every_change_has_one_history_entry() {
+        let (s, id) = captured(100);
+        let entries = |s: &Snapshot| -> Vec<_> {
+            s.history
+                .iter()
+                .filter(|h| h.payment == id)
+                .map(|h| (h.n, h.command, h.result, h.by_operator, h.actor, h.at, h.status_before, h.status_after))
+                .collect()
+        };
+        assert_eq!(pay(&s, id).changes, 4);
+        assert_eq!(
+            entries(&s),
+            vec![
+                (0, CMD_CREATE, RES_NONE, false, 7, 3, NO_STATUS, CREATED),
+                (1, CMD_BEGIN_AUTHORIZE, RES_NONE, false, 7, 3, CREATED, PROCESSING),
+                (2, CMD_RECORD, RES_AUTHORIZED, true, 9, 5, PROCESSING, AUTHORIZED),
+                (3, CMD_RECORD, RES_CAPTURED, true, 9, 5, AUTHORIZED, CAPTURED),
+            ]
+        );
+        // A no-op writes nothing, so it records nothing.
+        let (s2, r) = run(&s, OP, Command::Record { payment: id, result: PspResult::Captured { amount: 100 } });
+        assert_eq!((r, &s2), (Ok(Reply::Unchanged), &s));
+        // A stale webhook, a PSP reference and the ledger mark are changes too.
+        let (s, r) = run(&s, OP, Command::Event { event: 3, payment: id, result: PspResult::Declined });
+        assert_eq!(r, Ok(Reply::Stale));
+        let (s, _) = run(&s, OP, Command::AttachRef { payment: id, reference: b"pi".to_vec() });
+        let (s, _) = run(&s, OP, Command::MarkPosted { payment: id, captured: 100, refunds: vec![] });
+        let (s, r) = run(&s, M, Command::RequestRefund { payment: id, amount: 30 });
+        let Ok(Reply::Created(rid)) = r else { panic!("{r:?}") };
+        let tail: Vec<_> = s.history.iter().filter(|h| h.payment == id && h.n >= 4).map(|h| (h.n, h.command, h.event, h.refund)).collect();
+        assert_eq!(tail, vec![(4, CMD_EVENT, 3, 0), (5, CMD_ATTACH_REF, 0, 0), (6, CMD_MARK_POSTED, 0, 0), (7, CMD_REQUEST_REFUND, 0, rid)]);
+        let last = s.history.iter().find(|h| h.payment == id && h.n == 7).unwrap();
+        assert_eq!((last.pending_before, last.pending_after, last.captured_after), (0, 30, 100));
+        assert_eq!(s.history.len(), 8);
+        // Paged, operators only.
+        let page = run(&s, OP, Command::History { payment: id, from: 2, limit: 3 }).1;
+        let Ok(Reply::History(hs, next)) = page else { panic!("{page:?}") };
+        assert_eq!((hs.iter().map(|h| h.n).collect::<Vec<_>>(), next), (vec![2, 3, 4], Some(5)));
+        let page = run(&s, OP, Command::History { payment: id, from: 5, limit: 3 }).1;
+        assert!(matches!(page, Ok(Reply::History(ref hs, None)) if hs.len() == 3));
+        assert_eq!(run(&s, M, Command::History { payment: id, from: 0, limit: 3 }).1, Err(Error::Forbidden));
+        assert_eq!(run(&s, OP, Command::History { payment: id, from: 0, limit: 0 }).1, Err(Error::BadPage));
+        assert_eq!(run(&s, OP, Command::History { payment: 99, from: 0, limit: 1 }).1, Err(Error::NotFound));
     }
 
     #[test]

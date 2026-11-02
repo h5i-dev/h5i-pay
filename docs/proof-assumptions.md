@@ -17,12 +17,15 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Policies | `payment_domain.Policies.check_sound` | the extracted `crates/payment-domain/src/policy.rs` |
 | Reconciliation | `payment_reconcile.Reconcile.classify_internal_spec`, `classify_external_spec`, `codes_in_range`, `internal_matched_iff`, `external_matched_iff`, `duplicates_first`, `exception_reported_once`, `pair_matched_both_sides` | the extracted `crates/payment-reconcile/src/rules.rs` (`classify_internal`, `classify_external`), the per-row decision every engine calls, the GPU included (`proofs/reconcile/generated/PaymentReconcile.lean`) |
 | Reconciliation join | `payment_reconcile.Join.probe_spec`, `insert_spec`, `build_spec`, `lookup_spec`, `internal_code_spec`, `join_eq_reference`, `join_rows` | the extracted `crates/payment-reconcile/src/join.rs`, the single-thread hash join (`cpu_single`, and `cpu_parallel` per partition), equal row for row to the reference's counts and first external record |
+| History (G1) | `payment_ledger.History.every_change_logged`, `history_appended`; `payment_domain.Theorems.every_change_logged`, `history_appended` | the extracted `post`/`open` (ledger: each account row followed by its entry) and the extracted `transition` = `decide_command` + `logged` (payments: one entry per change of a payment); in every reachable state the history is only appended to, under fresh keys |
 | Read plans | `payment_ledger.Plan.reads_abs`, `payment_ledger.Frame.frame`, `load_for_sound`; `payment_domain.Plan.reads_abs`, `payment_domain.Frame.frame`, `load_for_sound`; `*.Schema.decode_load` (generated) | the extracted `reads` of each kernel (`Store::load_for` runs it) and the extracted `transition`: on what each command's plan loads, `transition` gives its whole-tenant result |
 
-Gate results (h5i-app 0.5.2, with the read plans): `h5i app check
-crates/payment-ledger` — 227 theorems in 13 modules; `h5i app check
-crates/payment-domain` — 228 theorems in 8 modules; both on the three
-standard axioms only. (Before the read plans: 145 and 122.)
+Gate results (h5i-app 0.5.2, after G1): `h5i app check
+crates/payment-ledger` — 317 theorems in 14 modules; `h5i app check
+crates/payment-domain` — 405 theorems in 9 modules; `h5i app check
+crates/payment-reconcile` — 64 in 2; all on the three standard axioms
+only. (After F: 257, 293 and 64; with the first read plans: 227 and 228;
+before them: 145 and 122.)
 
 Ledger `currency` and `code`, and payment `currency` and `status`, are
 `u32` columns. They are stored as `BIGINT` like `u64` columns; on load,
@@ -83,7 +86,7 @@ committed history is such a sequence.
 3. **PostgreSQL.** Behaves as `H5iAppLib.Pg` models it (tenant-scoped keyed
    upserts and selects) and provides SERIALIZABLE isolation.
 4. **Room in memory.** `Spec.HasRoom`: a loaded snapshot has fewer than
-   `usize::MAX − 3·8192` rows. Needed so that `Vec::push` in a maximal batch
+   `usize::MAX − 5·8192` rows (five writes per transfer since G1). Needed so that `Vec::push` in a maximal batch
    cannot overflow; true on any 64-bit host. The ledger's frame theorem uses
    it for batches (so `apply` between a batch's transfers cannot overflow on
    the whole tenant either).
@@ -129,6 +132,28 @@ committed history is such a sequence.
    unless rows are changed outside the engines; the scheduled recovery
    trusts the marker, and `POST /v1/recover` and reconciliation also check
    the journal itself.
+
+8. **The history's clock and its storage (G1).** Both kernels prove that
+   every change writes exactly one history entry per changed payment or
+   account, naming the principal and `a.at`, and that in every reachable
+   state the history is only appended to (`every_change_logged`,
+   `history_appended` in each kernel). Trusted: that `a.at` is the
+   transaction's clock. The engine stamps it before every attempt
+   (`Kernel::stamp`) from `Clock::Database`, PostgreSQL's
+   `transaction_timestamp()` in microseconds (`payment_storage::engines_with`
+   sets it); the kernel only copies it. It is not monotone across
+   transactions (two transactions that start in one order may commit in the
+   other; `n` gives the order per payment or account). That nothing outside
+   the kernels rewrites the history is PostgreSQL's: triggers on both
+   `history` tables refuse `UPDATE`, `DELETE` and `TRUNCATE` from any role
+   (`payment_storage::append_only_history`; `payments_api::every_change_is_in_the_history`
+   checks it), so a stray `ON CONFLICT DO UPDATE` would abort the
+   transaction rather than overwrite an entry. A superuser can still drop
+   the triggers. Payments and accounts created before G1 start with
+   `changes = 0`: their history begins with their first change after the
+   migration. The payments proof project raises Lean's `maxHeartbeats` for
+   the generated schema (the 17-column `HistoryEntry` row decode); nothing
+   else changes in what is checked.
 
 ## Not proven (known limits)
 

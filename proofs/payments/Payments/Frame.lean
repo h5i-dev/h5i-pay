@@ -1,4 +1,5 @@
 import Payments.Plan
+import Payments.Logged
 /-!
 # Frame theorem: the payment kernel's read plans load enough
 
@@ -15,7 +16,7 @@ the requested refund with `IN (SELECT payment FROM refunds WHERE id = ...)`
 (`holds_in_1`).
 -/
 open Aeneas Aeneas.Std Result payment_domain payment_domain.Commands payment_domain.Schema
-  payment_domain.Plan H5iAppLib H5iAppLib.Query
+  payment_domain.Plan payment_domain.Logged H5iAppLib H5iAppLib.Query
 
 namespace payment_domain.Frame
 
@@ -239,6 +240,63 @@ theorem list_congr (a : Principal) (s s' : Snapshot) (m f : U64) (l : U32) (e : 
   unfold list
   simp only [he, merchant_next_eq, merchantNext, h2, merchant_range_congr s s' m f e h1, bind_ok]
 
+def hrangeP (p f e : U64) (x : HistoryEntry) : Bool := decide (x.payment = p) && decide (f ≤ x.n) && decide (x.n < e)
+
+def hrangeStepL (p f e : U64) (acc : List HistoryEntry) (x : HistoryEntry) : List HistoryEntry :=
+  if hrangeP p f e x then acc ++ [x] else acc
+
+theorem foldl_hrangeStepL (p f e : U64) (l acc : List HistoryEntry) :
+    l.foldl (hrangeStepL p f e) acc = acc ++ l.filter (hrangeP p f e) := by
+  induction l generalizing acc with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl_cons, ih, hrangeStepL, List.filter_cons]
+    split <;> simp
+
+theorem history_range_spec (s : Snapshot) (p f e : U64) :
+    history_range s p f e ⦃ v => v.val = s.history.val.filter (hrangeP p f e) ⦄ := by
+  unfold history_range history_range_loop
+  have h := loop_fold s.history.val (fun v : alloc.vec.Vec HistoryEntry => v.val) (hrangeStepL p f e)
+    (fun v k => v.length + (s.history.length - k) ≤ Usize.max)
+    (fun x => history_range_loop.body s p f e x.1 x.2) ?_ (alloc.vec.Vec.new HistoryEntry) 0#usize (by simp)
+    (by simp [alloc.vec.Vec.length])
+  · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_hrangeStepL]; simp)
+  · intro v j hj hv
+    unfold history_range_loop.body
+    simp only [alloc.vec.Vec.length] at hj hv
+    simp only [alloc.vec.Vec.len]
+    split
+    · rename_i hlt
+      have hlt' : j.val < s.history.val.length := by scalar_tac
+      rw [vec_index_eq s.history j hlt']
+      simp only [bind_ok]
+      have hj1 : j.val + 1 ≤ Usize.max := by scalar_tac
+      by_cases h1 : s.history.val[j.val].payment = p <;> by_cases h2 : f ≤ s.history.val[j.val].n <;>
+        by_cases h3 : s.history.val[j.val].n < e <;>
+        simp only [h1, h2, h3, if_true, if_false, bind_ok] <;> step* <;> simp only [FoldStep] <;>
+        refine ⟨hlt', ?_, by scalar_tac, by simp only [alloc.vec.Vec.length] at *; scalar_tac⟩ <;>
+        simp_all [hrangeStepL, hrangeP]
+    · simp only [WP.spec_ok, FoldStep, and_true]
+      scalar_tac
+
+theorem history_range_congr (s s' : Snapshot) (p f e : U64)
+    (h : s'.history.val.filter (hrangeP p f e) = s.history.val.filter (hrangeP p f e)) :
+    history_range s' p f e = history_range s p f e := by
+  obtain ⟨v, hv⟩ := ok_of (history_range_spec s p f e)
+  obtain ⟨v', hv'⟩ := ok_of (history_range_spec s' p f e)
+  have e1 := post_of_ok (history_range_spec s p f e) hv
+  have e2 := post_of_ok (history_range_spec s' p f e) hv'
+  have : v' = v := alloc.vec.Vec.ext _ _ (by rw [e1, e2, h])
+  rw [hv, hv', this]
+
+theorem history_page_congr (a : Principal) (s s' : Snapshot) (p f : U64) (l : U32) (e : U64)
+    (he : page_end f l = ok e) (h0 : AgreeP s s' p)
+    (h1 : s'.history.val.filter (hrangeP p f e) = s.history.val.filter (hrangeP p f e)) :
+    history_page a s' p f l = history_page a s p f l := by
+  simp only [AgreeP] at h0
+  unfold history_page
+  simp only [find_payment_eq, h0, he, history_range_congr s s' p f e h1, bind_ok]
+
 /-! ## What a plan loads -/
 
 theorem find_filter_kept {α : Type} (l : List α) (keep P : α → Bool) (h : ∀ x, P x = true → keep x = true) :
@@ -327,10 +385,10 @@ theorem find_append_res {t : Nat} (ht : t ≠ 1) (pre : List (Read Val)) (res : 
 
 /-! ## The frame theorem -/
 
-/-- **Frame.** On what a command's plan loads, `transition` gives what it
-gives on the whole tenant. -/
-theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapshot)
-    (hp : readsA a c = some plan) : transition a (Snapshot.load plan s) c = transition a s c := by
+/-- On what a command's plan loads, `decide_command` decides what it
+decides on the whole tenant. -/
+theorem frame0 (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapshot)
+    (hp : readsA a c = some plan) : decide_command a (Snapshot.load plan s) c = decide_command a s c := by
   cases c with
   | Create amt cur m =>
     simp only [readsA, Option.some.injEq] at hp; subst hp
@@ -368,7 +426,7 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
     simp only [readsA, Option.some.injEq] at hp; subst hp
     exact get_congr a s _ id (agreeP_load _ s id (by simp))
   | List m f l =>
-    simp only [transition]
+    simp only [decide_command]
     simp only [readsA] at hp
     split at hp
     · rename_i hc
@@ -411,7 +469,7 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
       simp [h0, hm, hna.1, hna.2, is_operator_eq, user_of_eq]
   | GetRefund id =>
     simp only [readsA, Option.some.injEq] at hp; subst hp
-    simp only [transition]
+    simp only [decide_command]
     apply get_refund_congr a s _ id (agreeR_load _ s id (by simp))
     intro r hr
     have hmem := List.mem_of_find?_eq_some hr
@@ -427,7 +485,7 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
       simp [Refund.row, UScalar.eq_of_val_eq hx]
   | Refunds id =>
     simp only [readsA, Option.some.injEq] at hp; subst hp
-    simp only [transition]
+    simp only [decide_command]
     apply refunds_of_congr a s _ id (agreeP_load _ s id (by simp))
     rw [Snapshot.load_refunds, pickRows_filter _ _ _ _ _ ⟨1, eqU 1 id, {}⟩ (by simp) rfl]
     apply filter_slice
@@ -438,7 +496,7 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
     exact get_ref_congr a s _ id (agreeP_load _ s id (by simp)) (agreeF_load _ s id (by simp))
   | View id =>
     simp only [readsA, Option.some.injEq] at hp; subst hp
-    simp only [transition]
+    simp only [decide_command]
     apply view_congr a s _ id (agreeP_load _ s id (by simp)) (agreeF_load _ s id (by simp))
     rw [Snapshot.load_refunds, pickRows_filter _ _ _ _ _ ⟨1, eqU 1 id, {}⟩ (by simp) rfl]
     apply filter_slice
@@ -446,12 +504,146 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
     simp_all [eqU, Pred.holds, Refund.row]
   | MarkPosted id cap seen =>
     simp only [readsA, Option.some.injEq] at hp; subst hp
-    simp only [transition]
+    simp only [decide_command]
     apply mark_posted_congr a s _ id cap seen (agreeP_load _ s id (by simp))
     rw [Snapshot.load_refunds, pickRows_filter _ _ _ _ _ ⟨1, eqU 1 id, {}⟩ (by simp) rfl]
     apply filter_slice
     intro x _ hx
     simp_all [eqU, Pred.holds, Refund.row]
+  | History p f l =>
+    simp only [decide_command]
+    simp only [readsA] at hp
+    split at hp
+    · rename_i hc
+      simp only [Option.some.injEq] at hp; subst hp
+      obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+      apply history_page_congr a s _ p f l e he
+      · apply agreeP_load; unfold histA; split <;> simp
+      · unfold histA
+        rw [← hev]
+        by_cases hfe : f.val < e.val
+        · simp only [hfe, if_true]
+          rw [Snapshot.load_history, pickRows_filter _ _ _ _ _ ⟨6, .and (eqU 0 p) (rangeA 1 f.val e.val), {}⟩ (by simp) rfl]
+          apply filter_slice
+          intro x _ hx
+          simp only [hrangeP, Bool.and_eq_true, decide_eq_true_eq] at hx
+          obtain ⟨⟨h1, h2⟩, h3⟩ := hx
+          simp only [Pred.holds, Bool.and_eq_true]
+          refine ⟨by simp [eqU, Pred.holds, HistoryEntry.row, h1], ?_⟩
+          apply rangeA_holds_of 1 f.val e.val x.n.val (by scalar_tac) (by scalar_tac)
+          simp [HistoryEntry.row]
+        · simp only [hfe, if_false]
+          have : s.history.val.filter (hrangeP p f e) = [] := by
+            rw [List.filter_eq_nil_iff]; intro x _; simp only [hrangeP]; intro h
+            simp only [Bool.and_eq_true, decide_eq_true_eq] at h; scalar_tac
+          rw [this]
+          simp [Snapshot.load_history, pickRows]
+    · rename_i hc
+      unfold history_page
+      by_cases h0 : l = 0#u32
+      · simp [h0]
+      have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+      by_cases hm : l > MAX_PAGE
+      · simp [h0, hm]
+      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
+      simp [h0, hm, hna, is_operator_eq]
+
+/-- Binds that agree on every value the first computation returns. -/
+theorem bind_congr_ok {α β : Type} (m : Result α) (f g : α → Result β) (h : ∀ x, m = ok x → f x = g x) :
+    (do let x ← m; f x) = (do let x ← m; g x) := by
+  change Std.bind m f = Std.bind m g
+  cases m using Result.cases with
+  | ret a => exact (bind_ok a f).trans ((h a rfl).trans (bind_ok a g).symm)
+  | vis e k =>
+    cases e with
+    | fail err =>
+      rw [bind_vis, bind_vis]
+      congr 1; funext y; exact y.elim
+  | div => simp
+
+/-- `logged` reads the counter (for a new payment and a refund request's
+number) and the changed payment, by id. -/
+theorem logged_congr (a : Principal) (s s' : Snapshot) (c : Command) (ws : alloc.vec.Vec Write) (r : Reply)
+    (hw : whatOf s' c = whatOf s c) (hs : ∀ id, subj c = some id → AgreeP s s' id)
+    (hn : subj c = none → s'.counter = s.counter) :
+    logged a s' c ws r = logged a s c ws r := by
+  unfold logged
+  simp only [what_of_eq, subject_eq, hw, bind_ok]
+  cases h : subj c with
+  | none => simp only [hn h]
+  | some id =>
+    have := hs id h
+    simp only [AgreeP] at this
+    simp only [find_payment_eq, this]
+
+/-- `logged` on what a writing command's plan loads, as on the whole tenant. -/
+theorem logged_frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapshot)
+    (hp : readsA a c = some plan) (ws : alloc.vec.Vec Write) (r : Reply)
+    (hx : decide_command a s c = ok (.Ok (ws, r))) (hne : ws.val ≠ []) :
+    logged a (Snapshot.load plan s) c ws r = logged a s c ws r := by
+  cases c with
+  | Create amt cur m =>
+    simp only [readsA, Option.some.injEq] at hp; subst hp
+    exact logged_congr a s _ _ ws r (by simp [whatOf]) (by simp [subj]) (fun _ => counter_load s _ (by simp))
+  | BeginAuthorize id =>
+    simp only [readsA, Option.some.injEq] at hp; subst hp
+    exact logged_congr a s _ _ ws r (by simp [whatOf])
+      (fun i hi => by simp [subj] at hi; subst hi; exact agreeP_load _ s _ (by simp)) (by simp [subj])
+  | Cancel id =>
+    simp only [readsA, Option.some.injEq] at hp; subst hp
+    exact logged_congr a s _ _ ws r (by simp [whatOf])
+      (fun i hi => by simp [subj] at hi; subst hi; exact agreeP_load _ s _ (by simp)) (by simp [subj])
+  | RequestRefund id amt =>
+    simp only [readsA, Option.some.injEq] at hp; subst hp
+    have hc := counter_load s [⟨0, eqU 0 id, {}⟩, ⟨4, .all, {}⟩] (by simp)
+    exact logged_congr a s _ _ ws r (by simp [whatOf, hc])
+      (fun i hi => by simp [subj] at hi; subst hi; exact agreeP_load _ s _ (by simp)) (by simp [subj])
+  | Record id res =>
+    simp only [readsA, Option.some.injEq] at hp; subst hp
+    exact logged_congr a s _ _ ws r (by simp [whatOf])
+      (fun i hi => by simp [subj] at hi; subst hi; exact agreeP_load _ s _ (by simp)) (by simp [subj])
+  | Event ev id res =>
+    simp only [readsA, Option.some.injEq] at hp; subst hp
+    refine logged_congr a s _ _ ws r (by simp [whatOf]) (fun i hi => ?_) (by simp [subj])
+    simp [subj] at hi; subst hi
+    apply agreeP_load
+    have := find_append_res (t := 0) (by omega) [⟨2, eqU 0 ev, {}⟩, ⟨0, eqU 0 id, {}⟩] res
+    simpa using this
+  | AttachRef id ref =>
+    simp only [readsA, Option.some.injEq] at hp; subst hp
+    exact logged_congr a s _ _ ws r (by simp [whatOf])
+      (fun i hi => by simp [subj] at hi; subst hi; exact agreeP_load _ s _ (by simp)) (by simp [subj])
+  | MarkPosted id cap seen =>
+    simp only [readsA, Option.some.injEq] at hp; subst hp
+    exact logged_congr a s _ _ ws r (by simp [whatOf])
+      (fun i hi => by simp [subj] at hi; subst hi; exact agreeP_load _ s _ (by simp)) (by simp [subj])
+  | Get id => exact absurd (get_writes a s id ws r hx) hne
+  | List m f l => exact absurd (list_writes a s m f l ws r hx) hne
+  | GetRefund id => exact absurd (get_refund_writes a s id ws r hx) hne
+  | Refunds id => exact absurd (refunds_of_writes a s id ws r hx) hne
+  | GetRef id => exact absurd (get_ref_writes a s id ws r hx) hne
+  | View id => exact absurd (view_writes a s id ws r hx) hne
+  | History p f l => exact absurd (history_page_writes a s p f l ws r hx) hne
+
+/-- **Frame.** On what a command's plan loads, `transition` (the decision
+and its history entry) gives what it gives on the whole tenant. -/
+theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapshot)
+    (hp : readsA a c = some plan) : transition a (Snapshot.load plan s) c = transition a s c := by
+  unfold transition
+  rw [frame0 a c plan s hp]
+  apply bind_congr_ok
+  intro x hx
+  rcases x with ⟨ws, rep⟩ | e
+  · change (if ws.len = 0#usize then _ else logged a (Snapshot.load plan s) c ws rep) =
+      (if ws.len = 0#usize then _ else logged a s c ws rep)
+    by_cases hz : ws.len = 0#usize
+    · simp only [hz, if_true]
+    · simp only [hz, if_false]
+      have hne : ws.val ≠ [] := by
+        intro e; apply hz; apply UScalar.eq_of_val_eq; simp [alloc.vec.Vec.len, e]
+      exact logged_frame a c plan s hp ws rep hx hne
+  · rfl
 
 /-- **The plan the server runs.** For every command, `transition` on what
 loading the extracted `reads` plan decodes to equals `transition` on the

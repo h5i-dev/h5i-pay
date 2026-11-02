@@ -63,6 +63,11 @@ def rangeA (c f x : Nat) : Pred Val := (List.range' (f + 1) (x - (f + 1))).foldl
 def pageA (m : U64) (f e : Nat) : List (Read Val) :=
   if f < e then [⟨0, .and (eqU 1 m) (rangeA 13 f e), {}⟩, ⟨5, eqU 0 m, {}⟩] else [⟨5, eqU 0 m, {}⟩]
 
+/-- A `History` page that is not refused: the payment, and its entries
+numbered `from` to `end - 1`. -/
+def histA (p : U64) (f e : Nat) : List (Read Val) :=
+  if f < e then [⟨0, eqU 0 p, {}⟩, ⟨6, .and (eqU 0 p) (rangeA 1 f e), {}⟩] else [⟨0, eqU 0 p, {}⟩]
+
 def readsA (a : Principal) : Command → Option (List (Read Val))
   | .Create .. => some [⟨4, .all, {}⟩, ⟨5, eqU 0 a.user, {}⟩]
   | .BeginAuthorize id => some [⟨0, eqU 0 id, {}⟩]
@@ -80,6 +85,9 @@ def readsA (a : Principal) : Command → Option (List (Read Val))
   | .GetRef p => some [⟨0, eqU 0 p, {}⟩, ⟨3, eqU 0 p, {}⟩]
   | .View id => some [⟨0, eqU 0 id, {}⟩, ⟨1, eqU 1 id, {}⟩, ⟨3, eqU 0 id, {}⟩]
   | .MarkPosted p _ _ => some [⟨0, eqU 0 p, {}⟩, ⟨1, eqU 1 p, {}⟩]
+  | .History p f l =>
+    if l.val ≠ 0 ∧ l.val ≤ 64 ∧ a.operator = true then some (histA p f.val (pageEndN f.val l.val))
+    else some []
 
 /-! ## The extracted plans compute `readsA` -/
 
@@ -202,6 +210,45 @@ theorem reads_abs (a : Principal) (c : Command) : ∃ o, reads a c = ok o ∧ pl
         · simp [h0, hm, hu, ha, h0', hm', planOf]
       · simp only [h0, hm, ha, h0', hm', bne_iff_ne, ne_eq, not_false_eq_true, if_true, is_operator_eq, bind_ok,
           true_and, true_or, and_self]
+        exact page
+    · have hm' : ¬ l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      simp [h0, hm, hm', planOf]
+  case History p f l =>
+    obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+    have page : ∃ o, (do
+        let v ← v_int p
+        let q ← p_eq PAYMENT_ID v
+        let r ← rd_where T_PAYMENTS q
+        let out ← alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Read) r
+        let «end» ← page_end f l
+        if f < «end» then do
+            let range ← seq_range HISTORY_N f «end»
+            let q1 ← p_eq HISTORY_PAYMENT v
+            let r1 ← rd_where T_HISTORY (h5i_app_sql.Pred.And q1 range)
+            let out1 ← alloc.vec.Vec.push out r1
+            ok (some out1)
+          else ok (some out)) = ok o ∧ planOf o = some (histA p f.val (pageEndN f.val l.val)) := by
+      rw [← hev]
+      simp only [v_int_eq, p_eq, rd_where, h5i_app_sql.whole, bind_ok, he]
+      by_cases hfe : f < e
+      · obtain ⟨r, hr, hra⟩ := ok_of' (seq_range_spec HISTORY_N f e (by scalar_tac))
+        simp only [hfe, if_true, hr, bind_ok, v_int_eq, p_eq, rd_where, h5i_app_sql.whole]
+        simp [alloc.vec.Vec.push, alloc.vec.Vec.new, U32.max, U32.numBits, alloc.vec.Vec.from_val, planOf, histA,
+          Read.abs, Pred.abs, Window.abs, eqU, hra, T_PAYMENTS, T_HISTORY, PAYMENT_ID, HISTORY_PAYMENT, HISTORY_N,
+          show f.val < e.val by scalar_tac]
+      · simp only [hfe, if_false, bind_ok]
+        simp [alloc.vec.Vec.push, alloc.vec.Vec.new, U32.max, U32.numBits, alloc.vec.Vec.from_val, planOf, histA,
+          Read.abs, Pred.abs, Window.abs, eqU, T_PAYMENTS, PAYMENT_ID, show ¬ f.val < e.val by scalar_tac]
+    simp only [reads, readsA]
+    by_cases h0 : l = 0#u32
+    · subst h0; simp [planOf]
+    have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+    by_cases hm : l ≤ MAX_PAGE
+    · have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      cases ha : a.operator
+      · simp [h0, hm, ha, h0', hm', planOf]
+      · simp only [h0, hm, ha, h0', hm', bne_iff_ne, ne_eq, not_false_eq_true, if_true, is_operator_eq, bind_ok,
+          true_and, and_self, Bool.and_true, decide_true, Bool.true_and, and_true]
         exact page
     · have hm' : ¬ l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
       simp [h0, hm, hm', planOf]

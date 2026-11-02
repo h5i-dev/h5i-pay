@@ -87,7 +87,20 @@ async fn ledger_over_http() {
     let (st, accounts) = s.ledger(&alice, json!({"cmd": "accounts"}), None).await;
     assert_eq!(st, 200);
     assert_eq!(accounts, json!({"accounts": [{"id": 1, "owner": 1, "currency": 392, "code": 0, "no_overdraft": true,
-        "no_overcredit": false, "debits": 300, "credits": 1000, "seq": 0}], "next": null}));
+        "no_overcredit": false, "debits": 300, "credits": 1000, "seq": 0, "changes": 3}], "next": null}));
+    // G1: the account's history, operators only, paged; who, when, what, before and after.
+    let (st, h) = s.ledger(&op, json!({"cmd": "history", "account": 1, "limit": 2}), None).await;
+    assert_eq!(st, 200, "{h}");
+    let hs = h["history"].as_array().unwrap();
+    assert_eq!((hs.len(), &h["next"]), (2, &json!(2)));
+    assert_eq!((&hs[0]["n"], &hs[0]["command"], &hs[0]["actor"]["kind"]), (&json!(0), &json!("open"), &json!("user")));
+    assert_eq!((&hs[1]["command"], &hs[1]["credits_before"], &hs[1]["credits_after"]), (&json!("post"), &json!(0), &json!(1000)));
+    let t0 = hs[0]["at"].as_u64().unwrap();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros() as u64;
+    assert!(t0 > now - 600_000_000 && t0 <= now + 600_000_000, "at {t0} is the database clock");
+    let (_, h2) = s.ledger(&op, json!({"cmd": "history", "account": 1, "from": 2}), None).await;
+    assert_eq!((h2["history"][0]["transfer"].clone(), h2["history"][0]["actor"]["id"].clone(), h2["next"].clone()), (json!(3), json!(1), Value::Null));
+    assert_eq!(s.ledger(&alice, json!({"cmd": "history", "account": 1}), None).await.0, 403);
     // Another owner's accounts are not listed for a user.
     assert_eq!(s.ledger(&alice, json!({"cmd": "accounts", "owner": 2}), None).await.0, 403);
     assert_eq!(s.ledger(&alice, json!({"cmd": "accounts", "limit": 65}), None).await.0, 400);

@@ -135,6 +135,49 @@ async fn automatic_capture_posts_the_ledger() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn every_change_is_in_the_history() {
+    let Some(e) = start().await else { return };
+    let (st, p) = e.pay(800, "automatic", "tok_visa").await;
+    assert_eq!(st, 200, "{p}");
+    let id = p["id"].as_u64().unwrap();
+    let (st, h) = e.post("/v1/payments/rpc", &e.op, json!({"cmd": "history", "payment": id})).await;
+    assert_eq!(st, 200, "{h}");
+    let hs = h["history"].as_array().unwrap().clone();
+    assert!(hs.len() >= 4, "{h}");
+    for (n, x) in hs.iter().enumerate() {
+        assert_eq!(x["n"], json!(n), "{x}");
+        assert!(x["at"].as_u64().unwrap() > 0);
+    }
+    assert_eq!((&hs[0]["command"], &hs[0]["actor"], &hs[0]["status_before"]), (&json!("create"), &json!({"kind": "user", "id": 7}), &Value::Null));
+    let cap = hs.iter().find(|x| x["result"] == "captured").expect("capture recorded");
+    assert_eq!(cap["actor"], json!({"kind": "operator", "id": payment_storage::ORCHESTRATOR_OPERATOR}));
+    assert_eq!((&cap["status_after"], &cap["captured_before"], &cap["captured_after"]), (&json!("captured"), &json!(0), &json!(800)));
+    assert!(hs.iter().any(|x| x["command"] == "mark_posted"), "{h}");
+    // Paged; operators only.
+    let (_, page) = e.post("/v1/payments/rpc", &e.op, json!({"cmd": "history", "payment": id, "from": 1, "limit": 1})).await;
+    assert_eq!((page["history"][0]["n"].clone(), page["next"].clone()), (json!(1), json!(2)));
+    assert_eq!(e.post("/v1/payments/rpc", &e.merchant, json!({"cmd": "history", "payment": id})).await.0, 403);
+    // The database refuses to change or remove an entry, whoever asks.
+    let url = database_url().unwrap();
+    let (c, conn) = tokio_postgres::connect(&url, tokio_postgres::NoTls).await.unwrap();
+    tokio::spawn(conn);
+    let t = e.org as i64;
+    for sql in [
+        "UPDATE payments.history SET actor = 1 WHERE tenant_id = $1",
+        "DELETE FROM payments.history WHERE tenant_id = $1",
+        "UPDATE ledger.history SET actor = 1 WHERE tenant_id = $1",
+        "DELETE FROM ledger.history WHERE tenant_id = $1",
+    ] {
+        let err = c.execute(sql, &[&t]).await.expect_err(sql);
+        assert_eq!(err.code(), Some(&tokio_postgres::error::SqlState::INSUFFICIENT_PRIVILEGE), "{sql}: {err}");
+    }
+    let err = c.batch_execute("TRUNCATE payments.history").await.expect_err("truncate");
+    assert_eq!(err.code(), Some(&tokio_postgres::error::SqlState::INSUFFICIENT_PRIVILEGE), "{err}");
+    let (_, again) = e.post("/v1/payments/rpc", &e.op, json!({"cmd": "history", "payment": id})).await;
+    assert_eq!(again["history"].as_array().unwrap().len(), hs.len());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn manual_capture_partial_refunds_and_limits() {
     let Some(e) = start().await else { return };
     let (st, p) = e.pay(1000, "manual", "tok_visa").await;

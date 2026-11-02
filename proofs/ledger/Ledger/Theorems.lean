@@ -41,6 +41,58 @@ theorem findTr_putAcc (s : St) (a : Account) (n : Nat) : findTr (applyWrite s (.
 theorem findAcc_set (s : St) (l : Ledger) (n : Nat) : findAcc (applyWrite s (.SetLedger l)) n = findAcc s n := rfl
 theorem findTr_set (s : St) (l : Ledger) (n : Nat) : findTr (applyWrite s (.SetLedger l)) n = findTr s n := rfl
 theorem findAcc_owner (s : St) (c : OwnerCounter) (n : Nat) : findAcc (applyWrite s (.PutOwner c)) n = findAcc s n := rfl
+theorem findAcc_hist (s : St) (h : HistoryEntry) (n : Nat) : findAcc (applyWrite s (.PutHistory h)) n = findAcc s n := rfl
+theorem findTr_hist (s : St) (h : HistoryEntry) (n : Nat) : findTr (applyWrite s (.PutHistory h)) n = findTr s n := rfl
+
+/-! ## History writes change nothing else
+
+`core s` is what the ledger's invariant, lookups and sums are about: the
+counter, the accounts and the journal. History rows (G1) leave it alone, so
+a write set says the same about it with or without them (`core_strip`). -/
+
+def core (s : St) : Nat × List Account × List Transfer := (s.next, s.accounts, s.transfers)
+
+def notHist : Write → Bool
+  | .PutHistory _ => false
+  | _ => true
+
+/-- A write set without its history rows. -/
+def strip (ws : List Write) : List Write := ws.filter notHist
+
+theorem core_applyWrite {s1 s2 : St} (h : core s1 = core s2) (w : Write) :
+    core (applyWrite s1 w) = core (applyWrite s2 w) := by
+  simp only [core, Prod.mk.injEq] at h
+  obtain ⟨h1, h2, h3⟩ := h
+  cases w <;> simp [core, applyWrite, h1, h2, h3]
+
+theorem core_strip : ∀ (ws : List Write) (s1 s2 : St), core s1 = core s2 →
+    core (applyAll s1 ws) = core (applyAll s2 (strip ws)) := by
+  intro ws
+  induction ws with
+  | nil => intro s1 s2 h; exact h
+  | cons w ws ih =>
+    intro s1 s2 h
+    cases w with
+    | PutHistory x =>
+      simp only [strip, List.filter_cons, notHist, Bool.false_eq_true, if_false, applyAll, List.foldl_cons]
+      exact ih _ _ (by simpa [core, applyWrite] using h)
+    | _ =>
+      simp only [strip, List.filter_cons, notHist, if_true, applyAll, List.foldl_cons]
+      exact ih _ _ (core_applyWrite h _)
+
+theorem inv_core {s s' : St} (h : core s' = core s) (hi : Inv s) : Inv s' := by
+  simp only [core, Prod.mk.injEq] at h
+  obtain ⟨h1, h2, h3⟩ := h
+  refine ⟨?_, fun c => ?_, ?_⟩
+  · rw [h1, h2]; exact hi.fresh
+  · simp only [debits, credits, journal, h2, h3]; exact hi.balanced c
+  · rw [h2]; exact hi.limits
+
+theorem findAcc_core {s s' : St} (h : core s' = core s) (n : Nat) : findAcc s' n = findAcc s n := by
+  simp only [core, Prod.mk.injEq] at h; simp [findAcc, h.2.1]
+
+theorem findTr_core {s s' : St} (h : core s' = core s) (n : Nat) : findTr s' n = findTr s n := by
+  simp only [core, Prod.mk.injEq] at h; simp [findTr, h.2.2]
 
 theorem findAcc_mem {s : St} {n : Nat} {q : Account} (h : findAcc s n = some q) :
     q ∈ s.accounts ∧ q.id.val = n :=
@@ -111,11 +163,11 @@ theorem inv_open (s : St) (a : Account) (n : U64) (hinv : Inv s) (hid : a.id.val
 
 /-- What a posting does to the sums of currency `c`: all three grow by the
 amount if the transfer is in `c`, and stay the same otherwise. -/
-theorem post_sums (s : St) (t : TransferReq) (a b : Account) (d k op : U64) (c : Nat)
+theorem post_sums (s : St) (t : TransferReq) (a b : Account) (d k ca cb op : U64) (c : Nat)
     (ha : findAcc s t.debit.val = some a) (hb : findAcc s t.credit.val = some b) (hne : t.debit ≠ t.credit)
     (htr : findTr s t.id.val = none) (hcur : a.currency = b.currency)
     (hd : d.val = a.debits.val + t.amount.val) (hk : k.val = b.credits.val + t.amount.val) :
-    let s' := applyAll s [.PutAccount { a with debits := d }, .PutAccount { b with credits := k },
+    let s' := applyAll s [.PutAccount { a with debits := d, changes := ca }, .PutAccount { b with credits := k, changes := cb },
       .PutTransfer (journalRow t a.currency op)]
     let x := if a.currency.val = c then t.amount.val else 0
     debits c s' = debits c s + x ∧ credits c s' = credits c s + x ∧ journal c s' = journal c s + x := by
@@ -124,8 +176,8 @@ theorem post_sums (s : St) (t : TransferReq) (a b : Account) (d k op : U64) (c :
   have hbi := (findAcc_mem hb).2
   have hne' : a.id.val ≠ b.id.val := by
     rw [hai, hbi]; intro e; exact hne ((u64_val_eq _ _).1 e)
-  let a' : Account := { a with debits := d }
-  let b' : Account := { b with credits := k }
+  let a' : Account := { a with debits := d, changes := ca }
+  let b' : Account := { b with credits := k, changes := cb }
   let s1 := applyWrite s (.PutAccount a')
   let s2 := applyWrite s1 (.PutAccount b')
   have fa : findAcc s a'.id.val = some a := by simpa [a', hai] using ha
@@ -147,27 +199,28 @@ theorem post_sums (s : St) (t : TransferReq) (a b : Account) (d k op : U64) (c :
   by_cases hc : a.currency.val = c <;> simp only [hc, if_true, if_false, x] at d1 d2 c1 c2 j3 ⊢ <;> omega
 
 /-- Posting a transfer keeps the invariant. -/
-theorem inv_post (s : St) (t : TransferReq) (a b : Account) (d k op : U64) (hinv : Inv s)
+theorem inv_post (s : St) (t : TransferReq) (a b : Account) (d k ca cb op : U64) (hinv : Inv s)
     (ha : findAcc s t.debit.val = some a) (hb : findAcc s t.credit.val = some b) (hne : t.debit ≠ t.credit)
     (htr : findTr s t.id.val = none) (hcur : a.currency = b.currency)
     (hd : d.val = a.debits.val + t.amount.val) (hk : k.val = b.credits.val + t.amount.val)
     (hld : a.no_overdraft = true → d.val ≤ a.credits.val) (hlc : b.no_overcredit = true → k.val ≤ b.debits.val) :
-    Inv (applyAll s [.PutAccount { a with debits := d }, .PutAccount { b with credits := k },
+    Inv (applyAll s [.PutAccount { a with debits := d, changes := ca }, .PutAccount { b with credits := k, changes := cb },
       .PutTransfer (journalRow t a.currency op)]) := by
   have ma := findAcc_mem ha
   have mb := findAcc_mem hb
   refine ⟨?_, fun c => ?_, ?_⟩
   · simp only [applyAll, List.foldl_cons, List.foldl_nil, applyWrite]
-    exact fresh_upsert (a := { b with credits := k }) (fresh_upsert (a := { a with debits := d }) hinv.fresh
+    exact fresh_upsert (a := { b with credits := k, changes := cb })
+      (fresh_upsert (a := { a with debits := d, changes := ca }) hinv.fresh
       (hinv.fresh a ma.1)) (hinv.fresh b mb.1)
-  · obtain ⟨e1, e2, e3⟩ := post_sums s t a b d k op c ha hb hne htr hcur hd hk
+  · obtain ⟨e1, e2, e3⟩ := post_sums s t a b d k ca cb op c ha hb hne htr hcur hd hk
     obtain ⟨b1, b2⟩ := hinv.balanced c
     exact ⟨by rw [e1, e3, b1], by rw [e2, e3, b2]⟩
   · simp only [applyAll, List.foldl_cons, List.foldl_nil, applyWrite]
     have la := hinv.limits a ma.1
     have lb := hinv.limits b mb.1
-    refine limited_upsert (a := { b with credits := k })
-      (limited_upsert (a := { a with debits := d }) hinv.limits ⟨fun h => hld h, fun h => ?_⟩) ⟨fun h => ?_, fun h => hlc h⟩
+    refine limited_upsert (a := { b with credits := k, changes := cb })
+      (limited_upsert (a := { a with debits := d, changes := ca }) hinv.limits ⟨fun h => hld h, fun h => ?_⟩) ⟨fun h => ?_, fun h => hlc h⟩
     · have := la.2 h; simp only at *; omega
     · have := lb.1 h; simp only at *; omega
 
@@ -176,8 +229,9 @@ theorem inv_transfer (actor : Principal) (s : Snapshot) (t : TransferReq) ws r
     (hinv : Inv (Snapshot.toSt s)) (h : transfer actor s t = ok (.Ok (ws, r))) :
     Inv (applyAll (Snapshot.toSt s) ws.val) := by
   rcases post_of_ok (transfer_spec actor s t) h ws r rfl with
-    ⟨old, _, _, _, _, _, hws, _⟩ | ⟨_, _, htr, hne, a, b, ha, _, hb, hcur, _, d, k, hd, hk, hld, hlc, hws⟩
+    ⟨old, _, _, _, _, _, hws, _⟩ | ⟨_, _, htr, hne, a, b, ha, _, hb, hcur, _, d, k, ca, cb, hd, hk, _, _, hld, hlc, hws⟩
   · rw [hws]; exact hinv
-  · rw [hws]; exact inv_post _ t a b d k _ hinv ha hb hne htr hcur hd hk hld hlc
+  · rw [hws]
+    exact inv_core (core_strip _ _ _ rfl) (inv_post _ t a b d k ca cb _ hinv ha hb hne htr hcur hd hk hld hlc)
 
 end payment_ledger.Theorems

@@ -22,6 +22,7 @@ def enc (s : St) : Tables Val
   | 1 => s.transfers.map Transfer.row
   | 2 => [[int s.next]]
   | 3 => s.owners.map OwnerCounter.row
+  | 4 => s.history.map HistoryEntry.row
   | _ => []
 
 /-- The table writes of one write. -/
@@ -30,6 +31,7 @@ def sqlA : Write → List (AWrite Val)
   | .PutTransfer t => [Transfer.putA t]
   | .SetLedger l => [Ledger.putA l]
   | .PutOwner c => [OwnerCounter.putA c]
+  | .PutHistory h => [HistoryEntry.putA h]
 
 def app : App St Write Val where
   kl := kl
@@ -107,7 +109,7 @@ tenant: accepted commands, interleaved with any other tenants' commits,
 leave a state satisfying `Inv`, and so does every snapshot a later load
 decodes from the rows. -/
 theorem db_inv {ts : List Pg.Tab} {tv : Val} (hv : Pg.Valid ts) (htv : valKind tv = some .int)
-    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 4) {db : Pg.PgDb Val} {s : St}
+    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 5) {db : Pg.PgDb Val} {s : St}
     (h : PgServed app Snapshot.toSt ts tv Accepted db s) :
     Inv s ∧ ∀ r, Loads ts tv db r → decode r ⦃ o => ∃ snap, o = some snap ∧ Inv (Snapshot.toSt snap) ⦄ := by
   obtain ⟨hi, hload⟩ := pg_loaded_inv sql_fits fits hv htv hkl hlen DbInv

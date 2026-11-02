@@ -18,7 +18,7 @@ can return (`H5iAppLib.Query.find?_slice`, `filter_slice`):
   those states keep the same accounts and ids (`keeps_applyAll`: a write of a
   kept row keeps the slice a slice), so every transfer sees what it would
   have seen on the whole tenant (`batch_loop_congr`). The only assumption is
-  `HasRoom s` (no table within 3 · 8192 rows of `usize::MAX`), under which
+  `HasRoom s` (no table within 5 · 8192 rows of `usize::MAX`), under which
   `apply` cannot overflow on the whole tenant either;
 * `Account` reads its account; `Accounts` every account for an operator,
   else the caller's own; `Transfers` the journal for an operator, else
@@ -45,7 +45,8 @@ theorem may_debit_eq (actor : Principal) (a : Account) :
     may_debit actor a = ok (actor.operator || decide (a.owner = actor.user)) := by
   unfold may_debit; simp only [is_operator_eq, user_of_eq, bind_tc_ok, bind_ok]; cases actor.operator <;> simp
 
-theorem post_irrel (s s' : Snapshot) (t : TransferReq) (a b : Account) (op : U64) : post s' t a b op = post s t a b op := by
+theorem post_irrel (actor : Principal) (s s' : Snapshot) (t : TransferReq) (a b : Account) (op : U64) :
+    post actor s' t a b op = post actor s t a b op := by
   unfold post; rfl
 
 /-- A transfer reads its id in the journal and its two accounts, nothing else. -/
@@ -55,7 +56,7 @@ theorem transfer_congr (actor : Principal) (s s' : Snapshot) (t : TransferReq)
     (hC : s'.accounts.val.find? (fun x => x.id.val = t.credit.val) = s.accounts.val.find? (fun x => x.id.val = t.credit.val)) :
     transfer actor s' t = transfer actor s t := by
   unfold transfer
-  simp only [find_transfer_eq, find_account_eq, hT, hD, hC, bind_ok, bind_tc_ok, post_irrel s s']
+  simp only [find_transfer_eq, find_account_eq, hT, hD, hC, bind_ok, bind_tc_ok, post_irrel actor s s']
 
 theorem owner_next_eq (v : alloc.vec.Vec OwnerCounter) (o : U64) : owner_next v o = ok (ownerNext v.val o) :=
   eq_ok_of_spec (owner_next_spec v o)
@@ -131,6 +132,65 @@ theorem accounts_page_congr (a : Principal) (s s' : Snapshot) (o f : U64) (l : U
   unfold accounts_page
   simp only [he, owner_next_eq, ownerNext, h2, owner_range_congr s s' o f e h1, bind_ok]
 
+/-! ## A `History` page is a filter -/
+
+def hrangeP (acc f e : U64) (x : HistoryEntry) : Bool := decide (x.account = acc) && decide (f ≤ x.n) && decide (x.n < e)
+
+def hrangeStepL (acc f e : U64) (l : List HistoryEntry) (x : HistoryEntry) : List HistoryEntry :=
+  if hrangeP acc f e x then l ++ [x] else l
+
+theorem foldl_hrangeStepL (acc f e : U64) (l init : List HistoryEntry) :
+    l.foldl (hrangeStepL acc f e) init = init ++ l.filter (hrangeP acc f e) := by
+  induction l generalizing init with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl_cons, ih, hrangeStepL, List.filter_cons]
+    split <;> simp
+
+theorem history_range_spec (s : Snapshot) (acc f e : U64) :
+    history_range s acc f e ⦃ v => v.val = s.history.val.filter (hrangeP acc f e) ⦄ := by
+  unfold history_range history_range_loop
+  have h := loop_fold s.history.val (fun v : alloc.vec.Vec HistoryEntry => v.val) (hrangeStepL acc f e)
+    (fun v k => v.length + (s.history.length - k) ≤ Usize.max)
+    (fun x => history_range_loop.body s acc f e x.1 x.2) ?_ (alloc.vec.Vec.new HistoryEntry) 0#usize (by simp)
+    (by simp [alloc.vec.Vec.length])
+  · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_hrangeStepL]; simp)
+  · intro v j hj hv
+    unfold history_range_loop.body
+    simp only [alloc.vec.Vec.length] at hj hv
+    simp only [alloc.vec.Vec.len]
+    split
+    · rename_i hlt
+      have hlt' : j.val < s.history.val.length := by scalar_tac
+      rw [vec_index_eq s.history j hlt']
+      simp only [bind_ok]
+      have hj1 : j.val + 1 ≤ Usize.max := by scalar_tac
+      by_cases h1 : s.history.val[j.val].account = acc <;> by_cases h2 : f ≤ s.history.val[j.val].n <;>
+        by_cases h3 : s.history.val[j.val].n < e <;>
+        simp only [h1, h2, h3, if_true, if_false, bind_ok] <;> step* <;> simp only [FoldStep] <;>
+        refine ⟨hlt', ?_, by scalar_tac, by simp only [alloc.vec.Vec.length] at *; scalar_tac⟩ <;>
+        simp_all [hrangeStepL, hrangeP]
+    · simp only [WP.spec_ok, FoldStep, and_true]
+      scalar_tac
+
+theorem history_range_congr (s s' : Snapshot) (acc f e : U64)
+    (h : s'.history.val.filter (hrangeP acc f e) = s.history.val.filter (hrangeP acc f e)) :
+    history_range s' acc f e = history_range s acc f e := by
+  obtain ⟨v, hv⟩ := ok_of (history_range_spec s acc f e)
+  obtain ⟨v', hv'⟩ := ok_of (history_range_spec s' acc f e)
+  have e1 := post_of_ok (history_range_spec s acc f e) hv
+  have e2 := post_of_ok (history_range_spec s' acc f e) hv'
+  have : v' = v := alloc.vec.Vec.ext _ _ (by rw [e1, e2, h])
+  rw [hv, hv', this]
+
+theorem history_page_congr (a : Principal) (s s' : Snapshot) (acc f : U64) (l : U32) (e : U64)
+    (he : page_end f l = ok e)
+    (h0 : s'.accounts.val.find? (fun x => x.id.val = acc.val) = s.accounts.val.find? (fun x => x.id.val = acc.val))
+    (h1 : s'.history.val.filter (hrangeP acc f e) = s.history.val.filter (hrangeP acc f e)) :
+    history_page a s' acc f l = history_page a s acc f l := by
+  unfold history_page
+  simp only [find_account_eq, h0, he, history_range_congr s s' acc f e h1, bind_ok]
+
 /-! ## Slices kept through a batch -/
 
 /-- The accounts a batch names. -/
@@ -157,6 +217,7 @@ def Kept (ka : Account → Bool) (kt : Transfer → Bool) : Write → Prop
   | .PutTransfer t => kt t = true
   | .SetLedger _ => True
   | .PutOwner _ => False
+  | .PutHistory _ => True
 
 /-- `s'` keeps of `s` the accounts `ka` and the transfers `kt` keep. -/
 def Keeps (ka : Account → Bool) (kt : Transfer → Bool) (s s' : St) : Prop :=
@@ -183,6 +244,7 @@ theorem keeps_applyAll (ts : List TransferReq) (s s' : St) (ws : List Write)
       exact (upsert_filter _ _ t (fun y hy => by simp [kT, hy]) hw0 _).symm
     | SetLedger l => exact ⟨ha, ht, ho⟩
     | PutOwner c => exact absurd hw0 id
+    | PutHistory x => exact ⟨ha, ht, ho⟩
 
 theorem find_filter_kept {α : Type} (l : List α) (keep P : α → Bool) (h : ∀ x, P x = true → keep x = true) :
     (l.filter keep).find? P = l.find? P :=
@@ -205,16 +267,18 @@ theorem transfer_slice (actor : Principal) (ts : List TransferReq) (t : Transfer
 theorem transfer_kept (actor : Principal) (ts : List TransferReq) (t : TransferReq) (ht : t ∈ ts)
     (c : Snapshot) ws r (h : transfer actor c t = ok (.Ok (ws, r))) : ∀ w ∈ ws.val, Kept (kA ts) (kT ts) w := by
   rcases post_of_ok (transfer_spec actor c t) h ws r rfl with
-    ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, _, a, b, ha, _, hb, _, _, d, cr, _, _, _, _, hws⟩
+    ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, _, a, b, ha, _, hb, _, _, d, cr, _, _, _, _, _, _, _, _, hws⟩
   · simp [hws]
   · have hai := (List.find?_some ha)
     have hbi := (List.find?_some hb)
     simp only [decide_eq_true_eq] at hai hbi
     intro w hw
-    simp only [hws, List.mem_cons, List.mem_nil_iff, or_false] at hw
-    rcases hw with rfl | rfl | rfl
+    simp only [hws, postWrites, List.mem_cons, List.mem_nil_iff, or_false] at hw
+    rcases hw with rfl | rfl | rfl | rfl | rfl
     · simp only [Kept, kA, List.any_eq_true]; exact ⟨t, ht, by simp [UScalar.eq_of_val_eq hai]⟩
+    · trivial
     · simp only [Kept, kA, List.any_eq_true]; exact ⟨t, ht, by simp [UScalar.eq_of_val_eq hbi]⟩
+    · trivial
     · simp only [Kept, kT, List.any_eq_true]; exact ⟨t, ht, by simp [journalRow]⟩
 
 /-- Binds that agree on every value the first computation returns. -/
@@ -231,9 +295,11 @@ theorem bind_congr_ok {α β : Type} (m : Result α) (f g : α → Result β) (h
   | div => simp
 
 theorem size_le_of_keeps (ka : Account → Bool) (kt : Transfer → Bool) (c c' : Snapshot)
-    (h : Keeps ka kt (Snapshot.toSt c) (Snapshot.toSt c')) : Snapshot.size c' ≤ Snapshot.size c := by
+    (h : Keeps ka kt (Snapshot.toSt c) (Snapshot.toSt c')) (hh : c'.history.length ≤ c.history.length) :
+    Snapshot.size c' ≤ Snapshot.size c := by
   obtain ⟨ha, ht, ho⟩ := h
   simp only [Snapshot.toSt] at ha ht ho
+  simp only [alloc.vec.Vec.length] at hh
   simp only [Snapshot.size, alloc.vec.Vec.length, ha, ht]
   have := List.length_filter_le ka c.accounts.val
   have := List.length_filter_le kt c.transfers.val
@@ -268,12 +334,13 @@ theorem body_end (actor : Principal) (ts : alloc.vec.Vec TransferReq) (c c' : Sn
 theorem batch_loop_congr (actor : Principal) (ts : alloc.vec.Vec TransferReq) :
     ∀ n (c c' : Snapshot) (ws : alloc.vec.Vec Write) (i : Usize), ts.length - i.val = n → i.val ≤ ts.length →
       Keeps (kA ts.val) (kT ts.val) (Snapshot.toSt c) (Snapshot.toSt c') →
-      Snapshot.size c + 3 * (ts.length - i.val) < Usize.max →
+      Snapshot.size c + 5 * (ts.length - i.val) < Usize.max →
+      Snapshot.size c' + 5 * (ts.length - i.val) < Usize.max →
       batch_loop actor ts c' ws i = batch_loop actor ts c ws i := by
   intro n
   induction n using Nat.strong_induction_on with
   | _ n ih =>
-    intro c c' ws i hn hi hk hsz
+    intro c c' ws i hn hi hk hsz hsz'
     unfold batch_loop
     conv_lhs => rw [loop]
     conv_rhs => rw [loop]
@@ -287,7 +354,7 @@ theorem batch_loop_congr (actor : Principal) (ts : alloc.vec.Vec TransferReq) :
         have h3 := Batch.transfer_writes_le actor c _ w1 rep hr0
         have hfit : Snapshot.size c + w1.length < Usize.max := by simp only [alloc.vec.Vec.length] at *; omega
         have hfit' : Snapshot.size c' + w1.length < Usize.max := by
-          have := size_le_of_keeps _ _ c c' hk; omega
+          simp only [alloc.vec.Vec.length] at *; omega
         obtain ⟨c1, hap⟩ := ok_of (apply_spec c w1 hfit)
         have hst := post_of_ok (apply_spec c w1 hfit) hap
         obtain ⟨c1', hap'⟩ := ok_of (apply_spec c' w1 hfit')
@@ -304,8 +371,11 @@ theorem batch_loop_congr (actor : Principal) (ts : alloc.vec.Vec TransferReq) :
           exact keeps_applyAll ts.val _ _ w1.val (transfer_kept actor ts.val _ hmem c w1 rep hr0) hk
         have hsz1 : Snapshot.size c1 ≤ Snapshot.size c + w1.length := by
           rw [← rows_toSt, ← rows_toSt, hst]; exact rows_applyAll _ _
+        have hsz1' : Snapshot.size c1' ≤ Snapshot.size c' + w1.length := by
+          rw [← rows_toSt, ← rows_toSt, hst']; exact rows_applyAll _ _
         have := ih (ts.length - i2.val) (by simp only [alloc.vec.Vec.length] at *; omega) c1 c1' ws1 i2 rfl
           (by simp only [alloc.vec.Vec.length] at *; omega) hk1 (by simp only [alloc.vec.Vec.length] at *; omega)
+          (by simp only [alloc.vec.Vec.length] at *; omega)
         unfold batch_loop at this
         exact this
       · rw [body_err actor ts c' ws i e hlt' (heq ▸ hr0), body_err actor ts c ws i e hlt' hr0]
@@ -422,11 +492,13 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
         simp only [hne, hmax, if_false, Snapshot.clone_eq, bind_ok, bind_tc_ok]
         have hk := load_batch s t0 rest
         rw [← hv] at hk
+        have hle := size_le_of_keeps _ _ s _ hk (by simp [Snapshot.load_history, pickRows, batchA])
         apply batch_loop_congr a ts _ s _ _ 0#usize rfl (by simp) hk
-        have : ts.length ≤ 64 := by simp only [alloc.vec.Vec.length, hv]; omega
-        unfold HasRoom at hroom
-        simp only [Snapshot.size, alloc.vec.Vec.length] at *
-        omega
+        all_goals
+          have : ts.length ≤ 64 := by simp only [alloc.vec.Vec.length, hv]; omega
+          unfold HasRoom at hroom
+          simp only [Snapshot.size, alloc.vec.Vec.length] at *
+          omega
   | Account id =>
     simp only [readsA, Option.some.injEq] at hp; subst hp
     simp only [transition]
@@ -476,6 +548,47 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
       have hna : ¬ (a.operator = true ∨ o = a.user) := fun h => hc ⟨h0', hm', h⟩
       simp only [not_or] at hna
       simp [h0, hm, hna.1, hna.2, is_operator_eq, user_of_eq]
+  | History acc f l =>
+    simp only [transition]
+    simp only [readsA] at hp
+    split at hp
+    · rename_i hc
+      simp only [Option.some.injEq] at hp; subst hp
+      obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+      apply history_page_congr a s _ acc f l e he
+      · have hq : (histA acc f.val (pageEndN f.val l.val)).find? (fun q => decide (q.table = 0)) =
+            some ⟨0, eqU 0 acc, {}⟩ := by unfold histA; split <;> simp
+        rw [Snapshot.load_accounts, pickRows_filter _ _ _ _ _ ⟨0, eqU 0 acc, {}⟩ hq rfl]
+        apply find_filter_kept; intro x hx; simp_all [eqU, Pred.holds, Account.row]
+      · unfold histA
+        rw [← hev]
+        by_cases hfe : f.val < e.val
+        · simp only [hfe, if_true]
+          rw [Snapshot.load_history, pickRows_filter _ _ _ _ _ ⟨4, .and (eqU 0 acc) (rangeA 1 f.val e.val), {}⟩ (by simp) rfl]
+          apply filter_slice
+          intro x _ hx
+          simp only [hrangeP, Bool.and_eq_true, decide_eq_true_eq] at hx
+          obtain ⟨⟨h1, h2⟩, h3⟩ := hx
+          simp only [Pred.holds, Bool.and_eq_true]
+          refine ⟨by simp [eqU, Pred.holds, HistoryEntry.row, h1], ?_⟩
+          apply rangeA_holds_of 1 f.val e.val x.n.val (by scalar_tac) (by scalar_tac)
+          simp [HistoryEntry.row]
+        · simp only [hfe, if_false]
+          have : s.history.val.filter (hrangeP acc f e) = [] := by
+            rw [List.filter_eq_nil_iff]; intro x _; simp only [hrangeP]; intro h
+            simp only [Bool.and_eq_true, decide_eq_true_eq] at h; scalar_tac
+          rw [this]
+          simp [Snapshot.load_history, pickRows]
+    · rename_i hc
+      unfold history_page
+      by_cases h0 : l = 0#u32
+      · simp [h0]
+      have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+      by_cases hm : l > MAX_PAGE
+      · simp [h0, hm]
+      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
+      simp [h0, hm, hna, is_operator_eq]
   | Transfers =>
     simp only [transition, is_operator_eq, bind_tc_ok, bind_ok]
     cases ho : a.operator

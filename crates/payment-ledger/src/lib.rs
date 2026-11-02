@@ -34,11 +34,15 @@ pub enum Actor {
     Operator(u64),
 }
 
-/// Who is calling: an organization (the tenant) and who acts in it.
+/// Who is calling: an organization (the tenant) and who acts in it, and when.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Principal {
     pub org: u64,
     pub actor: Actor,
+    /// The transaction's clock, in microseconds since the Unix epoch: the
+    /// engine stamps it from PostgreSQL's `transaction_timestamp()` before
+    /// every attempt (`Kernel::stamp`). Recorded in the history (G1).
+    pub at: u64,
 }
 
 /// Is the caller one of the tenant's operators?
@@ -65,6 +69,15 @@ pub fn operator_of(actor: &Principal) -> u64 {
     }
 }
 
+/// The id the history records for the caller: the user's or the
+/// operator's (`HistoryEntry::by_operator` says which).
+pub fn actor_id(actor: &Principal) -> u64 {
+    match actor.actor {
+        Actor::User(u) => u,
+        Actor::Operator(o) => o,
+    }
+}
+
 /// The most transfers in one linked batch. Every accepted batch reads only
 /// its accounts and transfer ids (`reads`): a longer `OR` chain makes
 /// PostgreSQL's planning time grow faster than linearly (F3).
@@ -83,6 +96,7 @@ h5i_app_schema::schema! {
         accounts: Vec<Account>,
         transfers: Vec<Transfer>,
         owners: Vec<OwnerCounter>,
+        history: Vec<HistoryEntry>,
     }
 
     /// An account: posted debits and credits in one currency (ISO 4217
@@ -100,6 +114,9 @@ h5i_app_schema::schema! {
         /// The account's number among its owner's accounts (0, 1, …): the
         /// key `Accounts` pages by.
         seq: u64,
+        /// How many history entries the account has: the next entry's `n`
+        /// (G1). Opening it and every posting to it add one.
+        changes: u64,
     }
 
     /// A committed transfer: the journal. Never updated or deleted.
@@ -128,7 +145,33 @@ h5i_app_schema::schema! {
         key { owner: u64 }
         next: u64,
     }
+
+    /// One change of an account (G1): entry `n` of account `account`,
+    /// written with the change itself, never updated or deleted. Who
+    /// (`by_operator`, `actor`: the user or operator id), when (`at`, the
+    /// transaction's clock), what (`command`; the transfer id and code, or
+    /// the account code when it was opened), and the account's debits and
+    /// credits before and after.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct HistoryEntry in "history" {
+        key { account: u64, n: u64 }
+        by_operator: bool,
+        actor: u64,
+        at: u64,
+        command: u32,
+        transfer: u64,
+        code: u32,
+        debits_before: u64,
+        debits_after: u64,
+        credits_before: u64,
+        credits_after: u64,
+    }
 }
+
+/// `HistoryEntry::command`: the account was opened.
+pub const CMD_OPEN: u32 = 1;
+/// `HistoryEntry::command`: a transfer was posted to it (alone or in a batch).
+pub const CMD_POST: u32 = 2;
 
 /// A transfer as a client asks for it. `code` is the application's
 /// transfer type (capture, refund, payout, ...); the ledger only stores it.
@@ -157,6 +200,9 @@ pub enum Command {
     Accounts { owner: u64, from: u64, limit: u32 },
     /// The journal; operators only.
     Transfers,
+    /// One page of an account's history (operators only): its entries
+    /// numbered `from` to `from + limit - 1`, `limit` at most `MAX_PAGE`.
+    History { account: u64, from: u64, limit: u32 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -165,6 +211,7 @@ pub enum Write {
     PutTransfer(Transfer),
     SetLedger(Ledger),
     PutOwner(OwnerCounter),
+    PutHistory(HistoryEntry),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -182,6 +229,8 @@ pub enum Reply {
     /// was the last).
     Accounts(Vec<Account>, Option<u64>),
     Transfers(Vec<Transfer>),
+    /// A page of an account's history, and where the next page starts.
+    History(Vec<HistoryEntry>, Option<u64>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -210,12 +259,42 @@ pub enum Error {
 
 type Outcome = Result<(Vec<Write>, Reply), Error>;
 
-fn three(a: Write, b: Write, c: Write) -> Vec<Write> {
+fn four(a: Write, b: Write, c: Write, d: Write) -> Vec<Write> {
     let mut ws = Vec::new();
     ws.push(a);
     ws.push(b);
     ws.push(c);
+    ws.push(d);
     ws
+}
+
+fn five(a: Write, b: Write, c: Write, d: Write, e: Write) -> Vec<Write> {
+    let mut ws = Vec::new();
+    ws.push(a);
+    ws.push(b);
+    ws.push(c);
+    ws.push(d);
+    ws.push(e);
+    ws
+}
+
+/// Entry `n` of account `after.id`: `actor` changed it from `before` to
+/// `after` (G1).
+fn entry(actor: &Principal, command: u32, transfer: u64, code: u32, n: u64, before: &Account, after: &Account) -> HistoryEntry {
+    HistoryEntry {
+        account: after.id,
+        n,
+        by_operator: is_operator(actor),
+        actor: actor_id(actor),
+        at: actor.at,
+        command,
+        transfer,
+        code,
+        debits_before: before.debits,
+        debits_after: after.debits,
+        credits_before: before.credits,
+        credits_after: after.credits,
+    }
 }
 
 pub fn find_account(accounts: &Vec<Account>, id: u64) -> Option<Account> {
@@ -298,10 +377,12 @@ fn open(actor: &Principal, s: &Snapshot, owner: u64, currency: u32, code: u32, n
         debits: 0,
         credits: 0,
         seq: n,
+        changes: 1,
     };
+    let h = entry(actor, CMD_OPEN, 0, code, 0, &a, &a);
     let l2 = Ledger { next_account: l.next_account + 1 };
     let c2 = OwnerCounter { owner, next: n + 1 };
-    Ok((three(Write::PutAccount(a), Write::SetLedger(l2), Write::PutOwner(c2)), Reply::Created(a.id)))
+    Ok((four(Write::PutAccount(a), Write::PutHistory(h), Write::SetLedger(l2), Write::PutOwner(c2)), Reply::Created(a.id)))
 }
 
 /// Post one transfer, or recognise its replay. The caller must be allowed
@@ -334,7 +415,7 @@ pub fn transfer(actor: &Principal, s: &Snapshot, t: &TransferReq) -> Outcome {
                     }
                     None => match find_account(&s.accounts, t.credit) {
                         None => Err(Error::NotFound),
-                        Some(b) => post(s, t, a, b, operator_of(actor)),
+                        Some(b) => post(actor, s, t, a, b, operator_of(actor)),
                     },
                 }
             }
@@ -343,11 +424,14 @@ pub fn transfer(actor: &Principal, s: &Snapshot, t: &TransferReq) -> Outcome {
 }
 
 /// The arithmetic of a transfer between two different, existing accounts,
-/// posted by operator `op` (0: a user).
-fn post(s: &Snapshot, t: &TransferReq, a: Account, b: Account, op: u64) -> Outcome {
+/// posted by `actor`, operator `op` (0: a user); each account's change
+/// with its history entry.
+fn post(actor: &Principal, s: &Snapshot, t: &TransferReq, a: Account, b: Account, op: u64) -> Outcome {
     let _ = s;
     if a.currency != b.currency {
         Err(Error::CurrencyMismatch)
+    } else if a.changes == u64::MAX || b.changes == u64::MAX {
+        Err(Error::Overflow)
     } else if a.debits > u64::MAX - t.amount {
         Err(Error::Overflow)
     } else if b.credits > u64::MAX - t.amount {
@@ -370,6 +454,7 @@ fn post(s: &Snapshot, t: &TransferReq, a: Account, b: Account, op: u64) -> Outco
                 debits,
                 credits: a.credits,
                 seq: a.seq,
+                changes: a.changes + 1,
             };
             let b2 = Account {
                 id: b.id,
@@ -381,6 +466,7 @@ fn post(s: &Snapshot, t: &TransferReq, a: Account, b: Account, op: u64) -> Outco
                 debits: b.debits,
                 credits,
                 seq: b.seq,
+                changes: b.changes + 1,
             };
             let tr = Transfer {
                 id: t.id,
@@ -391,8 +477,10 @@ fn post(s: &Snapshot, t: &TransferReq, a: Account, b: Account, op: u64) -> Outco
                 code: t.code,
                 operator: op,
             };
+            let ha = entry(actor, CMD_POST, t.id, t.code, a.changes, &a, &a2);
+            let hb = entry(actor, CMD_POST, t.id, t.code, b.changes, &b, &b2);
             Ok((
-                three(Write::PutAccount(a2), Write::PutAccount(b2), Write::PutTransfer(tr)),
+                five(Write::PutAccount(a2), Write::PutHistory(ha), Write::PutAccount(b2), Write::PutHistory(hb), Write::PutTransfer(tr)),
                 Reply::Posted(t.id),
             ))
         }
@@ -472,8 +560,41 @@ fn accounts_page(actor: &Principal, s: &Snapshot, owner: u64, from: u64, limit: 
     Ok((Vec::new(), Reply::Accounts(owner_range(s, owner, from, end), next)))
 }
 
+/// `account`'s history entries numbered `from` up to (not including)
+/// `end`, in table order.
+fn history_range(s: &Snapshot, account: u64, from: u64, end: u64) -> Vec<HistoryEntry> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < s.history.len() {
+        let h = s.history[i];
+        if h.account == account && from <= h.n && h.n < end {
+            out.push(h);
+        }
+        i += 1;
+    }
+    out
+}
+
+fn history_page(actor: &Principal, s: &Snapshot, account: u64, from: u64, limit: u32) -> Outcome {
+    if limit == 0 || limit > MAX_PAGE {
+        return Err(Error::BadPage);
+    }
+    if !is_operator(actor) {
+        return Err(Error::Forbidden);
+    }
+    match find_account(&s.accounts, account) {
+        None => Err(Error::NotFound),
+        Some(a) => {
+            let end = page_end(from, limit);
+            let next = if end < a.changes { Some(end) } else { None };
+            Ok((Vec::new(), Reply::History(history_range(s, account, from, end), next)))
+        }
+    }
+}
+
 /// The ledger's logic: a command's writes and reply, or a refusal that
-/// commits nothing.
+/// commits nothing. Every account a command changes gets one history entry
+/// per change, written right after the account (`Theorems.every_change_logged`).
 pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
     match cmd {
         Command::Open { owner, currency, code, no_overdraft, no_overcredit } => {
@@ -490,6 +611,7 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
                 Err(Error::Forbidden)
             }
         }
+        Command::History { account, from, limit } => history_page(actor, s, *account, *from, *limit),
     }
 }
 
@@ -500,12 +622,15 @@ pub const T_ACCOUNTS: u32 = 0;
 pub const T_TRANSFERS: u32 = 1;
 pub const T_LEDGER: u32 = 2;
 pub const T_OWNERS: u32 = 3;
+pub const T_HISTORY: u32 = 4;
 /// Column numbers: key columns first, then fields in declaration order.
 pub const ACCOUNT_ID: u32 = 0;
 pub const ACCOUNT_OWNER: u32 = 1;
 pub const ACCOUNT_SEQ: u32 = 8;
 pub const TRANSFER_ID: u32 = 0;
 pub const OWNER_KEY: u32 = 0;
+pub const HISTORY_ACCOUNT: u32 = 0;
+pub const HISTORY_N: u32 = 1;
 
 /// Every batch the kernel accepts has a plan (F3: no whole-tenant loads).
 pub const MAX_PLANNED_BATCH: usize = MAX_BATCH;
@@ -611,6 +736,20 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
             }
             Some(out)
         }
+        Command::History { account, from, limit } => {
+            let mut out = Vec::new();
+            // Refused pages read nothing.
+            if *limit != 0 && *limit <= MAX_PAGE && is_operator(actor) {
+                out.push(rd_where(T_ACCOUNTS, p_eq(ACCOUNT_ID, v_int(*account))));
+                let end = page_end(*from, *limit);
+                if *from < end {
+                    let range = seq_range(HISTORY_N, *from, end);
+                    let pred = h5i_app_sql::Pred::And(Box::new(p_eq(HISTORY_ACCOUNT, v_int(*account))), Box::new(range));
+                    out.push(rd_where(T_HISTORY, pred));
+                }
+            }
+            Some(out)
+        }
     }
 }
 
@@ -621,6 +760,7 @@ fn apply_write(s: &mut Snapshot, w: Write) {
         Write::PutTransfer(t) => Transfer::put(&mut s.transfers, t),
         Write::SetLedger(l) => s.ledger = l,
         Write::PutOwner(c) => OwnerCounter::put(&mut s.owners, c),
+        Write::PutHistory(h) => HistoryEntry::put(&mut s.history, h),
     }
 }
 
@@ -631,6 +771,7 @@ fn sql_write(w: &Write, out: &mut Vec<h5i_app_sql::Write>) {
         Write::PutTransfer(t) => out.push(t.sql_put()),
         Write::SetLedger(l) => out.push(l.sql_put()),
         Write::PutOwner(c) => out.push(c.sql_put()),
+        Write::PutHistory(h) => out.push(h.sql_put()),
     }
 }
 
@@ -639,11 +780,11 @@ mod tests {
     use super::*;
 
     fn op() -> Principal {
-        Principal { org: 1, actor: Actor::Operator(9) }
+        Principal { org: 1, actor: Actor::Operator(9), at: 5 }
     }
 
     fn user(u: u64) -> Principal {
-        Principal { org: 1, actor: Actor::User(u) }
+        Principal { org: 1, actor: Actor::User(u), at: 3 }
     }
 
     fn run(s: &Snapshot, a: Principal, c: Command) -> (Snapshot, Result<Reply, Error>) {
@@ -728,6 +869,41 @@ mod tests {
         assert_eq!((by(&s, 10), by(&s, 11)), (9, 0));
         // A user is never an operator, whatever its id.
         assert_eq!(run(&s, user(9), Command::Transfers).1, Err(Error::Forbidden));
+    }
+
+    #[test]
+    fn every_account_change_has_one_history_entry() {
+        let s = setup();
+        let (s, _) = run(&s, op(), Command::Transfer { t: tr(10, 0, 1, 100) });
+        // A batch touching account 1 twice: two entries, numbered in order.
+        let (s, r) = run(&s, user(1), Command::Batch { transfers: vec![tr(11, 1, 2, 30), tr(12, 1, 2, 20)] });
+        assert_eq!(r, Ok(Reply::Batch(2)));
+        let of = |s: &Snapshot, acc: u64| -> Vec<_> {
+            s.history
+                .iter()
+                .filter(|h| h.account == acc)
+                .map(|h| (h.n, h.command, h.transfer, h.by_operator, h.actor, h.at, h.debits_before, h.debits_after, h.credits_after))
+                .collect()
+        };
+        assert_eq!(
+            of(&s, 1),
+            vec![
+                (0, CMD_OPEN, 0, false, 1, 3, 0, 0, 0),
+                (1, CMD_POST, 10, true, 9, 5, 0, 0, 100),
+                (2, CMD_POST, 11, false, 1, 3, 0, 30, 100),
+                (3, CMD_POST, 12, false, 1, 3, 30, 50, 100),
+            ]
+        );
+        assert_eq!(find_account(&s.accounts, 1).unwrap().changes, 4);
+        // A replay writes nothing, so it records nothing.
+        let (s2, r) = run(&s, user(1), Command::Transfer { t: tr(11, 1, 2, 30) });
+        assert_eq!((r, &s2), (Ok(Reply::Exists(11)), &s));
+        // Paged, operators only.
+        let page = run(&s, op(), Command::History { account: 1, from: 1, limit: 2 }).1;
+        let Ok(Reply::History(hs, next)) = page else { panic!("{page:?}") };
+        assert_eq!((hs.iter().map(|h| h.n).collect::<Vec<_>>(), next), (vec![1, 2], Some(3)));
+        assert_eq!(run(&s, user(1), Command::History { account: 1, from: 0, limit: 2 }).1, Err(Error::Forbidden));
+        assert_eq!(run(&s, op(), Command::History { account: 99, from: 0, limit: 2 }).1, Err(Error::NotFound));
     }
 
     #[test]

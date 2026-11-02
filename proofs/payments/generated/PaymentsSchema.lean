@@ -123,9 +123,9 @@ def sqlW : h5i_app_sql.Write → AWrite Val
 
 /-! ## `Payment` (table `payments`) -/
 
-/-- Columns `id`, `merchant`, `amount`, `currency`, `status`, `manual_capture`, `attempts`, `authorized`, `captured`, `refunded`, `refund_pending`, `operator`, `ledger_done`, `seq`. -/
+/-- Columns `id`, `merchant`, `amount`, `currency`, `status`, `manual_capture`, `attempts`, `authorized`, `captured`, `refunded`, `refund_pending`, `operator`, `ledger_done`, `seq`, `changes`. -/
 def Payment.row (x : Payment) : List Val :=
-  [int x.id.val, int x.merchant.val, int x.amount.val, int x.currency.val, int x.status.val, .Bool x.manual_capture, int x.attempts.val, int x.authorized.val, int x.captured.val, int x.refunded.val, int x.refund_pending.val, int x.operator.val, .Bool x.ledger_done, int x.seq.val]
+  [int x.id.val, int x.merchant.val, int x.amount.val, int x.currency.val, int x.status.val, .Bool x.manual_capture, int x.attempts.val, int x.authorized.val, int x.captured.val, int x.refunded.val, int x.refund_pending.val, int x.operator.val, .Bool x.ledger_done, int x.seq.val, int x.changes.val]
 
 def Payment.table : Nat := 0
 def Payment.keyLen : Nat := 1
@@ -143,6 +143,7 @@ def Payment.col_refund_pending : Nat := 10
 def Payment.col_operator : Nat := 11
 def Payment.col_ledger_done : Nat := 12
 def Payment.col_seq : Nat := 13
+def Payment.col_changes : Nat := 14
 
 @[simp] theorem Payment.row_col_id (x : Payment) :
     (Payment.row x)[Payment.col_id]? = some (int x.id.val) := by
@@ -200,7 +201,11 @@ def Payment.col_seq : Nat := 13
     (Payment.row x)[Payment.col_seq]? = some (int x.seq.val) := by
   simp [Payment.row, Payment.col_seq]
 
-@[simp] theorem Payment.row_length (x : Payment) : (Payment.row x).length = 14 := rfl
+@[simp] theorem Payment.row_col_changes (x : Payment) :
+    (Payment.row x)[Payment.col_changes]? = some (int x.changes.val) := by
+  simp [Payment.row, Payment.col_changes]
+
+@[simp] theorem Payment.row_length (x : Payment) : (Payment.row x).length = 15 := rfl
 
 @[step] theorem Payment.to_row_spec (x : Payment) : Payment.to_row x ⦃ v => v.val = Payment.row x ⦄ := by
   have := usize_max_le
@@ -718,18 +723,188 @@ def MerchantCounter.delWhereA (col : Nat) (val : Val) : AWrite Val := .delWhere 
       (l.filter (fun y => !decide ((MerchantCounter.row y)[col]? = some val))).map MerchantCounter.row := by
   rw [List.filter_map]; rfl
 
+/-! ## `HistoryEntry` (table `history`) -/
+
+/-- Columns `payment`, `n`, `by_operator`, `actor`, `at`, `command`, `result`, `event`, `refund`, `status_before`, `status_after`, `captured_before`, `captured_after`, `refunded_before`, `refunded_after`, `pending_before`, `pending_after`. -/
+def HistoryEntry.row (x : HistoryEntry) : List Val :=
+  [int x.payment.val, int x.n.val, .Bool x.by_operator, int x.actor.val, int x.at.val, int x.command.val, int x.result.val, int x.event.val, int x.refund.val, int x.status_before.val, int x.status_after.val, int x.captured_before.val, int x.captured_after.val, int x.refunded_before.val, int x.refunded_after.val, int x.pending_before.val, int x.pending_after.val]
+
+def HistoryEntry.table : Nat := 6
+def HistoryEntry.keyLen : Nat := 2
+def HistoryEntry.col_payment : Nat := 0
+def HistoryEntry.col_n : Nat := 1
+def HistoryEntry.col_by_operator : Nat := 2
+def HistoryEntry.col_actor : Nat := 3
+def HistoryEntry.col_at : Nat := 4
+def HistoryEntry.col_command : Nat := 5
+def HistoryEntry.col_result : Nat := 6
+def HistoryEntry.col_event : Nat := 7
+def HistoryEntry.col_refund : Nat := 8
+def HistoryEntry.col_status_before : Nat := 9
+def HistoryEntry.col_status_after : Nat := 10
+def HistoryEntry.col_captured_before : Nat := 11
+def HistoryEntry.col_captured_after : Nat := 12
+def HistoryEntry.col_refunded_before : Nat := 13
+def HistoryEntry.col_refunded_after : Nat := 14
+def HistoryEntry.col_pending_before : Nat := 15
+def HistoryEntry.col_pending_after : Nat := 16
+
+@[simp] theorem HistoryEntry.row_col_payment (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_payment]? = some (int x.payment.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_payment]
+
+@[simp] theorem HistoryEntry.row_col_n (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_n]? = some (int x.n.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_n]
+
+@[simp] theorem HistoryEntry.row_col_by_operator (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_by_operator]? = some (.Bool x.by_operator) := by
+  simp [HistoryEntry.row, HistoryEntry.col_by_operator]
+
+@[simp] theorem HistoryEntry.row_col_actor (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_actor]? = some (int x.actor.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_actor]
+
+@[simp] theorem HistoryEntry.row_col_at (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_at]? = some (int x.at.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_at]
+
+@[simp] theorem HistoryEntry.row_col_command (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_command]? = some (int x.command.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_command]
+
+@[simp] theorem HistoryEntry.row_col_result (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_result]? = some (int x.result.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_result]
+
+@[simp] theorem HistoryEntry.row_col_event (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_event]? = some (int x.event.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_event]
+
+@[simp] theorem HistoryEntry.row_col_refund (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_refund]? = some (int x.refund.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_refund]
+
+@[simp] theorem HistoryEntry.row_col_status_before (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_status_before]? = some (int x.status_before.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_status_before]
+
+@[simp] theorem HistoryEntry.row_col_status_after (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_status_after]? = some (int x.status_after.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_status_after]
+
+@[simp] theorem HistoryEntry.row_col_captured_before (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_captured_before]? = some (int x.captured_before.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_captured_before]
+
+@[simp] theorem HistoryEntry.row_col_captured_after (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_captured_after]? = some (int x.captured_after.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_captured_after]
+
+@[simp] theorem HistoryEntry.row_col_refunded_before (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_refunded_before]? = some (int x.refunded_before.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_refunded_before]
+
+@[simp] theorem HistoryEntry.row_col_refunded_after (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_refunded_after]? = some (int x.refunded_after.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_refunded_after]
+
+@[simp] theorem HistoryEntry.row_col_pending_before (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_pending_before]? = some (int x.pending_before.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_pending_before]
+
+@[simp] theorem HistoryEntry.row_col_pending_after (x : HistoryEntry) :
+    (HistoryEntry.row x)[HistoryEntry.col_pending_after]? = some (int x.pending_after.val) := by
+  simp [HistoryEntry.row, HistoryEntry.col_pending_after]
+
+@[simp] theorem HistoryEntry.row_length (x : HistoryEntry) : (HistoryEntry.row x).length = 17 := rfl
+
+@[step] theorem HistoryEntry.to_row_spec (x : HistoryEntry) : HistoryEntry.to_row x ⦃ v => v.val = HistoryEntry.row x ⦄ := by
+  have := usize_max_le
+  unfold HistoryEntry.to_row; step* <;> simp_all [HistoryEntry.row] <;> scalar_tac
+
+theorem HistoryEntry.row_inj : Function.Injective HistoryEntry.row := by
+  intro a b h; cases a; cases b; simp_all [HistoryEntry.row]
+
+theorem HistoryEntry.clone_eq (x : HistoryEntry) : HistoryEntry.Insts.CoreCloneClone.clone x = ok x := by
+  simp [HistoryEntry.Insts.CoreCloneClone.clone, lift]
+
+@[step] theorem HistoryEntry.clone_spec (x : HistoryEntry) : HistoryEntry.Insts.CoreCloneClone.clone x ⦃ y => y = x ⦄ := by
+  rw [HistoryEntry.clone_eq]; simp
+
+def HistoryEntry.putA (x : HistoryEntry) : AWrite Val := .put HistoryEntry.table HistoryEntry.keyLen (HistoryEntry.row x)
+
+@[step] theorem HistoryEntry.sql_put_spec (x : HistoryEntry) : HistoryEntry.sql_put x ⦃ w => sqlW w = HistoryEntry.putA x ⦄ := by
+  unfold HistoryEntry.sql_put; step*; simp_all [sqlW, HistoryEntry.putA, HistoryEntry.table, HistoryEntry.keyLen, HistoryEntry.TABLE, HistoryEntry.KEY_LEN]
+
+/-- Insert, or replace the row with the same key. -/
+@[step] theorem HistoryEntry.put_spec (v : alloc.vec.Vec HistoryEntry) (x : HistoryEntry) (h : v.length < Usize.max) :
+    HistoryEntry.put v x ⦃ v' => v'.val = upsert (fun y => (y.payment, y.n)) x v.val ⦄ := by
+  unfold HistoryEntry.put HistoryEntry.put_loop
+  apply WP.spec_mono (loop_search v.val (fun q => decide ((q.payment, q.n) = (x.payment, x.n)))
+    (fun y : alloc.vec.Vec HistoryEntry => y.val) (fun j _ => v.val.set j x) (v.val ++ [x]) _ ?_ 0#usize (by simp))
+  · intro r hr; rw [hr, show ((0#usize : Usize) : Nat) = 0 from rfl]
+    exact upsert_loop_result (fun y => (y.payment, y.n)) x _ 0 (Nat.zero_le _) (by simp)
+  · intro j hj; unfold HistoryEntry.put_loop.body; h5i_step
+
+/-- The rows without this key. -/
+@[step] theorem HistoryEntry.del_spec (v : alloc.vec.Vec HistoryEntry) (payment : U64) (n : U64) :
+    HistoryEntry.del v payment n ⦃ v' => v'.val = v.val.filter (fun y => ¬(y.payment = payment ∧ y.n = n)) ⦄ := by
+  unfold HistoryEntry.del HistoryEntry.del_loop
+  apply WP.spec_mono (loop_fold v.val (fun w : alloc.vec.Vec HistoryEntry => w.val)
+    (fun acc y => if decide ¬(y.payment = payment ∧ y.n = n) then acc ++ [y] else acc)
+    (fun w j => w.length ≤ j) (fun x => HistoryEntry.del_loop.body v payment n x.1 x.2) ?_ _ 0#usize (by simp) (by simp))
+  · intro r hr; rw [hr, foldl_filter]; simp
+  · intro o j hj ho; have := v.len_ineq; unfold HistoryEntry.del_loop.body; h5i_step
+
+/-- The rows whose column `col` does not hold `val`. -/
+@[step] theorem HistoryEntry.del_where_spec (v : alloc.vec.Vec HistoryEntry) (col : U32) (val : Val) :
+    HistoryEntry.del_where v col val ⦃ v' => v'.val = v.val.filter (fun y => ¬((HistoryEntry.row y)[col.val]? = some val)) ⦄ := by
+  unfold HistoryEntry.del_where HistoryEntry.del_where_loop
+  apply WP.spec_mono (loop_fold v.val (fun w : alloc.vec.Vec HistoryEntry => w.val)
+    (fun acc y => if decide ¬((HistoryEntry.row y)[col.val]? = some val) then acc ++ [y] else acc)
+    (fun w j => w.length ≤ j) (fun x => HistoryEntry.del_where_loop.body v col val x.1 x.2) ?_ _ 0#usize (by simp) (by simp))
+  · intro r hr; rw [hr, foldl_filter]; simp
+  · intro o j hj ho; have := v.len_ineq; unfold HistoryEntry.del_where_loop.body; h5i_step
+
+def HistoryEntry.delA (payment : U64) (n : U64) : AWrite Val := .del HistoryEntry.table [int payment.val, int n.val]
+def HistoryEntry.delWhereA (col : Nat) (val : Val) : AWrite Val := .delWhere HistoryEntry.table col val
+
+@[step] theorem HistoryEntry.sql_del_spec (payment : U64) (n : U64) : HistoryEntry.sql_del payment n ⦃ w => sqlW w = HistoryEntry.delA payment n ⦄ := by
+  unfold HistoryEntry.sql_del; step* <;> simp_all [sqlW, HistoryEntry.delA, HistoryEntry.table, HistoryEntry.TABLE] <;> scalar_tac
+
+@[step] theorem HistoryEntry.sql_del_where_spec (col : U32) (val : Val) :
+    HistoryEntry.sql_del_where col val ⦃ w => sqlW w = HistoryEntry.delWhereA col.val val ⦄ := by
+  unfold HistoryEntry.sql_del_where; simp [sqlW, HistoryEntry.delWhereA, HistoryEntry.table, HistoryEntry.TABLE]
+
+/-! Row writes on the encoding match the list operations. -/
+
+@[simp] theorem HistoryEntry.map_put (x : HistoryEntry) (l : List HistoryEntry) :
+    upsert (·.take 2) (HistoryEntry.row x) (l.map HistoryEntry.row) = (upsert (fun y => (y.payment, y.n)) x l).map HistoryEntry.row :=
+  map_upsert _ _ _ _ _ (fun y => by simp [HistoryEntry.row])
+
+@[simp] theorem HistoryEntry.map_del (payment : U64) (n : U64) (l : List HistoryEntry) :
+    (l.map HistoryEntry.row).filter (fun r => !decide (r.take 2 = [int payment.val, int n.val])) =
+      (l.filter (fun y => !decide (y.payment = payment ∧ y.n = n))).map HistoryEntry.row :=
+  map_filter_of _ _ _ _ (fun y => by simp [HistoryEntry.row])
+
+@[simp] theorem HistoryEntry.map_del_where (col : Nat) (val : Val) (l : List HistoryEntry) :
+    (l.map HistoryEntry.row).filter (fun r => !decide (r[col]? = some val)) =
+      (l.filter (fun y => !decide ((HistoryEntry.row y)[col]? = some val))).map HistoryEntry.row := by
+  rw [List.filter_map]; rfl
+
 /-! ## Decoding -/
 
 /-- Steps through a generated `from_row`. -/
 macro "row_tac" : tactic => `(tactic| (
   repeat (first
     | (step*; done)
-    | (simp_all only [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row, MerchantCounter.row, List.getElem_cons_zero, List.getElem_cons_succ, Nat.zero_add, Nat.reduceAdd, bind_tc_ok, u64_from_val, u32_from_val, bool_from_val, bytes_from_val]; step*))
+    | (simp_all only [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row, MerchantCounter.row, HistoryEntry.row, List.getElem_cons_zero, List.getElem_cons_succ, Nat.zero_add, Nat.reduceAdd, bind_tc_ok, u64_from_val, u32_from_val, bool_from_val, bytes_from_val]; step*))
   all_goals simp_all))
 
 theorem Payment.from_row_spec (x : Payment) (v : alloc.vec.Vec Val) (h : v.val = Payment.row x) :
     Payment.from_row v ⦃ o => o = some x ⦄ := by
-  have hl : v.length = 14 := by simp [alloc.vec.Vec.length, h, Payment.row]
+  have hl : v.length = 15 := by simp [alloc.vec.Vec.length, h, Payment.row]
   unfold Payment.from_row; row_tac
 
 theorem Refund.from_row_spec (x : Refund) (v : alloc.vec.Vec Val) (h : v.val = Refund.row x) :
@@ -756,6 +931,11 @@ theorem MerchantCounter.from_row_spec (x : MerchantCounter) (v : alloc.vec.Vec V
     MerchantCounter.from_row v ⦃ o => o = some x ⦄ := by
   have hl : v.length = 2 := by simp [alloc.vec.Vec.length, h, MerchantCounter.row]
   unfold MerchantCounter.from_row; row_tac
+
+theorem HistoryEntry.from_row_spec (x : HistoryEntry) (v : alloc.vec.Vec Val) (h : v.val = HistoryEntry.row x) :
+    HistoryEntry.from_row v ⦃ o => o = some x ⦄ := by
+  have hl : v.length = 17 := by simp [alloc.vec.Vec.length, h, HistoryEntry.row]
+  unfold HistoryEntry.from_row; row_tac
 
 theorem Payment.from_rows_spec (rows : alloc.vec.Vec (alloc.vec.Vec Val)) (l : List Payment)
     (h : rows.val.map (·.val) = l.map Payment.row) :
@@ -859,6 +1039,22 @@ theorem MerchantCounter.from_rows_spec (rows : alloc.vec.Vec (alloc.vec.Vec Val)
   step with hl
   simp [ok1_post, l_post]
 
+theorem HistoryEntry.from_rows_spec (rows : alloc.vec.Vec (alloc.vec.Vec Val)) (l : List HistoryEntry)
+    (h : rows.val.map (·.val) = l.map HistoryEntry.row) :
+    HistoryEntry.from_rows rows ⦃ o => ∃ v, o = some v ∧ v.val = l ⦄ := by
+  have e : HistoryEntry.from_rows_loop rows (alloc.vec.Vec.new HistoryEntry) true 0#usize =
+      loop (fun x => rowsBody HistoryEntry.from_row rows x.1 x.2.1 x.2.2) (alloc.vec.Vec.new HistoryEntry, true, 0#usize) := by
+    unfold HistoryEntry.from_rows_loop; congr 1; funext ⟨a, b, c⟩
+    simp only []; unfold HistoryEntry.from_rows_loop.body rowsBody
+    dsimp only
+    split <;> (try rfl)
+    congr 1; funext v; congr 1; funext o; cases o <;> rfl
+  have hl : HistoryEntry.from_rows_loop rows (alloc.vec.Vec.new HistoryEntry) true 0#usize ⦃ r => r.2 = true ∧ r.1.val = l ⦄ := by
+    rw [e]; exact rows_loop HistoryEntry.from_row HistoryEntry.row (fun x v hv => HistoryEntry.from_row_spec x v hv) rows l h
+  unfold HistoryEntry.from_rows
+  step with hl
+  simp [ok1_post, l_post]
+
 /-! ## Tables -/
 
 /-- Key length per table. -/
@@ -869,6 +1065,7 @@ def kl : Nat → Nat
   | 3 => 1
   | 4 => 0
   | 5 => 1
+  | 6 => 2
   | _ => 0
 
 @[simp] theorem kl_0 : kl 0 = 1 := rfl
@@ -877,6 +1074,7 @@ def kl : Nat → Nat
 @[simp] theorem kl_3 : kl 3 = 1 := rfl
 @[simp] theorem kl_4 : kl 4 = 0 := rfl
 @[simp] theorem kl_5 : kl 5 = 1 := rfl
+@[simp] theorem kl_6 : kl 6 = 2 := rfl
 
 /-- `row` encodes a value of table `t`'s row type. -/
 def IsRow : Nat → List Val → Prop
@@ -886,24 +1084,25 @@ def IsRow : Nat → List Val → Prop
   | 3 => fun r => ∃ x : PspRef, r = PspRef.row x
   | 4 => fun r => ∃ x : Counter, r = Counter.row x
   | 5 => fun r => ∃ x : MerchantCounter, r = MerchantCounter.row x
+  | 6 => fun r => ∃ x : HistoryEntry, r = HistoryEntry.row x
   | _ => fun _ => False
 
 /-- Split a goal about table `t` into one goal per table. -/
-macro "cases_table " t:ident : tactic => `(tactic| rcases $t:ident with _ | _ | _ | _ | _ | _ | $t:ident)
+macro "cases_table " t:ident : tactic => `(tactic| rcases $t:ident with _ | _ | _ | _ | _ | _ | _ | $t:ident)
 
 /-- A write's table writes map a state's encoding to the next: `schema_step [enc, sqlA, applyWrite]`. -/
 macro "schema_step" " [" ls:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic| (
   intro s w; funext t
   cases w <;> cases_table t <;>
-    simp [applyAllW, applyW, upsert, Payment.putA, Payment.table, Payment.keyLen, Payment.delA, Payment.delWhereA, Refund.putA, Refund.table, Refund.keyLen, Refund.delA, Refund.delWhereA, Event.putA, Event.table, Event.keyLen, Event.delA, Event.delWhereA, PspRef.putA, PspRef.table, PspRef.keyLen, PspRef.delA, PspRef.delWhereA, Counter.putA, Counter.table, Counter.keyLen, Counter.row, MerchantCounter.putA, MerchantCounter.table, MerchantCounter.keyLen, MerchantCounter.delA, MerchantCounter.delWhereA, $ls,*] <;>
+    simp [applyAllW, applyW, upsert, Payment.putA, Payment.table, Payment.keyLen, Payment.delA, Payment.delWhereA, Refund.putA, Refund.table, Refund.keyLen, Refund.delA, Refund.delWhereA, Event.putA, Event.table, Event.keyLen, Event.delA, Event.delWhereA, PspRef.putA, PspRef.table, PspRef.keyLen, PspRef.delA, PspRef.delWhereA, Counter.putA, Counter.table, Counter.keyLen, Counter.row, MerchantCounter.putA, MerchantCounter.table, MerchantCounter.keyLen, MerchantCounter.delA, MerchantCounter.delWhereA, HistoryEntry.putA, HistoryEntry.table, HistoryEntry.keyLen, HistoryEntry.delA, HistoryEntry.delWhereA, $ls,*] <;>
     first
-      | exact map_filter_of _ _ _ _ (fun y => by simp [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row, MerchantCounter.row])
-      | (congr 1; exact List.filter_congr (fun y _ => by simp [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row, MerchantCounter.row]))))
+      | exact map_filter_of _ _ _ _ (fun y => by simp [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row, MerchantCounter.row, HistoryEntry.row])
+      | (congr 1; exact List.filter_congr (fun y _ => by simp [Payment.row, Refund.row, Event.row, PspRef.row, Counter.row, MerchantCounter.row, HistoryEntry.row]))))
 
 /-- Every table write is well formed: `schema_ok [sqlA]`. -/
 macro "schema_ok" " [" ls:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic| (
   intro w; cases w <;>
-    simp [WriteOk, RowOk, IsRow, Payment.putA, Payment.table, Payment.keyLen, Payment.delA, Payment.delWhereA, Refund.putA, Refund.table, Refund.keyLen, Refund.delA, Refund.delWhereA, Event.putA, Event.table, Event.keyLen, Event.delA, Event.delWhereA, PspRef.putA, PspRef.table, PspRef.keyLen, PspRef.delA, PspRef.delWhereA, Counter.putA, Counter.table, Counter.keyLen, MerchantCounter.putA, MerchantCounter.table, MerchantCounter.keyLen, MerchantCounter.delA, MerchantCounter.delWhereA, $ls,*]))
+    simp [WriteOk, RowOk, IsRow, Payment.putA, Payment.table, Payment.keyLen, Payment.delA, Payment.delWhereA, Refund.putA, Refund.table, Refund.keyLen, Refund.delA, Refund.delWhereA, Event.putA, Event.table, Event.keyLen, Event.delA, Event.delWhereA, PspRef.putA, PspRef.table, PspRef.keyLen, PspRef.delA, PspRef.delWhereA, Counter.putA, Counter.table, Counter.keyLen, MerchantCounter.putA, MerchantCounter.table, MerchantCounter.keyLen, MerchantCounter.delA, MerchantCounter.delWhereA, HistoryEntry.putA, HistoryEntry.table, HistoryEntry.keyLen, HistoryEntry.delA, HistoryEntry.delWhereA, $ls,*]))
 
 /-- A fresh tenant's tables: `schema_init [enc, init]`. -/
 macro "schema_init" " [" ls:Lean.Parser.Tactic.simpLemma,* "]" : tactic => `(tactic| (
@@ -923,11 +1122,12 @@ def Snapshot.enc (s : Snapshot) : Tables Val
   | 3 => s.refs.val.map PspRef.row
   | 4 => [Counter.row s.counter]
   | 5 => s.merchants.val.map MerchantCounter.row
+  | 6 => s.history.val.map HistoryEntry.row
   | _ => []
 
 /-- A fresh tenant's snapshot. -/
 def Snapshot.empty : Snapshot :=
-  { counter := Counter.zero, payments := alloc.vec.Vec.new Payment, refunds := alloc.vec.Vec.new Refund, events := alloc.vec.Vec.new Event, refs := alloc.vec.Vec.new PspRef, merchants := alloc.vec.Vec.new MerchantCounter }
+  { counter := Counter.zero, payments := alloc.vec.Vec.new Payment, refunds := alloc.vec.Vec.new Refund, events := alloc.vec.Vec.new Event, refs := alloc.vec.Vec.new PspRef, merchants := alloc.vec.Vec.new MerchantCounter, history := alloc.vec.Vec.new HistoryEntry }
 
 /-- Stored rows, table by table. -/
 def Rows.tabs (r : Rows) : Tables Val
@@ -937,6 +1137,7 @@ def Rows.tabs (r : Rows) : Tables Val
   | 3 => r.refs.val.map (·.val)
   | 4 => r.counter.val.map (·.val)
   | 5 => r.merchants.val.map (·.val)
+  | 6 => r.history.val.map (·.val)
   | _ => []
 
 theorem Snapshot.clone_eq (s : Snapshot) : Snapshot.Insts.CoreCloneClone.clone s = ok s := by
@@ -946,13 +1147,14 @@ theorem Snapshot.clone_eq (s : Snapshot) : Snapshot.Insts.CoreCloneClone.clone s
     vec_clone_eq Refund.Insts.CoreCloneClone s.refunds Refund.clone_eq,
     vec_clone_eq Event.Insts.CoreCloneClone s.events Event.clone_eq,
     vec_clone_eq PspRef.Insts.CoreCloneClone s.refs PspRef.clone_eq,
-    vec_clone_eq MerchantCounter.Insts.CoreCloneClone s.merchants MerchantCounter.clone_eq]
+    vec_clone_eq MerchantCounter.Insts.CoreCloneClone s.merchants MerchantCounter.clone_eq,
+    vec_clone_eq HistoryEntry.Insts.CoreCloneClone s.history HistoryEntry.clone_eq]
 
 /-- `decode` reads back tables `E` up to row order (an empty singleton table reads as its fresh row). -/
 theorem decode_spec (r : Rows) (E : Tables Val)
     (hrow : ∀ t, ∀ row ∈ E t, IsRow t row)
     (hone4 : (E 4).length = 1)
-    (hnil : ∀ t, 6 ≤ t → E t = [])
+    (hnil : ∀ t, 7 ≤ t → E t = [])
     (hR : ∀ t, (Rows.tabs r t).Perm (E t) ∨ (Rows.tabs r t = [] ∧ E t = Snapshot.enc Snapshot.empty t)) :
     decode r ⦃ o => ∃ s, o = some s ∧ ∀ t, (Snapshot.enc s t).Perm (E t) ⦄ := by
   obtain ⟨l4, n4, e4, f4⟩ := one_row Counter.row Counter.zero (Rows.tabs r 4) (E 4) hone4 (hrow 4) (hR 4)
@@ -966,6 +1168,8 @@ theorem decode_spec (r : Rows) (E : Tables Val)
   obtain ⟨l3, e3⟩ := exists_map PspRef.row (Rows.tabs r 3) (fun row h => hrow 3 row (h3.subset h))
   have h5 : (Rows.tabs r 5).Perm (E 5) := keyed_perm (hR 5)
   obtain ⟨l5, e5⟩ := exists_map MerchantCounter.row (Rows.tabs r 5) (fun row h => hrow 5 row (h5.subset h))
+  have h6 : (Rows.tabs r 6).Perm (E 6) := keyed_perm (hR 6)
+  obtain ⟨l6, e6⟩ := exists_map HistoryEntry.row (Rows.tabs r 6) (fun row h => hrow 6 row (h6.subset h))
   unfold decode
   step with Counter.from_one_spec r.counter l4 n4 e4 as ⟨ o4, h4 ⟩
   subst h4; dsimp only
@@ -979,6 +1183,8 @@ theorem decode_spec (r : Rows) (E : Tables Val)
   subst ho3; dsimp only
   step with MerchantCounter.from_rows_spec r.merchants l5 e5 as ⟨ o5, v5, ho5, hv5 ⟩
   subst ho5; dsimp only
+  step with HistoryEntry.from_rows_spec r.history l6 e6 as ⟨ o6, v6, ho6, hv6 ⟩
+  subst ho6; dsimp only
   refine ⟨_, rfl, fun t => ?_⟩
   match t with
   | 0 => simp only [Snapshot.enc, hv0]; rw [← e0]; exact h0
@@ -987,7 +1193,8 @@ theorem decode_spec (r : Rows) (E : Tables Val)
   | 3 => simp only [Snapshot.enc, hv3]; rw [← e3]; exact h3
   | 4 => simp only [Snapshot.enc, f4]; exact .refl _
   | 5 => simp only [Snapshot.enc, hv5]; rw [← e5]; exact h5
-  | t + 6 => simp only [Snapshot.enc, hnil (t + 6) (by omega)]; exact .refl _
+  | 6 => simp only [Snapshot.enc, hv6]; rw [← e6]; exact h6
+  | t + 7 => simp only [Snapshot.enc, hnil (t + 7) (by omega)]; exact .refl _
 
 /-! ## Partial loads
 
@@ -1008,7 +1215,7 @@ noncomputable def pickVec {α : Type} (plan : List (Query.Read Val)) (tabs : Tab
 /-- What loading `plan` from the tables of `s` decodes to: each table's rows its read keeps, none if the plan
 does not read it; a singleton table reads as fresh unless its read keeps its row. -/
 noncomputable def Snapshot.load (plan : List (Query.Read Val)) (s : Snapshot) : Snapshot :=
-  { counter := (pickRows plan (Snapshot.enc s) 4 Counter.row [s.counter]).headD Counter.zero, payments := pickVec plan (Snapshot.enc s) 0 Payment.row s.payments, refunds := pickVec plan (Snapshot.enc s) 1 Refund.row s.refunds, events := pickVec plan (Snapshot.enc s) 2 Event.row s.events, refs := pickVec plan (Snapshot.enc s) 3 PspRef.row s.refs, merchants := pickVec plan (Snapshot.enc s) 5 MerchantCounter.row s.merchants }
+  { counter := (pickRows plan (Snapshot.enc s) 4 Counter.row [s.counter]).headD Counter.zero, payments := pickVec plan (Snapshot.enc s) 0 Payment.row s.payments, refunds := pickVec plan (Snapshot.enc s) 1 Refund.row s.refunds, events := pickVec plan (Snapshot.enc s) 2 Event.row s.events, refs := pickVec plan (Snapshot.enc s) 3 PspRef.row s.refs, merchants := pickVec plan (Snapshot.enc s) 5 MerchantCounter.row s.merchants, history := pickVec plan (Snapshot.enc s) 6 HistoryEntry.row s.history }
 
 @[simp] theorem Snapshot.load_payments (plan : List (Query.Read Val)) (s : Snapshot) :
     (Snapshot.load plan s).payments.val = pickRows plan (Snapshot.enc s) 0 Payment.row s.payments.val :=
@@ -1030,10 +1237,14 @@ noncomputable def Snapshot.load (plan : List (Query.Read Val)) (s : Snapshot) : 
     (Snapshot.load plan s).merchants.val = pickRows plan (Snapshot.enc s) 5 MerchantCounter.row s.merchants.val :=
   alloc.vec.Vec.from_val _ _
 
+@[simp] theorem Snapshot.load_history (plan : List (Query.Read Val)) (s : Snapshot) :
+    (Snapshot.load plan s).history.val = pickRows plan (Snapshot.enc s) 6 HistoryEntry.row s.history.val :=
+  alloc.vec.Vec.from_val _ _
+
 
 /-- Rows holding, for each table, what `plan` loads from the tables of `s` decode to `Snapshot.load plan s`. -/
 theorem decode_load (plan : List (Query.Read Val)) (s : Snapshot) (r : Rows)
-    (h : ∀ t, t < 6 → Rows.tabs r t = load plan (Snapshot.enc s) t) :
+    (h : ∀ t, t < 7 → Rows.tabs r t = load plan (Snapshot.enc s) t) :
     decode r = ok (some (Snapshot.load plan s)) := by
   have e4 := h 4 (by omega)
   rw [load_pick plan _ 4 Counter.row [s.counter] rfl] at e4
@@ -1048,6 +1259,8 @@ theorem decode_load (plan : List (Query.Read Val)) (s : Snapshot) (r : Rows)
   rw [load_pick plan _ 3 PspRef.row s.refs.val rfl] at e3
   have e5 := h 5 (by omega)
   rw [load_pick plan _ 5 MerchantCounter.row s.merchants.val rfl] at e5
+  have e6 := h 6 (by omega)
+  rw [load_pick plan _ 6 HistoryEntry.row s.history.val rfl] at e6
   simp only [Rows.tabs] at *
   apply eq_ok_of_spec
   unfold decode
@@ -1063,6 +1276,8 @@ theorem decode_load (plan : List (Query.Read Val)) (s : Snapshot) (r : Rows)
   subst ho3; dsimp only
   step with MerchantCounter.from_rows_spec r.merchants _ e5 as ⟨ o5, v5, ho5, hv5 ⟩
   subst ho5; dsimp only
+  step with HistoryEntry.from_rows_spec r.history _ e6 as ⟨ o6, v6, ho6, hv6 ⟩
+  subst ho6; dsimp only
   simp only [WP.spec_ok, Option.some.injEq, Snapshot.load]
   congr 1 <;> apply alloc.vec.Vec.ext <;> simp [pickVec, *]
 
@@ -1132,11 +1347,22 @@ theorem holds_in_5 (s : Snapshot) (i j : Nat) (p : Query.Pred Val) (w : Query.Wi
     (l := s.merchants.val) (h := rfl)]
   cases r[i]? <;> rfl
 
+/-- `IN` a column of a read of table 6, as a test on the snapshot's rows. -/
+theorem holds_in_6 (s : Snapshot) (i j : Nat) (p : Query.Pred Val) (w : Query.Window) (r : List Val) :
+    (Query.Pred.isIn i 6 p j w).holds (Snapshot.enc s) r =
+      match r[i]? with
+      | none => false
+      | some x => (w.apply ((s.history.val).filter (fun y => p.holds (Snapshot.enc s) (HistoryEntry.row y)))).any
+          (fun y => decide ((HistoryEntry.row y)[j]? = some x)) := by
+  rw [Query.holds_isIn (tabs := Snapshot.enc s) (i := i) (t := 6) (j := j) (p := p) (w := w) (r := r) (f := HistoryEntry.row)
+    (l := s.history.val) (h := rfl)]
+  cases r[i]? <;> rfl
+
 
 end PartialLoads
 
 /-- Rows in a snapshot's keyed tables; a write adds at most one. -/
-def Snapshot.size (s : Snapshot) : Nat := s.payments.length + s.refunds.length + s.events.length + s.refs.length + s.merchants.length
+def Snapshot.size (s : Snapshot) : Nat := s.payments.length + s.refunds.length + s.events.length + s.refs.length + s.merchants.length + s.history.length
 
 /-! ## Loading
 
@@ -1151,7 +1377,7 @@ structure Fits : Prop where
   rows : A.IsRow = IsRow
   enc : ∀ s, A.enc (toSt s) = Snapshot.enc s
   init : A.enc A.init = Snapshot.enc Snapshot.empty
-  nil : ∀ s t, 6 ≤ t → A.enc s t = []
+  nil : ∀ s t, 7 ≤ t → A.enc s t = []
 
 variable {A toSt}
 
@@ -1282,7 +1508,7 @@ variable {St : Type} (A : App St Write Val) (toSt : Snapshot → St) (ts : List 
 
 /-- Rows the compiled `SELECT` of each table returns, in any order. -/
 def Loads (db : Pg.PgDb Val) (r : Rows) : Prop :=
-  ∀ t, t < 6 → ∃ q ps R0, Pg.selectA valKind ts tv t none = some (q, ps) ∧
+  ∀ t, t < 7 → ∃ q ps R0, Pg.selectA valKind ts tv t none = some (q, ps) ∧
     Pg.selected valKind db q ps = some R0 ∧ (Rows.tabs r t).Perm R0
 
 inductive PgServed : Pg.PgDb Val → St → Prop
@@ -1301,13 +1527,13 @@ inductive PgServed : Pg.PgDb Val → St → Prop
 
 variable {A toSt ts tv Step}
 
-theorem Rows.tabs_nil (r : Rows) (t : Nat) (h : 6 ≤ t) : Rows.tabs r t = [] := by
+theorem Rows.tabs_nil (r : Rows) (t : Nat) (h : 7 ≤ t) : Rows.tabs r t = [] := by
   obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le' h
   simp only [Rows.tabs]
 
 /-- The tenant's view of a `PgServed` database is `Served`, with the same state. -/
 theorem pg_served (hs : SqlFits A) (hf : Fits A toSt) (hv : Pg.Valid ts) (htv : valKind tv = some .int)
-    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 6) {db : Pg.PgDb Val} {s : St}
+    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 7) {db : Pg.PgDb Val} {s : St}
     (h : PgServed A toSt ts tv Step db s) : Pg.Matches valKind ts db ∧ Served A toSt (Pg.view ts tv db) s := by
   induction h with
   | fresh hm he => exact ⟨hm, he ▸ .fresh⟩
@@ -1330,7 +1556,7 @@ theorem pg_served (hs : SqlFits A) (hf : Fits A toSt) (hv : Pg.Valid ts) (htv : 
 
 /-- An `Inv` kept by init, row reordering and every `Step` holds on PostgreSQL and on every load. -/
 theorem pg_loaded_inv (hs : SqlFits A) (hf : Fits A toSt) (hv : Pg.Valid ts) (htv : valKind tv = some .int)
-    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 6) (Inv : St → Prop) (hinit : Inv A.init)
+    (hkl : Pg.klOf ts = kl) (hlen : ts.length = 7) (Inv : St → Prop) (hinit : Inv A.init)
     (hequiv : ∀ snap s', A.Equiv (toSt snap) s' → Inv s' → Inv (toSt snap))
     (hstep : ∀ snap ws, Step snap ws → Inv (toSt snap) → Inv (ws.val.foldl A.step (toSt snap)))
     {db : Pg.PgDb Val} {s : St} (h : PgServed A toSt ts tv Step db s) :

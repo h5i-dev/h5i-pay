@@ -218,10 +218,15 @@ async fn postgres_agrees_with_the_reference_engine() {
     }
     let mut a = pg.snapshot(TenantId(org)).await.unwrap();
     let mut b = mem.snapshot(TenantId(org));
+    // G1: PostgreSQL's history carries the transaction's clock; the
+    // in-memory engine does not stamp one.
+    assert!(!a.history.is_empty() && a.history.iter().all(|h| h.at > 0));
     for s in [&mut a, &mut b] {
         s.accounts.sort_by_key(|x| x.id);
         s.transfers.sort_by_key(|x| x.id);
         s.owners.sort_by_key(|x| x.owner);
+        s.history.sort_by_key(|h| (h.account, h.n));
+        s.history.iter_mut().for_each(|h| h.at = 0);
     }
     assert_eq!(a, b);
     audit(&a).unwrap();
@@ -279,11 +284,11 @@ async fn payments_load_for_matches_the_whole_tenant() {
     let Some(url) = database_url() else { return };
     let (_, pg) = payment_storage::engines(&url, 4, EngineConfig::default()).await.unwrap();
     let org = fresh_tenant();
-    let op = d::Principal { org, actor: d::Actor::Operator(1) };
+    let op = d::Principal { org, actor: d::Actor::Operator(1), at: 0 };
     let mut rng = Rng(11);
     for i in 0..500u64 {
         let u = rng.below(4);
-        let actor = if u == 0 { op } else { d::Principal { org, actor: d::Actor::User(u) } };
+        let actor = if u == 0 { op } else { d::Principal { org, actor: d::Actor::User(u), at: 0 } };
         let id = |r: &mut Rng| r.below(8);
         // Few amounts, so PSP results often match and payments get captured.
         let amount = |r: &mut Rng| 100 * (1 + r.below(2));

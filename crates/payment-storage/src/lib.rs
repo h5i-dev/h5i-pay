@@ -13,7 +13,7 @@
 pub mod ledger;
 pub mod payments;
 
-use h5i_app_pg::{Engine, EngineConfig, Pool, DbError};
+use h5i_app_pg::{Clock, Engine, EngineConfig, Pool, DbError};
 use std::sync::Arc;
 
 pub use h5i_app_pg::tls::Roots;
@@ -49,6 +49,19 @@ pub(crate) fn add_column(table: &str, column: &str, ty: &str) -> String {
            END IF; \
          END $$"
     )
+}
+
+/// G1: the `history` table of the schema refuses `UPDATE`, `DELETE` and
+/// `TRUNCATE`, so an entry, once committed, stays as written. The kernels
+/// only append to it (`Theorems.history_appended`); this makes the database
+/// refuse anything else, from any client.
+pub(crate) fn append_only_history() -> Vec<String> {
+    vec![
+        "CREATE OR REPLACE FUNCTION history_append_only() RETURNS trigger LANGUAGE plpgsql AS $$            BEGIN RAISE EXCEPTION 'history is append-only (% on %)', TG_OP, TG_TABLE_NAME              USING ERRCODE = 'insufficient_privilege'; END $$"
+            .into(),
+        "DO $$ BEGIN            IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'history_append_only'                           AND tgrelid = 'history'::regclass) THEN              CREATE TRIGGER history_append_only BEFORE UPDATE OR DELETE ON history                FOR EACH ROW EXECUTE FUNCTION history_append_only();              CREATE TRIGGER history_no_truncate BEFORE TRUNCATE ON history                FOR EACH STATEMENT EXECUTE FUNCTION history_append_only();            END IF;          END $$"
+            .into(),
+    ]
 }
 
 /// `ALTER TABLE … SET (fillfactor = n)`, only when not set yet (it takes a
@@ -143,12 +156,16 @@ pub async fn engines(url: &str, pool_size: usize, config: EngineConfig) -> Resul
 }
 
 /// Both engines, secured as `tls` says, with their schemas installed.
+/// They read the time from PostgreSQL (`Clock::Database`,
+/// `transaction_timestamp()`), so the history (G1) records the
+/// transaction's clock, the same for every API server of a database.
 pub async fn engines_with(
     url: &str,
     pool_size: usize,
     config: EngineConfig,
     tls: &DbTls,
 ) -> Result<(Arc<LedgerEngine>, Arc<PaymentsEngine>), DbError> {
+    let config = EngineConfig { clock: Clock::Database, ..config };
     let ledger = Arc::new(LedgerEngine::new(schema_pool_with(url, LEDGER_SCHEMA, pool_size, tls)?, config.clone()));
     ledger.install_schema().await?;
     let payments = Arc::new(PaymentsEngine::new(schema_pool_with(url, PAYMENTS_SCHEMA, pool_size, tls)?, config));

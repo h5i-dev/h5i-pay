@@ -178,6 +178,73 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### G1: append-only operator audit history, written by the kernels
+
+- Both kernels have a `history` table (`HistoryEntry`, key `(payment, n)`
+  or `(account, n)`) and a per-row count `changes` on `payments` and
+  `accounts` (the next entry's `n`). Each entry says who (`by_operator`,
+  `actor`: the user's or operator's id), when (`at`: the transaction's
+  clock), what (payments: command, PSP result, webhook event, refund;
+  ledger: open or post, transfer id and code) and the status and amounts
+  (payments) or debits and credits (ledger) before and after.
+- The clock: `Principal` has a field `at`; the engine stamps it before
+  every attempt (`Kernel::stamp`) and `payment_storage::engines_with` now
+  runs both engines on `Clock::Database` (`transaction_timestamp()`), so
+  every API server of a database records the same clock.
+- Payments: `transition` is now `decide_command` (what every command
+  decided before) followed, when the write set is not empty, by `logged`:
+  the decision's writes without its payment row, then the payment row it
+  wrote (or the row as it was, for a stale webhook or a PSP reference)
+  with `changes + 1`, the caller as `operator` and the ledger mark kept
+  only by `MarkPosted`, then entry `n` = the old `changes` (0 for a new
+  payment). `logged` checks that the row is the command's payment
+  (`Corrupt` otherwise; unreachable). A stale webhook and `AttachRef` now
+  also write the payment row (to count the entry), clearing its ledger
+  mark; recovery re-marks such a payment (its postings are replays).
+- Ledger: `open` and `post` write each account row followed by its entry
+  (`[account, entry, account, entry, transfer]` per transfer), so a batch
+  that touches an account twice numbers its two entries in order.
+- Read: `History { payment | account, from, limit }`, operators only,
+  paged like F3 (at most 64; `next` from `changes`), with read plans and
+  frame theorems; HTTP `{"cmd":"history", …}` on `/v1/payments/rpc` and
+  `/v1/ledger`.
+- Database: triggers on both `history` tables refuse `UPDATE`, `DELETE`
+  and `TRUNCATE` from any role (`payment_storage::append_only_history`).
+  Existing payments and accounts get `changes = 0`; their history starts
+  with their next change.
+- Proven (`h5i app check`; ledger 317 theorems in 14 modules, payments 405
+  in 9; standard axioms only):
+  - payments `every_change_logged`: a successful command writes nothing,
+    or exactly one payment row and exactly one history entry, entry `n` of
+    that payment leaving it with `n + 1`, naming the acting principal
+    (`User u` / `Operator o` and the id) and `a.at`, with the row's status
+    and amounts after the change; `history_appended`: in every reachable
+    state the entry is appended under a key no earlier entry has (every
+    earlier entry stays, unchanged and in order), and its "before" fields
+    are the row as it was (`NO_STATUS` and `n = 0` for a new payment);
+  - ledger `every_change_logged` (inductive `Logged`: every account row in
+    the write set is immediately followed by exactly its entry, no other
+    history row, so as many entries as account writes) and
+    `history_appended` (the history after = before ++ the command's
+    entries, keys unique), batches included through `Batch.Serial`;
+  - the earlier theorems restated over the wrapper (payments: `effect`,
+    `writes_record_operator`, `marked_only_as_seen` now with
+    `changes = p.changes + 1`, `changes_clear_ledger_done`, `event_dedup`,
+    `operator_only`; frame theorems for `transition`, `logged` included).
+- Mutants (`h5i app mutate`): payments 19/19 caught, ledger 15/15. New in
+  both kernels: `change_without_entry` (payments: `logged` drops the entry;
+  ledger: opening an account writes no entry), `history_wrong_actor` (a
+  user recorded as 0), `history_entry_overwritten` (the count not bumped,
+  so the next change reuses the key). `mark_plan_misses_refunds` was
+  re-anchored (the `History` plan now follows the `MarkPosted` plan).
+- Tests: kernel unit tests for both histories; `ledger_over_http` reads an
+  account's history (database clock within ten minutes of the host's);
+  `payments_api::every_change_is_in_the_history` reads a payment's history
+  (entries numbered 0…, the creating user, the orchestrator's capture)
+  and checks that PostgreSQL refuses `UPDATE`, `DELETE` and `TRUNCATE`
+  on both history tables; the PostgreSQL-vs-memory differential test
+  compares the histories (clock aside).
+
 ### After F: full checks and the B4 end-to-end runs
 
 - Checks at `b87ef95`: `h5i app extract --check` and `h5i app check` on

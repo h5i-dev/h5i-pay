@@ -62,11 +62,11 @@ pub mod ledger {
     use payment_ledger as k;
 
     pub fn op(org: u64) -> k::Principal {
-        k::Principal { org, actor: k::Actor::Operator(1) }
+        k::Principal { org, actor: k::Actor::Operator(1), at: 0 }
     }
 
     pub fn user(org: u64, user: u64) -> k::Principal {
-        k::Principal { org, actor: k::Actor::User(user) }
+        k::Principal { org, actor: k::Actor::User(user), at: 0 }
     }
 
     pub fn open(owner: u64, currency: u32, no_overdraft: bool) -> k::Command {

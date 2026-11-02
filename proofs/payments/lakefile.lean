@@ -17,6 +17,9 @@ package h5i_pay_payments_proofs
 lean_lib Generated where
   srcDir := "generated"
   roots := #[`PaymentDomain, `PaymentsSchema]
+  -- The history table's 17-column row decode (`HistoryEntry.from_row_spec`)
+  -- needs more than the default 200000 heartbeats.
+  leanOptions := #[⟨`maxHeartbeats, (1000000 : Nat)⟩]
 
 -- Hand-written specifications and proofs.
 @[default_target] lean_lib Proofs where

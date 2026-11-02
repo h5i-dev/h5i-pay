@@ -181,7 +181,7 @@ def RecordWrites (s : St) (op : U64) (id : Nat) (ws : List Write) : Prop :=
 
 theorem write_clone (w : Write) : Write.Insts.CoreCloneClone.clone w = ok w := by
   cases w <;> simp [Write.Insts.CoreCloneClone.clone, Payment.clone_eq, Refund.clone_eq, Event.clone_eq,
-    PspRef.clone_eq, Counter.clone_eq, MerchantCounter.clone_eq]
+    PspRef.clone_eq, Counter.clone_eq, MerchantCounter.clone_eq, HistoryEntry.clone_eq]
 
 @[step] theorem append_spec (ws more : alloc.vec.Vec Write) (h : ws.length + more.length ≤ Usize.max) :
     append ws more ⦃ v => v.val = ws.val ++ more.val ⦄ := by
@@ -264,7 +264,7 @@ theorem create_spec (a : Principal) (s : Snapshot) (amt : U64) (cur : U32) (mc :
     create a s amt cur mc ⦃ r => ∀ ws rep, r = .Ok (ws, rep) → ∃ n : U64, n.val = s.counter.next_id.val + 1 ∧
       ∃ q m : U64, q = merchantNext s.merchants.val a.user ∧ m.val = q.val + 1 ∧
       ws.val = [.PutPayment ⟨s.counter.next_id, a.user, amt, cur, CREATED, mc, 0#u64, 0#u64, 0#u64, 0#u64, 0#u64, a.opId,
-        false, q⟩, .SetCounter ⟨n⟩, .PutMerchant ⟨a.user, m⟩] ⦄ := by
+        false, q, 0#u64⟩, .SetCounter ⟨n⟩, .PutMerchant ⟨a.user, m⟩] ⦄ := by
   unfold create
   simp only [user_of_eq, operator_of_eq, bind_tc_ok, bind_ok]
   step*
@@ -571,5 +571,23 @@ theorem list_writes (a : Principal) (s : Snapshot) (m f : U64) (l : U32) ws r
       obtain ⟨i, -, h⟩ := bind_tc_eq_ok.1 h
       obtain ⟨nx, -, h⟩ := bind_tc_eq_ok.1 h
       exact fin _ _ h
+
+theorem history_page_writes (a : Principal) (s : Snapshot) (p f : U64) (l : U32) ws r
+    (h : history_page a s p f l = ok (.Ok (ws, r))) : ws.val = [] := by
+  unfold history_page at h
+  simp only [is_operator_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  split at h
+  · obtain ⟨o, -, h⟩ := bind_tc_eq_ok.1 h
+    split at h
+    · simp at h
+    · obtain ⟨e, -, h⟩ := bind_tc_eq_ok.1 h
+      obtain ⟨nx, -, h⟩ := bind_tc_eq_ok.1 h
+      obtain ⟨v, -, h⟩ := bind_tc_eq_ok.1 h
+      simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
+  · simp at h
 
 end payment_domain.Commands

@@ -58,10 +58,29 @@ theorem accounts_page_writes (a : Principal) (s : Snapshot) (o f : U64) (l : U32
       obtain ⟨nx, -, h⟩ := bind_tc_eq_ok.1 h
       exact fin _ _ h
 
+theorem history_page_writes (a : Principal) (s : Snapshot) (p f : U64) (l : U32) ws r
+    (h : history_page a s p f l = ok (.Ok (ws, r))) : ws.val = [] := by
+  unfold history_page at h
+  simp only [is_operator_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  split at h
+  · obtain ⟨o, -, h⟩ := bind_tc_eq_ok.1 h
+    split at h
+    · simp at h
+    · obtain ⟨e, -, h⟩ := bind_tc_eq_ok.1 h
+      obtain ⟨nx, -, h⟩ := bind_tc_eq_ok.1 h
+      obtain ⟨v, -, h⟩ := bind_tc_eq_ok.1 h
+      simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
+  · simp at h
+
 theorem reads_nothing (a : Principal) (s : Snapshot) (c : Command) ws r
     (h : transition a s c = ok (.Ok (ws, r)))
-    (hc : (∃ o f l, c = .Accounts o f l) ∨ c = .Transfers ∨ ∃ id, c = .Account id) : ws.val = [] := by
-  rcases hc with ⟨o, f, l, rfl⟩ | rfl | ⟨id, rfl⟩
+    (hc : (∃ o f l, c = .Accounts o f l) ∨ c = .Transfers ∨ (∃ id, c = .Account id) ∨ ∃ p f l, c = .History p f l) :
+    ws.val = [] := by
+  rcases hc with ⟨o, f, l, rfl⟩ | rfl | ⟨id, rfl⟩ | ⟨p, f, l, rfl⟩
   · exact accounts_page_writes a s o f l ws r h
   · simp only [transition, is_operator_eq, bind_tc_ok, bind_ok] at h
     split at h
@@ -70,6 +89,7 @@ theorem reads_nothing (a : Principal) (s : Snapshot) (c : Command) ws r
       rw [← hv.1]; rfl
     · simp at h
   · exact post_of_ok (read_account_spec a s id) h ws r rfl
+  · exact history_page_writes a s p f l ws r h
 
 /-! ## The invariant -/
 
@@ -91,19 +111,23 @@ theorem inv_preserved (a : Principal) (s : Snapshot) (c : Command) ws r
   cases c with
   | Open owner cur code nod noc =>
     obtain ⟨_, _, n, hn, q, m, _, _, hws⟩ := post_of_ok (open_spec a s owner cur code nod noc) h ws r rfl
-    rw [hws, show ∀ x y z : Write, [x, y, z] = [x, y] ++ [z] from fun _ _ _ => rfl]
-    have h2 := inv_open _ ⟨s.ledger.next_account, owner, cur, code, nod, noc, 0#u64, 0#u64, q⟩ n hinv rfl hn rfl rfl
+    rw [hws]
+    apply inv_core (core_strip _ _ _ rfl)
+    simp only [strip, List.filter_cons, notHist, if_true, Bool.false_eq_true, if_false, List.filter_nil]
+    rw [show ∀ x y z : Write, [x, y, z] = [x, y] ++ [z] from fun _ _ _ => rfl]
+    have h2 := inv_open _ ⟨s.ledger.next_account, owner, cur, code, nod, noc, 0#u64, 0#u64, q, 1#u64⟩ n hinv rfl hn rfl rfl
     simp only [applyAll, List.foldl_append, List.foldl_cons, List.foldl_nil] at h2 ⊢
     exact ⟨h2.fresh, h2.balanced, h2.limits⟩
   | Transfer t => exact inv_transfer a s t ws r hinv h
   | Batch ts =>
-    have hsz : Snapshot.size s + 3 * 8192 < Usize.max := by
+    have hsz : Snapshot.size s + 5 * 8192 < Usize.max := by
       simp only [HasRoom, Snapshot.size, alloc.vec.Vec.length] at *; omega
     obtain ⟨s', hser⟩ := batch_serial a s ts ws r hsz h
     exact inv_serial hser hinv
-  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr ⟨id, rfl⟩))]; exact hinv
+  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr (.inl ⟨id, rfl⟩)))]; exact hinv
   | Accounts o f l => rw [reads_nothing a s _ ws r h (.inl ⟨o, f, l, rfl⟩)]; exact hinv
   | Transfers => rw [reads_nothing a s _ ws r h (.inr (.inl rfl))]; exact hinv
+  | History p f l => rw [reads_nothing a s _ ws r h (.inr (.inr (.inr ⟨p, f, l, rfl⟩)))]; exact hinv
 
 theorem init_inv : Inv init := by
   refine ⟨by simp [init], fun c => ?_, by simp [init]⟩
@@ -147,15 +171,16 @@ nothing. -/
 theorem posting_balanced (a : Principal) (s : Snapshot) (t : TransferReq) ws r
     (h : transition a s (.Transfer t) = ok (.Ok (ws, r))) :
     ws.val = [] ∨
-      ∃ qa qb d k, findAcc (Snapshot.toSt s) t.debit.val = some qa ∧ findAcc (Snapshot.toSt s) t.credit.val = some qb ∧
+      ∃ qa qb d k ca cb, findAcc (Snapshot.toSt s) t.debit.val = some qa ∧ findAcc (Snapshot.toSt s) t.credit.val = some qb ∧
         t.debit ≠ t.credit ∧ qa.currency = qb.currency ∧
         d.val = qa.debits.val + t.amount.val ∧ k.val = qb.credits.val + t.amount.val ∧
-        ws.val = [.PutAccount { qa with debits := d }, .PutAccount { qb with credits := k },
-          .PutTransfer ⟨t.id, t.debit, t.credit, t.amount, qa.currency, t.code, a.opId⟩] := by
+        ws.val = postWrites { qa with debits := d, changes := ca } { qb with credits := k, changes := cb } a t qa qb
+          qa.currency a.opId ∧
+        journalRow t qa.currency a.opId = ⟨t.id, t.debit, t.credit, t.amount, qa.currency, t.code, a.opId⟩ := by
   rcases post_of_ok (transfer_spec a s t) h ws r rfl with
-    ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, hne, qa, qb, ha, _, hb, hcur, _, d, k, hd, hk, _, _, hws⟩
+    ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, hne, qa, qb, ha, _, hb, hcur, _, d, k, ca, cb, hd, hk, _, _, _, _, hws⟩
   · exact .inl hws
-  · exact .inr ⟨qa, qb, d, k, ha, hb, hne, hcur, hd, hk, hws⟩
+  · exact .inr ⟨qa, qb, d, k, ca, cb, ha, hb, hne, hcur, hd, hk, hws, rfl⟩
 
 /-! ## Idempotency -/
 
@@ -201,24 +226,25 @@ theorem replay_is_noop (a a' : Principal) (s s' : Snapshot) (t : TransferReq) ws
       · exact ⟨fun e => e1 (by scalar_tac), fun e => e2 (by scalar_tac)⟩
   rcases post_of_ok (transfer_spec a s t) h ws r rfl with
     ⟨old, hf, h1, h2, h3, h4, hws, _, hne, acc, hacc, _⟩ |
-    ⟨_, _, htr, hne, qa, qb, ha, _, hb, hcur, _, d, k, hd, hk, _, _, hws⟩
+    ⟨_, _, htr, hne, qa, qb, ha, _, hb, hcur, _, d, k, ca, cb, hd, hk, _, _, _, _, hws⟩
   · rw [hws] at hs'
     have hf' : findTr (Snapshot.toSt s') t.id.val = some old := by rw [hs']; exact hf
     have hacc' : findAcc (Snapshot.toSt s') t.debit.val = some acc := by rw [hs']; exact hacc
     exact replay_ok a' s' t old acc hid.1 hid.2 hne hacc' (hauth.imp id (fun h => h acc hacc)) hf' h1 h2 h3 h4
   · have hf' : findTr (Snapshot.toSt s') t.id.val = some (Commands.journalRow t qa.currency a.opId) := by
       rw [hs', hws]
-      simp only [applyAll, List.foldl_cons, List.foldl_nil, findTr_put, findTr_putAcc, Commands.journalRow]
+      simp only [postWrites, applyAll, List.foldl_cons, List.foldl_nil, findTr_put, findTr_putAcc, findTr_hist,
+        Commands.journalRow]
       simp
     have hqa : qa.id.val = t.debit.val := by simpa using (List.find?_some ha)
     have hqb : qb.id.val = t.credit.val := by simpa using (List.find?_some hb)
-    have hacc' : findAcc (Snapshot.toSt s') t.debit.val = some { qa with debits := d } := by
+    have hacc' : findAcc (Snapshot.toSt s') t.debit.val = some { qa with debits := d, changes := ca } := by
       rw [hs', hws]
-      simp only [applyAll, List.foldl_cons, List.foldl_nil, findAcc_putTr, findAcc_put]
+      simp only [postWrites, applyAll, List.foldl_cons, List.foldl_nil, findAcc_putTr, findAcc_put, findAcc_hist]
       have : qb.id.val ≠ t.debit.val := by
         intro e; apply hne; apply UScalar.eq_of_val_eq; rw [← hqb, e]
       simp [this, hqa]
-    exact replay_ok a' s' t _ { qa with debits := d } hid.1 hid.2 hne hacc' (hauth.imp id (fun h => h qa ha)) hf'
+    exact replay_ok a' s' t _ { qa with debits := d, changes := ca } hid.1 hid.2 hne hacc' (hauth.imp id (fun h => h qa ha)) hf'
       rfl rfl rfl rfl
 
 /-- **Replays answer only to those who may debit (SEC-03).** A transfer
@@ -259,14 +285,14 @@ theorem guarded_transfer (a : Principal) (s : Snapshot) (t : TransferReq) ws r
     (h : transfer a s t = ok (.Ok (ws, r))) :
     Guarded a (Snapshot.toSt s) (applyAll (Snapshot.toSt s) ws.val) := by
   rcases post_of_ok (transfer_spec a s t) h ws r rfl with
-    ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, hne, qa, qb, ha, hauth, hb, _, _, d, k, hd, hk, _, _, hws⟩
+    ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, hne, qa, qb, ha, hauth, hb, _, _, d, k, ca, cb, hd, hk, _, _, _, _, hws⟩
   · rw [hws]; exact Guarded.refl _ _
   · rw [hws]
     intro n q hq
     have hai := (findAcc_mem ha).2
     have hbi := (findAcc_mem hb).2
     have hne' : t.debit.val ≠ t.credit.val := fun e => hne ((H5iAppLib.u64_val_eq _ _).1 e)
-    simp only [applyAll, List.foldl_cons, List.foldl_nil, findAcc_putTr, findAcc_put]
+    simp only [postWrites, applyAll, List.foldl_cons, List.foldl_nil, findAcc_putTr, findAcc_put, findAcc_hist]
     by_cases hnb : qb.id.val = n
     · -- the credit account: debits unchanged
       have : q = qb := by rw [← hnb, hbi] at hq; rw [hb] at hq; exact (Option.some.inj hq).symm
@@ -303,19 +329,20 @@ theorem guarded (a : Principal) (s : Snapshot) (c : Command) ws r
     intro m q hq
     have hfresh : (Snapshot.toSt s).next ≠ m := by
       intro e; rw [← e, findAcc_fresh hinv] at hq; simp at hq
-    simp only [applyAll, List.foldl_cons, List.foldl_nil, findAcc_set, findAcc_put, findAcc_owner]
+    simp only [applyAll, List.foldl_cons, List.foldl_nil, findAcc_set, findAcc_put, findAcc_owner, findAcc_hist]
     simp only [Snapshot.toSt] at hfresh
     rw [if_neg hfresh]
     exact ⟨q, hq, rfl, le_refl _, fun h => absurd h (lt_irrefl _)⟩
   | Transfer t => exact guarded_transfer a s t ws r h
   | Batch ts =>
-    have hsz : Snapshot.size s + 3 * 8192 < Usize.max := by
+    have hsz : Snapshot.size s + 5 * 8192 < Usize.max := by
       simp only [HasRoom, Snapshot.size, alloc.vec.Vec.length] at *; omega
     obtain ⟨s', hser⟩ := batch_serial a s ts ws r hsz h
     exact guarded_serial hser
-  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr ⟨id, rfl⟩))]; exact Guarded.refl _ _
+  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr (.inl ⟨id, rfl⟩)))]; exact Guarded.refl _ _
   | Accounts o f l => rw [reads_nothing a s _ ws r h (.inl ⟨o, f, l, rfl⟩)]; exact Guarded.refl _ _
   | Transfers => rw [reads_nothing a s _ ws r h (.inr (.inl rfl))]; exact Guarded.refl _ _
+  | History p f l => rw [reads_nothing a s _ ws r h (.inr (.inr (.inr ⟨p, f, l, rfl⟩)))]; exact Guarded.refl _ _
 
 /-- **Authorization of debits.** In every reachable state, if a command
 (a batch included) increases the debits of an account, the caller is the
@@ -335,10 +362,10 @@ theorem only_owner_or_operator_debits (a : Principal) (s : Snapshot) (c : Comman
 theorem transfer_records (a : Principal) (s : Snapshot) (t : TransferReq) ws r
     (h : transfer a s t = ok (.Ok (ws, r))) : ∀ x, Write.PutTransfer x ∈ ws.val → x.operator = a.opId := by
   rcases post_of_ok (transfer_spec a s t) h ws r rfl with
-    ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hws⟩
+    ⟨_, _, _, _, _, _, hws, _⟩ | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hws⟩
   · rw [hws]; simp
   · rw [hws]; intro x hx
-    simp only [List.mem_cons, List.not_mem_nil, or_false, reduceCtorEq, false_or, Write.PutTransfer.injEq] at hx
+    simp only [postWrites, List.mem_cons, List.not_mem_nil, or_false, reduceCtorEq, false_or, Write.PutTransfer.injEq] at hx
     subst hx; rfl
 
 theorem serial_records {a : Principal} {s s' : Snapshot} {l : List TransferReq} {ws : List Write}
@@ -364,12 +391,13 @@ theorem transfers_record_operator (a : Principal) (s : Snapshot) (c : Command) w
     rw [hws]; simp
   | Transfer t => exact transfer_records a s t ws r h
   | Batch ts =>
-    have hsz : Snapshot.size s + 3 * 8192 < Usize.max := by
+    have hsz : Snapshot.size s + 5 * 8192 < Usize.max := by
       simp only [HasRoom, Snapshot.size, alloc.vec.Vec.length] at *; omega
     obtain ⟨s', hser⟩ := batch_serial a s ts ws r hsz h
     exact serial_records hser
-  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr ⟨id, rfl⟩))]; simp
+  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr (.inl ⟨id, rfl⟩)))]; simp
   | Accounts o f l => rw [reads_nothing a s _ ws r h (.inl ⟨o, f, l, rfl⟩)]; simp
   | Transfers => rw [reads_nothing a s _ ws r h (.inr (.inl rfl))]; simp
+  | History p f l => rw [reads_nothing a s _ ws r h (.inr (.inr (.inr ⟨p, f, l, rfl⟩)))]; simp
 
 end payment_ledger.Theorems

@@ -192,3 +192,71 @@ PROGRESS.md as it lands.
 
 After F, re-run the full checks and the B4 end-to-end benchmarks, update
 `docs/benchmarks.md`, and report what was proven, measured, and left open.
+
+## G. Third round (the items F left open)
+
+Same ground rules. Tick each off here and in PROGRESS.md as it lands.
+
+1. [x] **Operator audit history.** The `operator` audit field on ledger
+   transfers and on `payments`, `refunds`, `psp_events`, `psp_refs` keeps
+   only the last writer. Record every change: an append-only history (who:
+   user or operator id; what: the command or event; when: the transaction's
+   clock; before/after status or amounts) written in the same transaction
+   as the change, by the kernels' own writes so it cannot be skipped. Prove
+   that every state change the kernel makes appends exactly one history
+   entry with the acting principal, and that history is never rewritten
+   (only appended). Expose it read-only to the tenant's operators (paged).
+   Mutants: a change without an entry, a wrong actor, an entry overwritten.
+2. [ ] **Idempotency namespaces per actor.** All operators share the `u0`
+   idempotency namespace, so two operators (or an operator and a system
+   job) using the same key collide. Key idempotency by the full principal
+   (`User(id)` / `Operator(id)`, system operators included), keep an
+   operator from replaying another's key, and keep the system jobs'
+   deterministic keys working (they act as their named system operators).
+   Migrate existing keys. Tests for the collision and for replays.
+3. [ ] **Scoped tokens, identity provider, revocation.**
+   - Scopes: tokens carry scopes (e.g. `payments:read`, `payments:write`,
+     `refunds:write`, `ledger:read`, `ledger:write`, `reconcile:read`,
+     `recover`, `operator:*`); every route checks its scope before the
+     kernel is called; operator tokens are limited to the scopes issued.
+   - Identity provider: accept OIDC/JWT access tokens from a configured
+     issuer (JWKS fetched and cached, `iss`/`aud`/`exp`/`nbf` checked,
+     RS256/ES256 only, claims mapped to tenant, actor and scopes) next to
+     the HMAC tokens; test with a local issuer (generated keys) — no
+     external IdP is needed for the tests. Terraform: optional Cognito user
+     pool or issuer URL as a variable.
+   - Revocation: a token id (`jti`) on every token and a revocation list in
+     PostgreSQL checked on each request (with a short in-process cache and
+     a bounded staleness you state); revoke-by-token, by-actor and
+     by-issued-before; operator routes to revoke; runbook updated.
+   - Keep the h5i-app token format compatible or version it; if h5i-app
+     itself needs a change, do it upstream as before.
+   Update `docs/security-review.md` and `docs/runbooks/secret-rotation.md`.
+4. [ ] **Page the Transfers journal.** The ledger's Transfers journal read
+   is not paged. Cursor pagination with a limit and a hard maximum, a read
+   plan and frame theorem as in F3, the HTTP route and every caller
+   (reconcile inputs, export, audit) moved to paged reads.
+5. [ ] **The remaining retries without losing throughput.** `MarkPosted`
+   and `Create` conflict on the same index pages; serializing them removed
+   the retries but cost 20% of throughput. Find a way that keeps both:
+   e.g. take `MarkPosted` off the payment's hot path (mark asynchronously
+   or in the next command's transaction, batch marks per tenant in the
+   recovery job), a separate marker table keyed so it shares no pages with
+   new payments, or index/key layout changes. Keep F2's proven guarantees
+   (state exactly what the marker means if its timing changes). Measure
+   at 10k/100k with 8 and 32 clients, interleaving the old and new builds
+   on the same host load.
+6. [ ] **`POST /v1/reconcile` without a whole-tenant load.** It loads both
+   kernels' full snapshots and the PSP report (~600 ms at 100k payments).
+   Make it incremental or bounded: reconcile a time window or a settlement
+   period (the PSP report is per period), read paged, stream through the
+   engine, and page the exceptions in the reply; or keep a maintained
+   reconciliation state updated as payments and settlements change. The
+   result for a period must equal the whole-tenant reconciliation
+   restricted to it (test against the full run on random data). Measure at
+   10k/100k.
+
+After G: re-run all checks and the B4 end-to-end benchmarks (interleaved
+with the previous build if the host is loaded), update `docs/benchmarks.md`,
+`docs/security-review.md`, `docs/proof-assumptions.md`, and report what was
+proven, measured and left open.

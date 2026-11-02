@@ -20,6 +20,9 @@ theorems = [
   "payment_ledger.Theorems.only_owner_or_operator_debits",
   "payment_ledger.Theorems.transfers_record_operator",
   "payment_ledger.Storage.db_inv",
+  # G1: one history entry per account change, naming the caller; only appended.
+  "payment_ledger.History.every_change_logged",
+  "payment_ledger.History.history_appended",
   # Read plans (`reads`, `LedgerStore::load_for`): the extracted plans are
   # `readsA`, a plan's rows decode to `Snapshot.load`, and `transition` on
   # that gives its whole-tenant result.
@@ -79,8 +82,8 @@ new = "        Actor::User(_) => true,\n        Actor::Operator(_) => true,"
 # SEC-02: the journal must record which operator posted.
 [[mutant]]
 name = "operator_id_dropped"
-old = "Some(b) => post(s, t, a, b, operator_of(actor)),"
-new = "Some(b) => post(s, t, a, b, 0),"
+old = "Some(b) => post(actor, s, t, a, b, operator_of(actor)),"
+new = "Some(b) => post(actor, s, t, a, b, 0),"
 
 # F3: a page plan that skips a sequence number.
 [[mutant]]
@@ -93,3 +96,21 @@ new = "    let mut x = from + 2;"
 name = "page_lists_other_owner"
 old = "    if !is_operator(actor) && owner != user_of(actor) {\n        return Err(Error::Forbidden);\n    }\n    let end = page_end(from, limit);"
 new = "    let end = page_end(from, limit);"
+
+# G1: opening an account without its history entry.
+[[mutant]]
+name = "change_without_entry"
+old = "four(Write::PutAccount(a), Write::PutHistory(h), Write::SetLedger(l2), Write::PutOwner(c2))"
+new = "four(Write::PutAccount(a), Write::SetLedger(l2), Write::PutOwner(c2), Write::PutOwner(c2))"
+
+# G1: the entry names the wrong actor (a user recorded as 0).
+[[mutant]]
+name = "history_wrong_actor"
+old = "        actor: actor_id(actor),"
+new = "        actor: operator_of(actor),"
+
+# G1: the debit account's count of entries not bumped, so its next change overwrites this entry.
+[[mutant]]
+name = "history_entry_overwritten"
+old = "                changes: a.changes + 1,"
+new = "                changes: a.changes,"
