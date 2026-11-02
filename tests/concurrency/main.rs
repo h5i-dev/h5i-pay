@@ -411,7 +411,46 @@ async fn payments_load_for_matches_the_whole_tenant() {
         let part = pg.snapshot_for(&actor, &cmd).await.unwrap();
         assert_eq!(d::transition(&actor, &part, &cmd), d::transition(&actor, &whole, &cmd), "step {i}: {cmd:?}");
         pg.execute(&actor, &cmd).await.unwrap().ok();
+        if i % 50 == 49 {
+            open_payments_agree(&url, &pg, org).await;
+        }
     }
     let snap = pg.snapshot(TenantId(org)).await.unwrap();
     assert!(snap.payments.len() > 20 && !snap.refunds.is_empty(), "{} payments, {} refunds", snap.payments.len(), snap.refunds.len());
+    // Mark every settled payment as the orchestrator would (its own captured
+    // amount and refunds): the trigger takes them out of `open_payments`.
+    let mut marked = 0;
+    for p in &snap.payments {
+        let refunds: Vec<d::Refund> = snap.refunds.iter().filter(|r| r.payment == p.id).copied().collect();
+        let cmd = d::Command::MarkPosted { payment: p.id, captured: p.captured, refunds };
+        if let Ok(d::Reply::Status(_)) = pg.execute(&op, &cmd).await.unwrap() {
+            marked += 1;
+        }
+    }
+    assert!(marked > 0, "some payments are settled");
+    open_payments_agree(&url, &pg, org).await;
+    // A later change clears the mark (a refund on a marked captured
+    // payment): the payment is open again.
+    let snap = pg.snapshot(TenantId(org)).await.unwrap();
+    let p = snap.payments.iter().find(|p| p.ledger_done && p.status == d::CAPTURED && p.captured > p.refunded + p.refund_pending);
+    let p = p.expect("a marked captured payment with room for a refund (the sequence is fixed)");
+    let m = d::Principal { org, actor: d::Actor::User(p.merchant), at: 0 };
+    pg.execute(&m, &d::Command::RequestRefund { payment: p.id, amount: 1 }).await.unwrap().unwrap();
+    assert!(!pg.snapshot(TenantId(org)).await.unwrap().payments.iter().find(|q| q.id == p.id).unwrap().ledger_done);
+    open_payments_agree(&url, &pg, org).await;
+}
+
+/// G5: `open_payments` (kept by triggers) holds exactly the tenant's
+/// payments not marked `ledger_done`.
+async fn open_payments_agree(url: &str, pg: &payment_storage::PaymentsEngine, org: u64) {
+    let snap = pg.snapshot(TenantId(org)).await.unwrap();
+    let mut want: Vec<i64> = snap.payments.iter().filter(|p| !p.ledger_done).map(|p| p.id as i64).collect();
+    want.sort_unstable();
+    let (c, conn) = tokio_postgres::connect(url, tokio_postgres::NoTls).await.unwrap();
+    let h = tokio::spawn(conn);
+    let sql = format!("SELECT id FROM {}.open_payments WHERE tenant_id = $1 ORDER BY id", payment_storage::PAYMENTS_SCHEMA);
+    let got: Vec<i64> = c.query(sql.as_str(), &[&(org as i64)]).await.unwrap().iter().map(|r| r.get(0)).collect();
+    drop(c);
+    let _ = h.await;
+    assert_eq!(got, want, "open_payments vs payments not ledger_done");
 }

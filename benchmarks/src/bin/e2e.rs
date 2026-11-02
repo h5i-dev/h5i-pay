@@ -17,7 +17,8 @@
 //!   throughput of 8 concurrent clients;
 //! * `GET /v1/payments/{id}`; `POST /v1/payments/{id}/refunds`;
 //! * kernel transactions per request (`EngineStats::attempts` of both
-//!   engines, so retries count);
+//!   engines, so retries count), and how many of the updates of `payments`
+//!   during the run were HOT (G5);
 //! * `jobs::recover_all` (the scheduled job's pass) with 5 payments left
 //!   `PROCESSING` by a lost PSP answer, and a second pass with nothing left;
 //!   PSP calls each pass makes;
@@ -172,6 +173,21 @@ impl Api {
     }
 }
 
+/// `payments.payments`: (updates, HOT updates) so far, as the statistics
+/// collector reports them (it may lag by a fraction of a second).
+async fn hot_updates(url: &str) -> (i64, i64) {
+    let (c, conn) = tokio_postgres::connect(url, tokio_postgres::NoTls).await.unwrap();
+    let h = tokio::spawn(conn);
+    let _ = c.execute("SELECT pg_stat_force_next_flush()", &[]).await;
+    let r = c
+        .query_opt("SELECT n_tup_upd, n_tup_hot_upd FROM pg_stat_user_tables WHERE schemaname = 'payments' AND relname = 'payments'", &[])
+        .await
+        .unwrap();
+    drop(c);
+    let _ = h.await;
+    r.map(|r| (r.get(0), r.get(1))).unwrap_or((0, 0))
+}
+
 fn stats(mut xs: Vec<f64>) -> Value {
     xs.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let q = |p: f64| xs[((xs.len() as f64 - 1.0) * p).round() as usize];
@@ -219,6 +235,11 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
         "accounts": journal.accounts.len(), "transfers": journal.transfers.len(),
     });
     eprintln!("{label}: tenant {tenant_rows}");
+    // Idle backends report their statistics after at most 10 s, so the
+    // startup migrations' updates are in before this first reading.
+    tokio::time::sleep(std::time::Duration::from_secs(11)).await;
+    let hot0 = hot_updates(&api.url).await;
+    eprintln!("{label}: payments updates at start {hot0:?}");
 
     // Warm up the pools and the orchestrator's account cache.
     for _ in 0..3 {
@@ -330,6 +351,13 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
     let (st, audit) = api.get("/v1/ledger/audit", &api.op).await;
     assert_eq!((st, audit["ok"].as_bool()), (200, Some(true)), "{audit}");
 
+    // How many updates of `payments` during the run were HOT (no index
+    // entries; G5).
+    let hot = {
+        let now = hot_updates(&api.url).await;
+        json!({"updates": now.0 - hot0.0, "hot": now.1 - hot0.1})
+    };
+
     let result = json!({
         "label": label,
         "tenant": tenant_rows,
@@ -340,6 +368,7 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
         "concurrent": concurrent,
         "recovery_passes": passes,
         "reconcile": stats(recon), "reconcile_exceptions": exceptions,
+        "payments_updates": hot,
     });
     println!("{}", serde_json::to_string_pretty(&result).unwrap());
     if let Some(path) = out {

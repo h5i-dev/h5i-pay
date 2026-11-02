@@ -71,17 +71,24 @@ impl Store<PaymentsApp> for PaymentsStore {
         ddl.push("CREATE INDEX IF NOT EXISTS payments_merchant_seq ON payments (tenant_id, merchant, seq)".into());
         ddl.push("CREATE INDEX IF NOT EXISTS refunds_payment ON refunds (tenant_id, payment)".into());
         // Recovery's work (F4): payments not marked done, and payments with
-        // a refund in flight. The status is in neither index, so the status
+        // a refund in flight. The status is not in any index, so the status
         // changes on the hot path (BeginAuthorize, Record) are HOT updates:
         // they add no index entries, and concurrent commands on neighbouring
         // payments stop conflicting on shared primary-key index pages under
-        // SERIALIZABLE. Only `MarkPosted` and refund changes touch an index.
-        // These replace `payments_unfinished` and `payments_unposted`
-        // (status in the predicate made every status change a non-HOT update).
+        // SERIALIZABLE. These replace `payments_unfinished` and
+        // `payments_unposted` (status in the predicate made every status
+        // change a non-HOT update).
         ddl.push("DROP INDEX IF EXISTS payments_unfinished".into());
         ddl.push("DROP INDEX IF EXISTS payments_unposted".into());
         ddl.push("DROP INDEX IF EXISTS payments_captured".into());
-        ddl.push("CREATE INDEX IF NOT EXISTS payments_open ON payments (tenant_id, id) WHERE NOT ledger_done".into());
+        // G5: `ledger_done` is not indexed either, so `MarkPosted` is a HOT
+        // update too. (As the partial index `payments_open … WHERE NOT
+        // ledger_done` it made every mark add primary-key index entries on
+        // the page concurrent `Create`s read and insert into: the last
+        // SERIALIZABLE aborts of the payment flow.) The unmarked payments
+        // are kept in `open_payments` instead, by a trigger.
+        ddl.push("DROP INDEX IF EXISTS payments_open".into());
+        ddl.extend(crate::open_payments());
         ddl.push("CREATE INDEX IF NOT EXISTS payments_refunding ON payments (tenant_id, id) WHERE refund_pending > 0".into());
         // Room in each heap page for HOT updates of its rows.
         ddl.push(crate::fillfactor("payments", 70));

@@ -126,6 +126,49 @@ pub(crate) fn append_only_history() -> Vec<String> {
     ]
 }
 
+/// G5: the payments not marked `ledger_done`, as rows of their own table
+/// instead of a partial index on `payments`. A partial index on the marker
+/// makes `MarkPosted` a non-HOT update, which adds primary-key entries on
+/// the index page that concurrent `Create`s read and insert into, and
+/// under SERIALIZABLE one of each such pair was aborted. `open_payments` is
+/// written only by these triggers, when a payment is inserted unmarked or
+/// its marker changes, and no kernel command reads it, so `MarkPosted`
+/// (now a HOT update of `payments`, plus a delete here) and `Create` (an
+/// insert here) form no read/write cycle. Recovery reads it
+/// (`recovery_work`). Outside the kernels' tables: it is an index the
+/// database maintains, not state a kernel decides on.
+///
+/// The trigger is created before the backfill: `CREATE TRIGGER` locks
+/// `payments` against writes until this transaction commits, so no payment
+/// changes between the copy and the trigger.
+pub(crate) fn open_payments() -> Vec<String> {
+    vec![
+        "CREATE OR REPLACE FUNCTION open_payments_sync() RETURNS trigger LANGUAGE plpgsql \
+           SET search_path FROM CURRENT AS $$ \
+         BEGIN \
+           IF NEW.ledger_done THEN \
+             DELETE FROM open_payments WHERE tenant_id = NEW.tenant_id AND id = NEW.id; \
+           ELSE \
+             INSERT INTO open_payments (tenant_id, id) VALUES (NEW.tenant_id, NEW.id) ON CONFLICT DO NOTHING; \
+           END IF; \
+           RETURN NULL; \
+         END $$"
+            .into(),
+        "DO $$ BEGIN \
+           IF to_regclass('open_payments') IS NULL THEN \
+             CREATE TABLE open_payments (tenant_id BIGINT NOT NULL, id BIGINT NOT NULL, PRIMARY KEY (tenant_id, id)); \
+             CREATE TRIGGER open_payments_insert AFTER INSERT ON payments \
+               FOR EACH ROW WHEN (NOT NEW.ledger_done) EXECUTE FUNCTION open_payments_sync(); \
+             CREATE TRIGGER open_payments_mark AFTER UPDATE ON payments \
+               FOR EACH ROW WHEN (OLD.ledger_done IS DISTINCT FROM NEW.ledger_done) EXECUTE FUNCTION open_payments_sync(); \
+             INSERT INTO open_payments (tenant_id, id) SELECT tenant_id, id FROM payments WHERE NOT ledger_done; \
+             ANALYZE open_payments; \
+           END IF; \
+         END $$"
+            .into(),
+    ]
+}
+
 /// `ALTER TABLE … SET (fillfactor = n)`, only when not set yet (it takes a
 /// lock and would serialize engines installing at once). Applies to pages
 /// written from then on.
@@ -311,10 +354,10 @@ async fn connect_direct(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Clien
 /// Every tenant's unfinished work, in one read-only query: payments to ask
 /// the PSP about, payments with a pending refund, and captured payments
 /// whose ledger postings are not marked complete ([`ledger_pending`]).
-/// Each part is a partial index (`payments_open`: not `ledger_done`;
-/// `payments_refunding`), so a pass costs O(unfinished payments), not
-/// O(captured) (F2; before, an anti-join on the ledger's transfer ids per
-/// captured payment).
+/// The parts read `open_payments` (the payments not `ledger_done`, kept by
+/// triggers; G5) and the partial index `payments_refunding`, so a pass
+/// costs O(unfinished payments), not O(captured) (F2; before, an anti-join
+/// on the ledger's transfer ids per captured payment).
 ///
 /// This query crosses tenants and is outside the kernels: it reads ids and
 /// statuses, writes nothing, and runs in a read-only transaction. It only
@@ -325,16 +368,19 @@ async fn connect_direct(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Clien
 /// also checks the journal).
 pub async fn recovery_work(url: &str, tls: &DbTls) -> Result<Vec<RecoveryWork>, DbError> {
     use payment_domain::{AUTHORIZED, CANCELED, CAPTURED, FAILED, PROCESSING};
-    // A payment in PROCESSING or AUTHORIZED is never marked, so `NOT
-    // ledger_done` (the partial index) holds for it.
+    // A payment in PROCESSING or AUTHORIZED is never marked, so it is in
+    // `open_payments`. `NOT p.ledger_done` is what the triggers keep true
+    // of every row there; checked again in case of a row left over.
     let sql = format!(
-        "SELECT tenant_id, id, 0 FROM {PAYMENTS_SCHEMA}.payments \
-           WHERE NOT ledger_done AND (status = {PROCESSING} OR (status = {AUTHORIZED} AND NOT manual_capture)) \
+        "SELECT p.tenant_id, p.id, 0 FROM {PAYMENTS_SCHEMA}.open_payments o \
+           JOIN {PAYMENTS_SCHEMA}.payments p ON p.tenant_id = o.tenant_id AND p.id = o.id \
+           WHERE NOT p.ledger_done AND (p.status = {PROCESSING} OR (p.status = {AUTHORIZED} AND NOT p.manual_capture)) \
          UNION ALL \
          SELECT tenant_id, id, 1 FROM {PAYMENTS_SCHEMA}.payments WHERE refund_pending > 0 \
          UNION ALL \
-         SELECT tenant_id, id, 2 FROM {PAYMENTS_SCHEMA}.payments \
-           WHERE NOT ledger_done AND status IN ({CAPTURED}, {FAILED}, {CANCELED}) \
+         SELECT p.tenant_id, p.id, 2 FROM {PAYMENTS_SCHEMA}.open_payments o \
+           JOIN {PAYMENTS_SCHEMA}.payments p ON p.tenant_id = o.tenant_id AND p.id = o.id \
+           WHERE NOT p.ledger_done AND p.status IN ({CAPTURED}, {FAILED}, {CANCELED}) \
          ORDER BY 1, 3, 2"
     );
     let (mut client, conn) = connect_direct(url, tls).await?;

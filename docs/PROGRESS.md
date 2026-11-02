@@ -178,6 +178,66 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### G5: the last serialization retries removed, throughput kept
+
+- Cause, from PostgreSQL's log with every statement (32 clients, 10k
+  payments, G4 build): of 99 aborted transactions, 43 were `MarkPosted`
+  and 41 `Create`, the rest `AttachRef` and in-flight upserts. `MarkPosted`
+  flips `ledger_done`, which the partial index `payments_open … WHERE NOT
+  ledger_done` names, so it was a non-HOT update: a new tuple and new
+  entries in every index of `payments`, including the primary key's
+  rightmost page, which each concurrent `Create` inserts into and
+  `MarkPosted` reads (the payment by key). Each read what the other wrote.
+- Change (shell only; no kernel, proof or marker change): `ledger_done` is
+  in no index any more, so `MarkPosted` is a HOT update like the other
+  status changes. The unmarked payments are kept in a table of their own,
+  `open_payments (tenant_id, id)`, written only by two triggers on
+  `payments` (`AFTER INSERT … WHEN (NOT NEW.ledger_done)` and `AFTER
+  UPDATE … WHEN (OLD.ledger_done IS DISTINCT FROM NEW.ledger_done)`:
+  insert when unmarked, delete when marked). No kernel command reads it,
+  so the `Create` (insert there) and `MarkPosted` (delete there) pair has
+  no read/write cycle. `recovery_work` joins it with `payments` (and
+  re-checks `NOT ledger_done`); still O(unfinished). Migration: the table,
+  the triggers and the backfill from `payments` run in the install
+  transaction, triggers first (`CREATE TRIGGER` blocks writes to
+  `payments` until commit), then `ANALYZE` (without it the planner kept
+  using the old index's shape). `payments_open` is dropped.
+- The marker means what it meant (F2): `ledger_done` is set by
+  `MarkPosted` in the same transaction as before, only the index that
+  finds the unmarked payments moved. `open_payments` holds exactly the
+  payments with `ledger_done = false`; that rests on the triggers (not
+  proven; checked in `payments_load_for_matches_the_whole_tenant`, which
+  compares the table with the kernel's snapshot every 50 random commands,
+  after marking every settled payment, and after a refund clears a mark).
+- Measured: `benchmarks/src/bin/e2e.rs`, fresh seeds made by the G4 build
+  (`e2e_g4_10000`, `e2e_g4_100000`), G4 and G5 builds interleaved, order
+  alternating, 4 rounds; the host was shared with another session's
+  CPU-bound job (load 4–5 on 4 cores). Payments/s median [range] and
+  serialization retries per run (200 payments at 8 clients, 800 at 32):
+
+| tenant | clients | G4 payments/s | G4 retries | G5 payments/s | G5 retries |
+|---|---:|---:|---|---:|---|
+| 10k | 8 | 122.8 [112.5–124.9] | 17, 30, 17, 23 | 117.8 [115.8–123.5] | 0, 1, 0, 0 |
+| 10k | 32 | 117.1 [115.2–120.5] | 161, 145, 138, 150 | 116.4 [115.6–118.6] | 1, 1, 2, 1 |
+| 100k | 8 | 121.9 [118.3–123.8] | 33, 11, 23, 23 | 123.5 [120.9–125.3] | 0, 0, 0, 0 |
+| 100k | 32 | 114.1 [113.5–116.4] | 140, 132, 165, 142 | 117.6 [115.9–117.8] | 2, 1, 0, 1 |
+
+  Throughput is the same within the spread (−4% to +3% by median), and
+  kernel transactions per payment fell from 8.10–8.18 to 8.00 (the
+  minimum: no retried attempt). Updates of `payments` that were HOT: 99%
+  (4172 of 4212 at 100k). The few left are `AttachRef` (it reads and
+  inserts `psp_refs` by key; F4's tenant key only queues `AttachRef`s
+  among themselves). Recovery: first pass (5 payments) 82–104 ms vs
+  78–85 ms; the empty pass 10–28 ms vs 7 ms (the query itself is 0.3 ms
+  in `EXPLAIN ANALYZE` at 100k; not explained further).
+  On the older seeds (made before G1; they migrate at every startup) a
+  first series of 6 rounds was noisier: of G5's 24 runs, 17 had 0–4
+  retries and 7 had 8–57 (G4: 18–194 in every run), which I did not
+  trace further; the table above uses fresh seeds.
+- The harness now reports how many updates of `payments` were HOT
+  (`payments_updates`). Raw results:
+  `benchmarks/results/e2e-G5-markposted-g5.xlarge.json`.
+
 ### G4: the Transfers journal paged
 
 - Ledger kernel: `Command::Transfers{account, from, limit}` returns one

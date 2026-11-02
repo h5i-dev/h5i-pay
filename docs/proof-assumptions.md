@@ -142,7 +142,14 @@ committed history is such a sequence.
    never deletes or rewrites a transfer, so a marked payment's postings stay
    unless rows are changed outside the engines; the scheduled recovery
    trusts the marker, and `POST /v1/recover` and reconciliation also check
-   the journal itself.
+   the journal itself. Since G5 the scheduled recovery finds unmarked
+   payments through `open_payments`, which two triggers on `payments` keep
+   equal to the payments with `ledger_done = false` (not proven; compared
+   with the kernel's snapshot in `payments_load_for_matches_the_whole_tenant`;
+   `recovery_work` re-checks `NOT ledger_done` on each row it returns). A
+   row missing from `open_payments` would delay that payment's recovery
+   until `POST /v1/recover` or reconciliation finds it; a stale extra row
+   is filtered out.
 
 8. **The history's clock and its storage (G1).** Both kernels prove that
    every change writes exactly one history entry per changed payment or

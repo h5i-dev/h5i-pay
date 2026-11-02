@@ -236,7 +236,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    is not paged. Cursor pagination with a limit and a hard maximum, a read
    plan and frame theorem as in F3, the HTTP route and every caller
    (reconcile inputs, export, audit) moved to paged reads.
-5. [ ] **The remaining retries without losing throughput.** `MarkPosted`
+5. [x] **The remaining retries without losing throughput.** Done (PROGRESS.md "G5"). `MarkPosted`
    and `Create` conflict on the same index pages; serializing them removed
    the retries but cost 20% of throughput. Find a way that keeps both:
    e.g. take `MarkPosted` off the payment's hot path (mark asynchronously
