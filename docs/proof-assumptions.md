@@ -18,6 +18,8 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Reconciliation | `payment_reconcile.Reconcile.classify_internal_spec`, `classify_external_spec`, `codes_in_range`, `internal_matched_iff`, `external_matched_iff`, `duplicates_first`, `exception_reported_once`, `pair_matched_both_sides` | the extracted `crates/payment-reconcile/src/rules.rs` (`classify_internal`, `classify_external`), the per-row decision every engine calls, the GPU included (`proofs/reconcile/generated/PaymentReconcile.lean`) |
 | Reconciliation join | `payment_reconcile.Join.probe_spec`, `insert_spec`, `build_spec`, `lookup_spec`, `internal_code_spec`, `join_eq_reference`, `join_rows` | the extracted `crates/payment-reconcile/src/join.rs`, the single-thread hash join (`cpu_single`, and `cpu_parallel` per partition), equal row for row to the reference's counts and first external record |
 | History (G1) | `payment_ledger.History.every_change_logged`, `history_appended`; `payment_domain.Theorems.every_change_logged`, `history_appended` | the extracted `post`/`open` (ledger: each account row followed by its entry) and the extracted `transition` = `decide_command` + `logged` (payments: one entry per change of a payment); in every reachable state the history is only appended to, under fresh keys |
+| Operator reads (G4) | `payment_ledger.Theorems.operator_reads` | the extracted `transition`: `Transfers` (an account's journal page), `AccountRange` and `History` succeed only for operators and write nothing; their pages are covered by `Frame.frame` like every other command (`journal_page_congr`, `account_range_congr`) |
+| Read-only commands (G4) | `payment_ledger.ReadOnly.sound` | the extracted `read_only` and `transition`: every command `read_only` names writes nothing when accepted, for every actor and state (h5i-app's `H5iAppLib.ReadOnly.Sound`), so the engine may run it `SERIALIZABLE READ ONLY DEFERRABLE` |
 | Read plans | `payment_ledger.Plan.reads_abs`, `payment_ledger.Frame.frame`, `load_for_sound`; `payment_domain.Plan.reads_abs`, `payment_domain.Frame.frame`, `load_for_sound`; `*.Schema.decode_load` (generated) | the extracted `reads` of each kernel (`Store::load_for` runs it) and the extracted `transition`: on what each command's plan loads, `transition` gives its whole-tenant result |
 
 Gate results (h5i-app 0.5.2, after G1): `h5i app check
@@ -59,6 +61,10 @@ the failing step lemma and cannot be proved without it.
 | ledger plan | `user_accounts_plan_wrong_column` | `Plan.reads_abs` |
 | payments plan | `record_plan_misses_refund` | `Plan.result_reads_abs` |
 | payments plan | `refunds_plan_reads_by_refund_id` | `Plan.reads_abs` |
+| ledger plan | `journal_plan_wrong_column` (G4) | `Plan.reads_abs` |
+| ledger frame | `account_range_past_end` (G4) | `Frame.id_range_spec` |
+| ledger | `journal_open_to_users` (G4) | `Invariants.journal_page_writes` (and `journal_page_operator`) |
+| ledger | `transfer_declared_read_only` (G4) | `ReadOnly.sound` |
 
 The plan mutants are caught where the extracted `reads` stops computing
 the plan `readsA` that `Frame.frame` is proved for; a wrong `readsA`
@@ -232,9 +238,24 @@ committed history is such a sequence.
   most 64 transfers (`MAX_BATCH`; longer ones are refused before reading,
   since an `OR` chain of a few hundred terms already costs PostgreSQL
   tens of milliseconds of planning), and `List`/`Accounts` read one page
-  of at most 64 sequence numbers of one merchant or owner. Whole-tenant
-  snapshots remain only where taken on purpose: `reconcile_inputs`,
-  `audit`, `find_work` and the export.
+  of at most 64 sequence numbers of one merchant or owner. Since G4 the
+  ledger journal (`Transfers`) is one page of at most 64 history entries
+  of one account, and `AccountRange` one page of at most 64 account ids;
+  the audit, `find_work` and `reconcile_inputs` read the ledger through
+  them. Whole-tenant *payments* snapshots remain where taken on purpose:
+  `reconcile_inputs` and the export (G6).
+- **The paged audit is per account, not one snapshot.** Each account is
+  checked against its journal up to the `changes` its row had when read,
+  in separate transactions. A transfer committed between two accounts'
+  reads shows on one side only; the audit finds it past the other
+  account's bound and reports it in flight. The audit's claim is
+  therefore "every account equals the sum of its own journal, and every
+  transfer has both legs", not "the tenant total was zero at one instant".
+- **Pre-G1 journal entries are reconstructed.** The G4 backfill gives
+  transfers older than the history entries with time 0 and command
+  `CMD_MIGRATED`; their actor is the transfer's operator or, for user
+  transfers, the debit account's owner (who had to be the caller since
+  SEC-03). This attribution is a migration rule, not a recorded fact.
 - **Pages are numbered by per-merchant and per-owner counters** (`seq`,
   `merchant_counters`, `owner_counters`). The frame theorems say a page's
   plan gives the whole-tenant reply; they do not say the numbers are

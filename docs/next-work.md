@@ -232,7 +232,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    - Keep the h5i-app token format compatible or version it; if h5i-app
      itself needs a change, do it upstream as before.
    Update `docs/security-review.md` and `docs/runbooks/secret-rotation.md`.
-4. [ ] **Page the Transfers journal.** The ledger's Transfers journal read
+4. [x] **Page the Transfers journal.** Done (PROGRESS.md "G4"). The ledger's Transfers journal read
    is not paged. Cursor pagination with a limit and a hard maximum, a read
    plan and frame theorem as in F3, the HTTP route and every caller
    (reconcile inputs, export, audit) moved to paged reads.

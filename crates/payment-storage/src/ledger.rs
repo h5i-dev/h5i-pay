@@ -37,6 +37,11 @@ impl Kernel for LedgerApp {
     fn stamp(actor: &mut k::Principal, now: h5i_app_core::Timestamp) {
         actor.at = now.0;
     }
+
+    /// Proven sound: `payment_ledger.ReadOnly.sound` (gated).
+    fn read_only(cmd: &k::Command) -> bool {
+        k::read_only(cmd)
+    }
 }
 
 /// User `user` of tenant `org`.
@@ -53,6 +58,44 @@ pub fn operator(org: u64, id: u64) -> k::Principal {
 payment_ledger::ledger_tables!(LedgerApp);
 
 pub struct LedgerStore;
+
+/// G4: one history entry (`command` = `CMD_MIGRATED`, 3) for each leg of a
+/// transfer that has none (transfers posted before G1), appended after the
+/// account's existing entries in transfer-id order (debit leg first), and
+/// the accounts' `changes` raised to match. Such an entry records the
+/// leg's amount as its `debits_after` or `credits_after` (`…_before` 0),
+/// not a balance, `at` 0 (unknown), and as actor the transfer's operator,
+/// or the debit account's owner for a transfer a user posted (only the
+/// owner may debit). Runs once (`h5i_pay_migrations`).
+const JOURNAL_BACKFILL: &str = "DO $$ BEGIN
+IF NOT EXISTS (SELECT 1 FROM h5i_pay_migrations WHERE name = 'g4-journal-history') THEN
+  WITH legs AS (
+    SELECT t.tenant_id, t.debit AS account, t.id AS transfer, t.code, t.amount, true AS is_debit, t.operator, t.debit AS payer FROM transfers t
+    UNION ALL
+    SELECT t.tenant_id, t.credit, t.id, t.code, t.amount, false, t.operator, t.debit FROM transfers t
+  ), missing AS (
+    SELECT l.* FROM legs l WHERE NOT EXISTS
+      (SELECT 1 FROM history h WHERE h.tenant_id = l.tenant_id AND h.account = l.account AND h.transfer = l.transfer)
+  ), numbered AS (
+    SELECT m.*, a.changes + row_number() OVER (PARTITION BY m.tenant_id, m.account ORDER BY m.transfer, m.is_debit DESC) - 1 AS n,
+           p.owner AS payer_owner
+    FROM missing m
+    JOIN accounts a ON a.tenant_id = m.tenant_id AND a.id = m.account
+    JOIN accounts p ON p.tenant_id = m.tenant_id AND p.id = m.payer
+  ), ins AS (
+    INSERT INTO history (tenant_id, account, n, by_operator, actor, at, command, transfer, code,
+                         debits_before, debits_after, credits_before, credits_after)
+    SELECT tenant_id, account, n, operator <> 0, CASE WHEN operator <> 0 THEN operator ELSE payer_owner END, 0, 3,
+           transfer, code, 0, CASE WHEN is_debit THEN amount ELSE 0 END, 0, CASE WHEN is_debit THEN 0 ELSE amount END
+    FROM numbered
+    RETURNING tenant_id, account
+  )
+  UPDATE accounts a SET changes = a.changes + c.k
+    FROM (SELECT tenant_id, account, count(*) AS k FROM ins GROUP BY 1, 2) c
+    WHERE a.tenant_id = c.tenant_id AND a.id = c.account;
+  INSERT INTO h5i_pay_migrations (name) VALUES ('g4-journal-history');
+END IF;
+END $$";
 
 impl Store<LedgerApp> for LedgerStore {
     /// The kernel's tables, and an index for the per-owner read plan
@@ -71,6 +114,10 @@ impl Store<LedgerApp> for LedgerStore {
         // table itself is `schema_ddl`'s, append-only.
         ddl.push(crate::add_column("accounts", "changes", "BIGINT NOT NULL DEFAULT 0"));
         ddl.extend(crate::append_only_history());
+        // G4: the journal is paged per account through the history, so
+        // transfers posted before the history existed get entries, once.
+        ddl.push(crate::MIGRATIONS_DDL.into());
+        ddl.push(JOURNAL_BACKFILL.into());
         // G2: the system operators' keys move out of the shared `u0`.
         ddl.push(crate::idempotency::migrate_system_keys());
         ddl
@@ -123,9 +170,11 @@ impl Store<LedgerApp> for LedgerStore {
                 Lock::Keys(keys)
             }
             // Reads write nothing; they need no queue.
-            k::Command::Account { .. } | k::Command::Accounts { .. } | k::Command::Transfers | k::Command::History { .. } => {
-                Lock::None
-            }
+            k::Command::Account { .. }
+            | k::Command::Accounts { .. }
+            | k::Command::Transfers { .. }
+            | k::Command::AccountRange { .. }
+            | k::Command::History { .. } => Lock::None,
         }
     }
 }
@@ -161,7 +210,23 @@ pub enum CommandJson {
         #[serde(default)]
         limit: Option<u32>,
     },
-    Transfers,
+    /// A page of an account's journal (operators only, G4): the transfers
+    /// of its history entries `from` (default 0) on, at most `limit`
+    /// (default and maximum `k::MAX_PAGE`).
+    Transfers {
+        account: u64,
+        #[serde(default)]
+        from: u64,
+        #[serde(default)]
+        limit: Option<u32>,
+    },
+    /// A page of the tenant's accounts by id (operators only, G4).
+    AccountsById {
+        #[serde(default)]
+        from: u64,
+        #[serde(default)]
+        limit: Option<u32>,
+    },
     /// A page of an account's history (operators only, G1), from entry
     /// `from` (default 0), at most `limit` (default and maximum `k::MAX_PAGE`).
     History {
@@ -203,7 +268,8 @@ impl CommandJson {
             CommandJson::Accounts { owner, from, limit } => {
                 k::Command::Accounts { owner: owner.unwrap_or(k::user_of(actor)), from, limit: limit.unwrap_or(k::MAX_PAGE) }
             }
-            CommandJson::Transfers => k::Command::Transfers,
+            CommandJson::Transfers { account, from, limit } => k::Command::Transfers { account, from, limit: limit.unwrap_or(k::MAX_PAGE) },
+            CommandJson::AccountsById { from, limit } => k::Command::AccountRange { from, limit: limit.unwrap_or(k::MAX_PAGE) },
             CommandJson::History { account, from, limit } => k::Command::History { account, from, limit: limit.unwrap_or(k::MAX_PAGE) },
         }
     }
@@ -332,7 +398,10 @@ impl h5i_app_http::Api<LedgerApp> for LedgerStore {
                 ("accounts", Out::Arr(accs.iter().map(account_json).collect())),
                 ("next", next.map_or(Out::Null, Out::from)),
             ]),
-            k::Reply::Transfers(ts) => Out::Arr(ts.iter().map(transfer_json).collect()),
+            k::Reply::Transfers(ts, next) => Out::obj([
+                ("transfers", Out::Arr(ts.iter().map(transfer_json).collect())),
+                ("next", next.map_or(Out::Null, Out::from)),
+            ]),
             k::Reply::History(hs, next) => Out::obj([
                 ("history", Out::Arr(hs.iter().map(history_json).collect())),
                 ("next", next.map_or(Out::Null, Out::from)),
@@ -361,6 +430,8 @@ enum StoredReply {
     /// Before SEC-02's operator column; decoded with operator 0.
     Transfers(Vec<(u64, u64, u64, u64, u32, u32)>),
     TransfersBy(Vec<(u64, u64, u64, u64, u32, u32, u64)>),
+    /// G4: a page of an account's journal.
+    TransferPage(Vec<(u64, u64, u64, u64, u32, u32, u64)>, Option<u64>),
     /// G1: a history page.
     History(Vec<StoredEntry>, Option<u64>),
 }
@@ -456,9 +527,10 @@ impl ReplyCodec<LedgerApp> for LedgerStore {
             k::Reply::Batch(n) => StoredReply::Batch(*n),
             k::Reply::Account(a) => StoredReply::Account(store_account(a)),
             k::Reply::Accounts(accs, next) => StoredReply::AccountPage(accs.iter().map(store_account).collect(), *next),
-            k::Reply::Transfers(ts) => {
-                StoredReply::TransfersBy(ts.iter().map(|t| (t.id, t.debit, t.credit, t.amount, t.currency, t.code, t.operator)).collect())
-            }
+            k::Reply::Transfers(ts, next) => StoredReply::TransferPage(
+                ts.iter().map(|t| (t.id, t.debit, t.credit, t.amount, t.currency, t.code, t.operator)).collect(),
+                *next,
+            ),
             k::Reply::History(hs, next) => StoredReply::History(hs.iter().map(store_entry).collect(), *next),
         };
         serde_json::to_vec(&stored).expect("stored replies serialize")
@@ -473,15 +545,24 @@ impl ReplyCodec<LedgerApp> for LedgerStore {
             StoredReply::Account(a) => k::Reply::Account(load_account(a)),
             StoredReply::Accounts(accs) => k::Reply::Accounts(accs.into_iter().map(load_account).collect(), None),
             StoredReply::AccountPage(accs, next) => k::Reply::Accounts(accs.into_iter().map(load_account).collect(), next),
+            // Before G4 the journal was one unpaged reply: decoded as the last page.
             StoredReply::Transfers(ts) => k::Reply::Transfers(
                 ts.into_iter()
                     .map(|(id, debit, credit, amount, currency, code)| k::Transfer { id, debit, credit, amount, currency, code, operator: 0 })
                     .collect(),
+                None,
             ),
             StoredReply::TransfersBy(ts) => k::Reply::Transfers(
                 ts.into_iter()
                     .map(|(id, debit, credit, amount, currency, code, operator)| k::Transfer { id, debit, credit, amount, currency, code, operator })
                     .collect(),
+                None,
+            ),
+            StoredReply::TransferPage(ts, next) => k::Reply::Transfers(
+                ts.into_iter()
+                    .map(|(id, debit, credit, amount, currency, code, operator)| k::Transfer { id, debit, credit, amount, currency, code, operator })
+                    .collect(),
+                next,
             ),
             StoredReply::History(hs, next) => k::Reply::History(hs.into_iter().map(load_entry).collect(), next),
         })
@@ -518,4 +599,187 @@ pub fn audit(s: &k::Snapshot) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+// ------------------------------------------------------------- paged reads (G4)
+
+fn refused(e: k::Error) -> DbError {
+    DbError::Decode(format!("ledger refused a page: {e:?}"))
+}
+
+/// Entries `from` up to `upto` (all if `None`) of `account`'s journal,
+/// read a page (at most `k::MAX_PAGE` entries) per kernel command.
+/// `actor` must be an operator. Also returns the number of pages read.
+pub async fn journal_range(
+    engine: &crate::LedgerEngine,
+    actor: &k::Principal,
+    account: u64,
+    from: u64,
+    upto: Option<u64>,
+) -> Result<(Vec<k::Transfer>, u64), DbError> {
+    let mut out = Vec::new();
+    let mut at = from;
+    let mut pages = 0;
+    loop {
+        let limit = match upto {
+            Some(u) if u <= at => break,
+            Some(u) => (u - at).min(u64::from(k::MAX_PAGE)) as u32,
+            None => k::MAX_PAGE,
+        };
+        pages += 1;
+        match engine.execute(actor, &k::Command::Transfers { account, from: at, limit }).await?.map_err(refused)? {
+            k::Reply::Transfers(ts, next) => {
+                out.extend(ts);
+                match next {
+                    Some(n) => at = n,
+                    None => break,
+                }
+            }
+            r => return Err(DbError::Decode(format!("journal page replied {r:?}"))),
+        }
+    }
+    Ok((out, pages))
+}
+
+/// All of `account`'s journal, paged.
+pub async fn journal(engine: &crate::LedgerEngine, actor: &k::Principal, account: u64) -> Result<Vec<k::Transfer>, DbError> {
+    Ok(journal_range(engine, actor, account, 0, None).await?.0)
+}
+
+/// Every page of a paged account listing.
+async fn all_pages(engine: &crate::LedgerEngine, actor: &k::Principal, cmd: impl Fn(u64) -> k::Command) -> Result<(Vec<k::Account>, u64), DbError> {
+    let mut out = Vec::new();
+    let mut from = 0;
+    let mut pages = 0;
+    loop {
+        pages += 1;
+        match engine.execute(actor, &cmd(from)).await?.map_err(refused)? {
+            k::Reply::Accounts(accs, next) => {
+                out.extend(accs);
+                match next {
+                    Some(n) => from = n,
+                    None => return Ok((out, pages)),
+                }
+            }
+            r => return Err(DbError::Decode(format!("account page replied {r:?}"))),
+        }
+    }
+}
+
+/// All of `owner`'s accounts, paged (an operator, or the owner itself).
+pub async fn accounts_of(engine: &crate::LedgerEngine, actor: &k::Principal, owner: u64) -> Result<Vec<k::Account>, DbError> {
+    Ok(all_pages(engine, actor, |from| k::Command::Accounts { owner, from, limit: k::MAX_PAGE }).await?.0)
+}
+
+/// What a paged audit read and found.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct AuditReport {
+    pub accounts: u64,
+    pub transfers: u64,
+    /// Kernel reads (pages) the audit took.
+    pub pages: u64,
+    /// Transfers seen on one side only because they were posted while the
+    /// audit ran (found on the other side's journal past what it had read).
+    pub in_flight: u64,
+}
+
+/// The audit of [`audit`], from paged reads instead of one snapshot (G4):
+/// every account (by id), and each account's journal up to the number of
+/// entries it had when read, so each account is checked against its own
+/// journal at one point: its debits are the sum of the transfers it is the
+/// debit account of, its credits likewise, every transfer is in its
+/// account's currency, and the limits hold. Then every transfer must be in
+/// the journals of both its accounts; one seen on one side only is looked
+/// up past the other account's bound (posted during the audit), and only
+/// if it is not there either is it an error. Per currency, debits, credits
+/// (counting those transfers on both sides) and the journal total agree.
+/// `actor` must be an operator. `Ok(Err(..))`: an invariant is violated.
+pub async fn audit_paged(engine: &crate::LedgerEngine, actor: &k::Principal) -> Result<Result<AuditReport, String>, DbError> {
+    use std::collections::{BTreeMap, HashMap};
+    let mut rep = AuditReport::default();
+    let (accounts, pages) = all_pages(engine, actor, |from| k::Command::AccountRange { from, limit: k::MAX_PAGE }).await?;
+    rep.pages += pages;
+    rep.accounts = accounts.len() as u64;
+    let bound: HashMap<u64, u64> = accounts.iter().map(|a| (a.id, a.changes)).collect();
+    let mut debit_side: HashMap<u64, k::Transfer> = HashMap::new();
+    let mut credit_side: HashMap<u64, k::Transfer> = HashMap::new();
+    // currency -> (debits, credits)
+    let mut sums: BTreeMap<u32, (u128, u128)> = BTreeMap::new();
+    for a in &accounts {
+        if a.no_overdraft && a.debits > a.credits {
+            return Ok(Err(format!("account {} overdrawn: debits {} > credits {}", a.id, a.debits, a.credits)));
+        }
+        if a.no_overcredit && a.credits > a.debits {
+            return Ok(Err(format!("account {} overcredited: credits {} > debits {}", a.id, a.credits, a.debits)));
+        }
+        let (ts, pages) = journal_range(engine, actor, a.id, 0, Some(a.changes)).await?;
+        rep.pages += pages;
+        let (mut d, mut c) = (0u128, 0u128);
+        for t in ts {
+            if t.currency != a.currency {
+                return Ok(Err(format!("transfer {} in currency {} on account {} of currency {}", t.id, t.currency, a.id, a.currency)));
+            }
+            if t.debit == a.id {
+                d += u128::from(t.amount);
+                debit_side.insert(t.id, t);
+            } else if t.credit == a.id {
+                c += u128::from(t.amount);
+                credit_side.insert(t.id, t);
+            } else {
+                return Ok(Err(format!("journal of account {} lists transfer {}, which is not its", a.id, t.id)));
+            }
+        }
+        if d != u128::from(a.debits) || c != u128::from(a.credits) {
+            return Ok(Err(format!("account {}: debits {} credits {}, its journal {d} / {c}", a.id, a.debits, a.credits)));
+        }
+        let e = sums.entry(a.currency).or_default();
+        e.0 += u128::from(a.debits);
+        e.1 += u128::from(a.credits);
+    }
+    // Transfers on one side only: posted after the other account was read?
+    let mut late: HashMap<u64, Vec<u64>> = HashMap::new();
+    let one_sided: Vec<(k::Transfer, bool)> = debit_side
+        .values()
+        .filter(|t| !credit_side.contains_key(&t.id))
+        .map(|t| (*t, true))
+        .chain(credit_side.values().filter(|t| !debit_side.contains_key(&t.id)).map(|t| (*t, false)))
+        .collect();
+    for (t, seen_debit) in &one_sided {
+        let other = if *seen_debit { t.credit } else { t.debit };
+        let ids = match late.get(&other) {
+            Some(ids) => ids.clone(),
+            None => {
+                let from = bound.get(&other).copied().unwrap_or(0);
+                let (ts, pages) = journal_range(engine, actor, other, from, None).await?;
+                rep.pages += pages;
+                let ids: Vec<u64> = ts.iter().map(|x| x.id).collect();
+                late.insert(other, ids.clone());
+                ids
+            }
+        };
+        if !ids.contains(&t.id) {
+            return Ok(Err(format!("transfer {} is in the journal of account {} only", t.id, if *seen_debit { t.debit } else { t.credit })));
+        }
+        rep.in_flight += 1;
+        let e = sums.entry(t.currency).or_default();
+        if *seen_debit {
+            e.1 += u128::from(t.amount);
+        } else {
+            e.0 += u128::from(t.amount);
+        }
+    }
+    let mut journal: BTreeMap<u32, u128> = BTreeMap::new();
+    let mut all: HashMap<u64, k::Transfer> = debit_side;
+    all.extend(credit_side);
+    for t in all.values() {
+        *journal.entry(t.currency).or_default() += u128::from(t.amount);
+    }
+    rep.transfers = all.len() as u64;
+    for (cur, (d, c)) in &sums {
+        let j = journal.get(cur).copied().unwrap_or(0);
+        if d != c || *d != j {
+            return Ok(Err(format!("currency {cur}: debits {d}, credits {c}, journal {j}")));
+        }
+    }
+    Ok(Ok(rep))
 }

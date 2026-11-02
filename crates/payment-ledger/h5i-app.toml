@@ -2,7 +2,7 @@
 #   h5i app prove crates/payment-ledger
 [extract]
 crate = "."
-start-from = ["transition", "reads"]
+start-from = ["transition", "reads", "read_only"]
 schema = true
 include = ["h5i_app_sql"]
 
@@ -23,6 +23,11 @@ theorems = [
   # G1: one history entry per account change, naming the caller; only appended.
   "payment_ledger.History.every_change_logged",
   "payment_ledger.History.history_appended",
+  # G4: the journal, history and account-by-id pages are operators' reads.
+  "payment_ledger.Theorems.operator_reads",
+  # G4: the commands run READ ONLY DEFERRABLE write nothing (h5i-app's
+  # obligation for `Kernel::read_only`).
+  "payment_ledger.ReadOnly.sound",
   # Read plans (`reads`, `LedgerStore::load_for`): the extracted plans are
   # `readsA`, a plan's rows decode to `Snapshot.load`, and `transition` on
   # that gives its whole-tenant result.
@@ -114,3 +119,27 @@ new = "        actor: operator_of(actor),"
 name = "history_entry_overwritten"
 old = "                changes: a.changes + 1,"
 new = "                changes: a.changes,"
+
+# G4: the journal page plan reads the history by the wrong column.
+[[mutant]]
+name = "journal_plan_wrong_column"
+old = "pub const HISTORY_TRANSFER: u32 = 6;"
+new = "pub const HISTORY_TRANSFER: u32 = 5;"
+
+# G4: an account page that includes the next page's first account.
+[[mutant]]
+name = "account_range_past_end"
+old = "        if from <= a.id && a.id < end {"
+new = "        if from <= a.id && a.id <= end {"
+
+# G4: a user reading an account's journal.
+[[mutant]]
+name = "journal_open_to_users"
+old = "fn journal_page(actor: &Principal, s: &Snapshot, account: u64, from: u64, limit: u32) -> Outcome {\n    if limit == 0 || limit > MAX_PAGE {\n        return Err(Error::BadPage);\n    }\n    if !is_operator(actor) {"
+new = "fn journal_page(actor: &Principal, s: &Snapshot, account: u64, from: u64, limit: u32) -> Outcome {\n    if limit == 0 || limit > MAX_PAGE {\n        return Err(Error::BadPage);\n    }\n    if false {"
+
+# G4: a transfer declared read-only (it would run READ ONLY, unserialized).
+[[mutant]]
+name = "transfer_declared_read_only"
+old = " | Command::History { .. }\n    )"
+new = " | Command::History { .. } | Command::Transfer { .. }\n    )"

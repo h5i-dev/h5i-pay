@@ -76,20 +76,111 @@ theorem history_page_writes (a : Principal) (s : Snapshot) (p f : U64) (l : U32)
       simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
   · simp at h
 
-theorem reads_nothing (a : Principal) (s : Snapshot) (c : Command) ws r
-    (h : transition a s c = ok (.Ok (ws, r)))
-    (hc : (∃ o f l, c = .Accounts o f l) ∨ c = .Transfers ∨ (∃ id, c = .Account id) ∨ ∃ p f l, c = .History p f l) :
-    ws.val = [] := by
-  rcases hc with ⟨o, f, l, rfl⟩ | rfl | ⟨id, rfl⟩ | ⟨p, f, l, rfl⟩
-  · exact accounts_page_writes a s o f l ws r h
-  · simp only [transition, is_operator_eq, bind_tc_ok, bind_ok] at h
+theorem journal_page_writes (a : Principal) (s : Snapshot) (p f : U64) (l : U32) ws r
+    (h : journal_page a s p f l = ok (.Ok (ws, r))) : ws.val = [] := by
+  unfold journal_page at h
+  simp only [is_operator_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  split at h
+  · obtain ⟨o, -, h⟩ := bind_tc_eq_ok.1 h
     split at h
-    · obtain ⟨v, -, hv⟩ := bind_tc_eq_ok.1 h
-      simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at hv
-      rw [← hv.1]; rfl
     · simp at h
-  · exact post_of_ok (read_account_spec a s id) h ws r rfl
-  · exact history_page_writes a s p f l ws r h
+    · obtain ⟨e, -, h⟩ := bind_tc_eq_ok.1 h
+      obtain ⟨nx, -, h⟩ := bind_tc_eq_ok.1 h
+      obtain ⟨v, -, h⟩ := bind_tc_eq_ok.1 h
+      obtain ⟨v2, -, h⟩ := bind_tc_eq_ok.1 h
+      simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
+  · simp at h
+
+theorem account_range_writes (a : Principal) (s : Snapshot) (f : U64) (l : U32) ws r
+    (h : account_range a s f l = ok (.Ok (ws, r))) : ws.val = [] := by
+  unfold account_range at h
+  simp only [is_operator_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  split at h
+  · obtain ⟨e, -, h⟩ := bind_tc_eq_ok.1 h
+    obtain ⟨nx, -, h⟩ := bind_tc_eq_ok.1 h
+    obtain ⟨v, -, h⟩ := bind_tc_eq_ok.1 h
+    simp only [Result.ok.injEq, core.result.Result.Ok.injEq, Prod.mk.injEq] at h; rw [← h.1]; rfl
+  · simp at h
+
+/-- The commands that only read. -/
+def IsRead : Command → Prop
+  | .Account _ => True
+  | .Accounts .. => True
+  | .Transfers .. => True
+  | .AccountRange .. => True
+  | .History .. => True
+  | _ => False
+
+theorem reads_nothing (a : Principal) (s : Snapshot) (c : Command) ws r
+    (h : transition a s c = ok (.Ok (ws, r))) (hc : IsRead c) : ws.val = [] := by
+  cases c <;> simp only [IsRead] at hc
+  · exact post_of_ok (read_account_spec a s _) h ws r rfl
+  · exact accounts_page_writes a s _ _ _ ws r h
+  · exact journal_page_writes a s _ _ _ ws r h
+  · exact account_range_writes a s _ _ ws r h
+  · exact history_page_writes a s _ _ _ ws r h
+
+/-! ## Reads of the whole tenant's data are operators' (SEC-02, G4) -/
+
+theorem journal_page_operator (a : Principal) (s : Snapshot) (p f : U64) (l : U32) ws r
+    (h : journal_page a s p f l = ok (.Ok (ws, r))) : a.operator = true := by
+  unfold journal_page at h
+  simp only [is_operator_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  split at h
+  · assumption
+  · simp at h
+
+theorem account_range_operator (a : Principal) (s : Snapshot) (f : U64) (l : U32) ws r
+    (h : account_range a s f l = ok (.Ok (ws, r))) : a.operator = true := by
+  unfold account_range at h
+  simp only [is_operator_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  split at h
+  · assumption
+  · simp at h
+
+theorem history_page_operator (a : Principal) (s : Snapshot) (p f : U64) (l : U32) ws r
+    (h : history_page a s p f l = ok (.Ok (ws, r))) : a.operator = true := by
+  unfold history_page at h
+  simp only [is_operator_eq, bind_ok] at h
+  split at h
+  · simp at h
+  split at h
+  · simp at h
+  split at h
+  · assumption
+  · simp at h
+
+/-- The commands that read across the tenant's accounts. -/
+def IsOperatorRead : Command → Prop
+  | .Transfers .. => True
+  | .AccountRange .. => True
+  | .History .. => True
+  | _ => False
+
+/-- Only an operator reads an account's journal or history, or lists the
+tenant's accounts by id: a user's principal gets an error. -/
+theorem operator_reads (a : Principal) (s : Snapshot) (c : Command) ws r
+    (h : transition a s c = ok (.Ok (ws, r))) (hc : IsOperatorRead c) : a.operator = true := by
+  cases c <;> simp only [IsOperatorRead] at hc
+  · exact journal_page_operator a s _ _ _ ws r h
+  · exact account_range_operator a s _ _ ws r h
+  · exact history_page_operator a s _ _ _ ws r h
 
 /-! ## The invariant -/
 
@@ -124,10 +215,11 @@ theorem inv_preserved (a : Principal) (s : Snapshot) (c : Command) ws r
       simp only [HasRoom, Snapshot.size, alloc.vec.Vec.length] at *; omega
     obtain ⟨s', hser⟩ := batch_serial a s ts ws r hsz h
     exact inv_serial hser hinv
-  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr (.inl ⟨id, rfl⟩)))]; exact hinv
-  | Accounts o f l => rw [reads_nothing a s _ ws r h (.inl ⟨o, f, l, rfl⟩)]; exact hinv
-  | Transfers => rw [reads_nothing a s _ ws r h (.inr (.inl rfl))]; exact hinv
-  | History p f l => rw [reads_nothing a s _ ws r h (.inr (.inr (.inr ⟨p, f, l, rfl⟩)))]; exact hinv
+  | Account id => rw [reads_nothing a s _ ws r h trivial]; exact hinv
+  | Accounts o f l => rw [reads_nothing a s _ ws r h trivial]; exact hinv
+  | Transfers acc f l => rw [reads_nothing a s _ ws r h trivial]; exact hinv
+  | AccountRange f l => rw [reads_nothing a s _ ws r h trivial]; exact hinv
+  | History p f l => rw [reads_nothing a s _ ws r h trivial]; exact hinv
 
 theorem init_inv : Inv init := by
   refine ⟨by simp [init], fun c => ?_, by simp [init]⟩
@@ -339,10 +431,11 @@ theorem guarded (a : Principal) (s : Snapshot) (c : Command) ws r
       simp only [HasRoom, Snapshot.size, alloc.vec.Vec.length] at *; omega
     obtain ⟨s', hser⟩ := batch_serial a s ts ws r hsz h
     exact guarded_serial hser
-  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr (.inl ⟨id, rfl⟩)))]; exact Guarded.refl _ _
-  | Accounts o f l => rw [reads_nothing a s _ ws r h (.inl ⟨o, f, l, rfl⟩)]; exact Guarded.refl _ _
-  | Transfers => rw [reads_nothing a s _ ws r h (.inr (.inl rfl))]; exact Guarded.refl _ _
-  | History p f l => rw [reads_nothing a s _ ws r h (.inr (.inr (.inr ⟨p, f, l, rfl⟩)))]; exact Guarded.refl _ _
+  | Account id => rw [reads_nothing a s _ ws r h trivial]; exact Guarded.refl _ _
+  | Accounts o f l => rw [reads_nothing a s _ ws r h trivial]; exact Guarded.refl _ _
+  | Transfers acc f l => rw [reads_nothing a s _ ws r h trivial]; exact Guarded.refl _ _
+  | AccountRange f l => rw [reads_nothing a s _ ws r h trivial]; exact Guarded.refl _ _
+  | History p f l => rw [reads_nothing a s _ ws r h trivial]; exact Guarded.refl _ _
 
 /-- **Authorization of debits.** In every reachable state, if a command
 (a batch included) increases the debits of an account, the caller is the
@@ -395,9 +488,10 @@ theorem transfers_record_operator (a : Principal) (s : Snapshot) (c : Command) w
       simp only [HasRoom, Snapshot.size, alloc.vec.Vec.length] at *; omega
     obtain ⟨s', hser⟩ := batch_serial a s ts ws r hsz h
     exact serial_records hser
-  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr (.inl ⟨id, rfl⟩)))]; simp
-  | Accounts o f l => rw [reads_nothing a s _ ws r h (.inl ⟨o, f, l, rfl⟩)]; simp
-  | Transfers => rw [reads_nothing a s _ ws r h (.inr (.inl rfl))]; simp
-  | History p f l => rw [reads_nothing a s _ ws r h (.inr (.inr (.inr ⟨p, f, l, rfl⟩)))]; simp
+  | Account id => rw [reads_nothing a s _ ws r h trivial]; simp
+  | Accounts o f l => rw [reads_nothing a s _ ws r h trivial]; simp
+  | Transfers acc f l => rw [reads_nothing a s _ ws r h trivial]; simp
+  | AccountRange f l => rw [reads_nothing a s _ ws r h trivial]; simp
+  | History p f l => rw [reads_nothing a s _ ws r h trivial]; simp
 
 end payment_ledger.Theorems

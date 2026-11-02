@@ -191,6 +191,155 @@ theorem history_page_congr (a : Principal) (s s' : Snapshot) (acc f : U64) (l : 
   unfold history_page
   simp only [find_account_eq, h0, he, history_range_congr s s' acc f e h1, bind_ok]
 
+/-! ## A journal page (G4) -/
+
+def toStep (s : Snapshot) (acc : List Transfer) (e : HistoryEntry) : List Transfer :=
+  match s.transfers.val.find? (fun t => t.id.val = e.transfer.val) with
+  | none => acc
+  | some t => acc ++ [t]
+
+theorem toStep_length (s : Snapshot) (acc : List Transfer) (e : HistoryEntry) :
+    (toStep s acc e).length ≤ acc.length + 1 := by
+  unfold toStep; split <;> simp
+
+theorem foldl_toStep_length (s : Snapshot) (l : List HistoryEntry) (acc : List Transfer) :
+    (l.foldl (toStep s) acc).length ≤ acc.length + l.length := by
+  induction l generalizing acc with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl_cons, List.length_cons]
+    have := ih (toStep s acc x); have := toStep_length s acc x; omega
+
+theorem transfers_of_spec (s : Snapshot) (es : alloc.vec.Vec HistoryEntry) :
+    transfers_of s es ⦃ v => v.val = es.val.foldl (toStep s) [] ⦄ := by
+  unfold transfers_of transfers_of_loop
+  have h := loop_fold es.val (fun v : alloc.vec.Vec Transfer => v.val) (toStep s)
+    (fun v k => v.length ≤ k)
+    (fun x => transfers_of_loop.body s es x.1 x.2) ?_ (alloc.vec.Vec.new Transfer) 0#usize (by simp)
+    (by simp [alloc.vec.Vec.length])
+  · exact WP.spec_mono h (fun r hr => by rw [hr]; simp)
+  · intro v j hj hv
+    unfold transfers_of_loop.body
+    simp only [alloc.vec.Vec.length] at hj hv
+    simp only [alloc.vec.Vec.len]
+    split
+    · rename_i hlt
+      have hlt' : j.val < es.val.length := by scalar_tac
+      rw [vec_index_eq es j hlt']
+      simp only [bind_ok]
+      rw [find_transfer_eq]
+      simp only [bind_ok]
+      have hj1 : j.val + 1 ≤ Usize.max := by scalar_tac
+      cases hf : s.transfers.val.find? (fun t => decide (t.id.val = es.val[j.val].transfer.val)) with
+      | none =>
+        simp only [bind_ok]
+        step*
+        simp only [FoldStep]
+        refine ⟨hlt', ?_, by scalar_tac, by scalar_tac⟩
+        show v.val = toStep s v.val es.val[j.val]
+        unfold toStep; rw [hf]
+      | some t =>
+        simp only [bind_ok]
+        have : v.val.length < Usize.max := by scalar_tac
+        step*
+        simp only [FoldStep]
+        refine ⟨hlt', by simp_all [toStep], by scalar_tac, ?_⟩
+        simp_all [alloc.vec.Vec.length]
+        try scalar_tac
+    · simp only [WP.spec_ok, FoldStep, and_true]
+      scalar_tac
+
+theorem foldl_toStep_congr (s s' : Snapshot) (l : List HistoryEntry)
+    (h : ∀ e ∈ l, s'.transfers.val.find? (fun t => t.id.val = e.transfer.val) = s.transfers.val.find? (fun t => t.id.val = e.transfer.val)) :
+    ∀ acc, l.foldl (toStep s') acc = l.foldl (toStep s) acc := by
+  induction l with
+  | nil => intro acc; rfl
+  | cons x xs ih =>
+    intro acc
+    simp only [List.foldl_cons]
+    have e1 : toStep s' acc x = toStep s acc x := by simp only [toStep, h x (by simp)]
+    rw [e1]; exact ih (fun e he => h e (List.mem_cons_of_mem _ he)) _
+
+theorem transfers_of_congr (s s' : Snapshot) (es : alloc.vec.Vec HistoryEntry)
+    (h : ∀ e ∈ es.val, s'.transfers.val.find? (fun t => t.id.val = e.transfer.val) = s.transfers.val.find? (fun t => t.id.val = e.transfer.val)) :
+    transfers_of s' es = transfers_of s es := by
+  obtain ⟨v, hv⟩ := ok_of (transfers_of_spec s es)
+  obtain ⟨v', hv'⟩ := ok_of (transfers_of_spec s' es)
+  have e1 := post_of_ok (transfers_of_spec s es) hv
+  have e2 := post_of_ok (transfers_of_spec s' es) hv'
+  have : v' = v := alloc.vec.Vec.ext _ _ (by rw [e1, e2, foldl_toStep_congr s s' _ h])
+  rw [hv, hv', this]
+
+theorem journal_page_congr (a : Principal) (s s' : Snapshot) (acc f : U64) (l : U32) (e : U64)
+    (he : page_end f l = ok e)
+    (h0 : s'.accounts.val.find? (fun x => x.id.val = acc.val) = s.accounts.val.find? (fun x => x.id.val = acc.val))
+    (h1 : s'.history.val.filter (hrangeP acc f e) = s.history.val.filter (hrangeP acc f e))
+    (h2 : ∀ x ∈ s.history.val.filter (hrangeP acc f e),
+      s'.transfers.val.find? (fun t => t.id.val = x.transfer.val) = s.transfers.val.find? (fun t => t.id.val = x.transfer.val)) :
+    journal_page a s' acc f l = journal_page a s acc f l := by
+  obtain ⟨v, hv⟩ := ok_of (history_range_spec s acc f e)
+  have hvv := post_of_ok (history_range_spec s acc f e) hv
+  have hc := transfers_of_congr s s' v (fun x hx => h2 x (by rw [← hvv]; exact hx))
+  unfold journal_page
+  simp only [find_account_eq, h0, he, history_range_congr s s' acc f e h1, hv, hc, bind_ok]
+
+/-! ## Accounts by id (G4) -/
+
+def idP (f e : U64) (x : Account) : Bool := decide (f ≤ x.id) && decide (x.id < e)
+
+def idStepL (f e : U64) (l : List Account) (x : Account) : List Account :=
+  if idP f e x then l ++ [x] else l
+
+theorem foldl_idStepL (f e : U64) (l init : List Account) :
+    l.foldl (idStepL f e) init = init ++ l.filter (idP f e) := by
+  induction l generalizing init with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl_cons, ih, idStepL, List.filter_cons]
+    split <;> simp
+
+theorem id_range_spec (s : Snapshot) (f e : U64) :
+    id_range s f e ⦃ v => v.val = s.accounts.val.filter (idP f e) ⦄ := by
+  unfold id_range id_range_loop
+  have h := loop_fold s.accounts.val (fun v : alloc.vec.Vec Account => v.val) (idStepL f e)
+    (fun v k => v.length + (s.accounts.length - k) ≤ Usize.max)
+    (fun x => id_range_loop.body s f e x.1 x.2) ?_ (alloc.vec.Vec.new Account) 0#usize (by simp)
+    (by simp [alloc.vec.Vec.length])
+  · exact WP.spec_mono h (fun r hr => by rw [hr, foldl_idStepL]; simp)
+  · intro v j hj hv
+    unfold id_range_loop.body
+    simp only [alloc.vec.Vec.length] at hj hv
+    simp only [alloc.vec.Vec.len]
+    split
+    · rename_i hlt
+      have hlt' : j.val < s.accounts.val.length := by scalar_tac
+      rw [vec_index_eq s.accounts j hlt']
+      simp only [bind_ok]
+      have hj1 : j.val + 1 ≤ Usize.max := by scalar_tac
+      by_cases h2 : f ≤ s.accounts.val[j.val].id <;> by_cases h3 : s.accounts.val[j.val].id < e <;>
+        simp only [h2, h3, if_true, if_false, bind_ok] <;> step* <;> simp only [FoldStep] <;>
+        refine ⟨hlt', ?_, by scalar_tac, by simp only [alloc.vec.Vec.length] at *; scalar_tac⟩ <;>
+        simp_all [idStepL, idP]
+    · simp only [WP.spec_ok, FoldStep, and_true]
+      scalar_tac
+
+theorem id_range_congr (s s' : Snapshot) (f e : U64)
+    (h : s'.accounts.val.filter (idP f e) = s.accounts.val.filter (idP f e)) :
+    id_range s' f e = id_range s f e := by
+  obtain ⟨v, hv⟩ := ok_of (id_range_spec s f e)
+  obtain ⟨v', hv'⟩ := ok_of (id_range_spec s' f e)
+  have e1 := post_of_ok (id_range_spec s f e) hv
+  have e2 := post_of_ok (id_range_spec s' f e) hv'
+  have : v' = v := alloc.vec.Vec.ext _ _ (by rw [e1, e2, h])
+  rw [hv, hv', this]
+
+theorem account_range_congr (a : Principal) (s s' : Snapshot) (f : U64) (l : U32) (e : U64)
+    (he : page_end f l = ok e) (hl : s'.ledger = s.ledger)
+    (h1 : s'.accounts.val.filter (idP f e) = s.accounts.val.filter (idP f e)) :
+    account_range a s' f l = account_range a s f l := by
+  unfold account_range
+  simp only [he, hl, id_range_congr s s' f e h1, bind_ok]
+
 /-! ## Slices kept through a batch -/
 
 /-- The accounts a batch names. -/
@@ -564,12 +713,12 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
         rw [← hev]
         by_cases hfe : f.val < e.val
         · simp only [hfe, if_true]
-          rw [Snapshot.load_history, pickRows_filter _ _ _ _ _ ⟨4, .and (eqU 0 acc) (rangeA 1 f.val e.val), {}⟩ (by simp) rfl]
+          rw [Snapshot.load_history, pickRows_filter _ _ _ _ _ ⟨4, entryA acc f.val e.val, {}⟩ (by simp) rfl]
           apply filter_slice
           intro x _ hx
           simp only [hrangeP, Bool.and_eq_true, decide_eq_true_eq] at hx
           obtain ⟨⟨h1, h2⟩, h3⟩ := hx
-          simp only [Pred.holds, Bool.and_eq_true]
+          simp only [entryA, Pred.holds, Bool.and_eq_true]
           refine ⟨by simp [eqU, Pred.holds, HistoryEntry.row, h1], ?_⟩
           apply rangeA_holds_of 1 f.val e.val x.n.val (by scalar_tac) (by scalar_tac)
           simp [HistoryEntry.row]
@@ -589,14 +738,98 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
       have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
       have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
       simp [h0, hm, hna, is_operator_eq]
-  | Transfers =>
-    simp only [transition, is_operator_eq, bind_tc_ok, bind_ok]
-    cases ho : a.operator
-    · simp
-    · simp only [readsA, ho, if_true, Option.some.injEq] at hp; subst hp
-      have : (Snapshot.load [⟨1, .all, {}⟩] s).transfers = s.transfers := by
-        apply vec_eq; simp [Snapshot.load_transfers, pickRows, Pred.holds]
-      simp only [this]
+  | Transfers acc f l =>
+    simp only [transition]
+    simp only [readsA] at hp
+    split at hp
+    · rename_i hc
+      simp only [Option.some.injEq] at hp; subst hp
+      obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+      have hentry : ∀ x : HistoryEntry, hrangeP acc f e x = true →
+          (entryA acc f.val e.val).holds (Snapshot.enc s) (HistoryEntry.row x) = true := by
+        intro x hx
+        simp only [hrangeP, Bool.and_eq_true, decide_eq_true_eq] at hx
+        obtain ⟨⟨h1, h2⟩, h3⟩ := hx
+        simp only [entryA, Pred.holds, Bool.and_eq_true]
+        refine ⟨by simp [eqU, Pred.holds, HistoryEntry.row, h1], ?_⟩
+        apply rangeA_holds_of 1 f.val e.val x.n.val (by scalar_tac) (by scalar_tac)
+        simp [HistoryEntry.row]
+      apply journal_page_congr a s _ acc f l e he
+      · have hq : (journalA acc f.val (pageEndN f.val l.val)).find? (fun q => decide (q.table = 0)) =
+            some ⟨0, eqU 0 acc, {}⟩ := by unfold journalA; split <;> simp
+        rw [Snapshot.load_accounts, pickRows_filter _ _ _ _ _ ⟨0, eqU 0 acc, {}⟩ hq rfl]
+        apply find_filter_kept; intro x hx; simp_all [eqU, Pred.holds, Account.row]
+      · unfold journalA
+        rw [← hev]
+        by_cases hfe : f.val < e.val
+        · simp only [hfe, if_true]
+          rw [Snapshot.load_history, pickRows_filter _ _ _ _ _ ⟨4, entryA acc f.val e.val, {}⟩ (by simp) rfl]
+          exact filter_slice _ _ _ (fun x _ hx => hentry x hx)
+        · simp only [hfe, if_false]
+          have : s.history.val.filter (hrangeP acc f e) = [] := by
+            rw [List.filter_eq_nil_iff]; intro x _; simp only [hrangeP]; intro h
+            simp only [Bool.and_eq_true, decide_eq_true_eq] at h; scalar_tac
+          rw [this]
+          simp [Snapshot.load_history, pickRows]
+      · intro x hx
+        have hxr := (List.mem_filter.1 hx).2
+        have hfe : f.val < e.val := by
+          simp only [hrangeP, Bool.and_eq_true, decide_eq_true_eq] at hxr; scalar_tac
+        unfold journalA
+        rw [← hev]
+        simp only [hfe, if_true]
+        rw [Snapshot.load_transfers, pickRows_filter _ _ _ _ _ ⟨1, .isIn 0 4 (entryA acc f.val e.val) 6 {}, {}⟩ (by simp) rfl]
+        apply find_filter_kept
+        intro t ht
+        simp only [decide_eq_true_eq] at ht
+        rw [holds_in_4]
+        simp only [Transfer.row, List.getElem?_cons_zero, Window.apply_default, List.any_eq_true, List.mem_filter]
+        exact ⟨x, ⟨(List.mem_filter.1 hx).1, hentry x hxr⟩, by simp [HistoryEntry.row, ht]⟩
+    · rename_i hc
+      unfold journal_page
+      by_cases h0 : l = 0#u32
+      · simp [h0]
+      have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+      by_cases hm : l > MAX_PAGE
+      · simp [h0, hm]
+      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
+      simp [h0, hm, hna, is_operator_eq]
+  | AccountRange f l =>
+    simp only [transition]
+    simp only [readsA] at hp
+    split at hp
+    · rename_i hc
+      simp only [Option.some.injEq] at hp; subst hp
+      obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
+      apply account_range_congr a s _ f l e he
+      · unfold idsA; split <;> simp [Snapshot.load, pickRows, Pred.holds]
+      · unfold idsA
+        rw [← hev]
+        by_cases hfe : f.val < e.val
+        · simp only [hfe, if_true]
+          rw [Snapshot.load_accounts, pickRows_filter _ _ _ _ _ ⟨0, rangeA 0 f.val e.val, {}⟩ (by simp) rfl]
+          apply filter_slice
+          intro x _ hx
+          simp only [idP, Bool.and_eq_true, decide_eq_true_eq] at hx
+          apply rangeA_holds_of 0 f.val e.val x.id.val (by scalar_tac) (by scalar_tac)
+          simp [Account.row]
+        · simp only [hfe, if_false]
+          have : s.accounts.val.filter (idP f e) = [] := by
+            rw [List.filter_eq_nil_iff]; intro x _; simp only [idP]; intro h
+            simp only [Bool.and_eq_true, decide_eq_true_eq] at h; scalar_tac
+          rw [this]
+          simp [Snapshot.load_accounts, pickRows]
+    · rename_i hc
+      unfold account_range
+      by_cases h0 : l = 0#u32
+      · simp [h0]
+      have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
+      by_cases hm : l > MAX_PAGE
+      · simp [h0, hm]
+      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
+      simp [h0, hm, hna, is_operator_eq]
 
 /-- **The plan the server runs.** For every command for which the extracted
 `reads` names a plan, `transition` on what loading that plan decodes to

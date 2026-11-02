@@ -125,10 +125,11 @@ theorem every_change_logged (a : Principal) (s : Snapshot) (c : Command) ws r
       simp only [HasRoom, Snapshot.size, alloc.vec.Vec.length] at *; omega
     obtain ⟨s', hser⟩ := batch_serial a s ts ws r hsz h
     exact logged_serial hser
-  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr (.inl ⟨id, rfl⟩)))]; exact .nil
-  | Accounts o f l => rw [reads_nothing a s _ ws r h (.inl ⟨o, f, l, rfl⟩)]; exact .nil
-  | Transfers => rw [reads_nothing a s _ ws r h (.inr (.inl rfl))]; exact .nil
-  | History p f l => rw [reads_nothing a s _ ws r h (.inr (.inr (.inr ⟨p, f, l, rfl⟩)))]; exact .nil
+  | Account id => rw [reads_nothing a s _ ws r h trivial]; exact .nil
+  | Accounts o f l => rw [reads_nothing a s _ ws r h trivial]; exact .nil
+  | Transfers acc f l => rw [reads_nothing a s _ ws r h trivial]; exact .nil
+  | AccountRange f l => rw [reads_nothing a s _ ws r h trivial]; exact .nil
+  | History p f l => rw [reads_nothing a s _ ws r h trivial]; exact .nil
 
 /-! ## The history is only appended to -/
 
@@ -284,11 +285,12 @@ theorem hinv_step (a : Principal) (s : Snapshot) (c : Command) ws r
       simp only [HasRoom, Snapshot.size, alloc.vec.Vec.length] at *; omega
     obtain ⟨s', hser⟩ := batch_serial a s ts ws r hsz h
     exact hinv_serial hser hh
-  | Account id => rw [reads_nothing a s _ ws r h (.inr (.inr (.inl ⟨id, rfl⟩)))]; exact ⟨hh, by simp [applyAll]⟩
-  | Accounts o f l => rw [reads_nothing a s _ ws r h (.inl ⟨o, f, l, rfl⟩)]; exact ⟨hh, by simp [applyAll]⟩
-  | Transfers => rw [reads_nothing a s _ ws r h (.inr (.inl rfl))]; exact ⟨hh, by simp [applyAll]⟩
+  | Account id => rw [reads_nothing a s _ ws r h trivial]; exact ⟨hh, by simp [applyAll]⟩
+  | Accounts o f l => rw [reads_nothing a s _ ws r h trivial]; exact ⟨hh, by simp [applyAll]⟩
+  | Transfers acc f l => rw [reads_nothing a s _ ws r h trivial]; exact ⟨hh, by simp [applyAll]⟩
+  | AccountRange f l => rw [reads_nothing a s _ ws r h trivial]; exact ⟨hh, by simp [applyAll]⟩
   | History p f l =>
-    rw [reads_nothing a s _ ws r h (.inr (.inr (.inr ⟨p, f, l, rfl⟩)))]; exact ⟨hh, by simp [applyAll]⟩
+    rw [reads_nothing a s _ ws r h trivial]; exact ⟨hh, by simp [applyAll]⟩
 
 theorem init_hinv : HInv init := by simp [HInv, init]
 

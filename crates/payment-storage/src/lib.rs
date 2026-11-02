@@ -110,6 +110,9 @@ pub(crate) fn add_column(table: &str, column: &str, ty: &str) -> String {
     )
 }
 
+/// One-off data migrations already run in this schema, by name.
+pub(crate) const MIGRATIONS_DDL: &str = "CREATE TABLE IF NOT EXISTS h5i_pay_migrations (name TEXT PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT now())";
+
 /// G1: the `history` table of the schema refuses `UPDATE`, `DELETE` and
 /// `TRUNCATE`, so an entry, once committed, stays as written. The kernels
 /// only append to it (`Theorems.history_appended`); this makes the database

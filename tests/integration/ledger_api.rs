@@ -106,13 +106,27 @@ async fn ledger_over_http() {
     assert_eq!(s.ledger(&alice, json!({"cmd": "accounts", "limit": 65}), None).await.0, 400);
     // Bob sees his account only, and cannot read Alice's.
     assert_eq!(s.ledger(&bob, json!({"cmd": "account", "id": 1}), None).await.0, 404);
-    assert_eq!(s.ledger(&bob, json!({"cmd": "transfers"}), None).await.0, 403);
+    assert_eq!(s.ledger(&bob, json!({"cmd": "transfers", "account": 2}), None).await.0, 403);
+    // G4: the journal is read per account, paged over its history entries
+    // (the opening names no transfer, so a page can hold fewer than `limit`).
+    let (st, j) = s.ledger(&op, json!({"cmd": "transfers", "account": 1, "limit": 2}), None).await;
+    assert_eq!(st, 200, "{j}");
+    assert_eq!((j["transfers"].as_array().map(Vec::len), &j["next"]), (Some(1), &json!(2)));
+    assert_eq!(j["transfers"][0]["id"], json!(1));
+    let (_, j) = s.ledger(&op, json!({"cmd": "transfers", "account": 1, "from": 2}), None).await;
+    assert_eq!((j["transfers"][0]["id"].clone(), j["next"].clone()), (json!(3), Value::Null));
+    assert_eq!(s.ledger(&op, json!({"cmd": "transfers", "account": 1, "limit": 65}), None).await.0, 400);
+    assert_eq!(s.ledger(&op, json!({"cmd": "transfers", "account": 9}), None).await.0, 404);
+    assert_eq!(s.ledger(&op, json!({"cmd": "transfers"}), None).await.0, 400);
+    let (st, ids) = s.ledger(&op, json!({"cmd": "accounts_by_id", "from": 1, "limit": 1}), None).await;
+    assert_eq!((st, ids["accounts"][0]["id"].clone(), ids["next"].clone()), (200, json!(1), json!(2)));
+    assert_eq!(s.ledger(&alice, json!({"cmd": "accounts_by_id"}), None).await.0, 403);
 
     let audit = s.http.get(format!("{}/v1/ledger/audit", s.base)).bearer_auth(&op).send().await.unwrap();
     assert_eq!(audit.status().as_u16(), 200);
     let audit: Value = audit.json().await.unwrap();
     assert_eq!(audit["ok"], json!(true));
-    assert_eq!(audit["transfers"], json!(2));
+    assert_eq!((&audit["accounts"], &audit["transfers"], &audit["in_flight"]), (&json!(3), &json!(2), &json!(0)));
     let audit = s.http.get(format!("{}/v1/ledger/audit", s.base)).bearer_auth(&alice).send().await.unwrap();
     assert_eq!(audit.status().as_u16(), 403);
 }
@@ -130,12 +144,12 @@ async fn tenants_are_isolated() {
     let (st, _) = s.ledger(&op_b, json!({"cmd": "transfer", "id": 2, "debit": 1, "credit": 0, "amount": 50}), None).await;
     assert_eq!(st, 404);
     assert_eq!(s.ledger(&op_b, json!({"cmd": "accounts"}), None).await, (200, json!({"accounts": [], "next": null})));
-    assert_eq!(s.ledger(&op_b, json!({"cmd": "transfers"}), None).await, (200, json!([])));
+    assert_eq!(s.ledger(&op_b, json!({"cmd": "transfers", "account": 0}), None).await.0, 404);
     // A forged token for tenant A signed with another secret is refused.
     let forged = HmacAuth::<LedgerApp>::new("other-secret", principal).issue(a, 0, 600);
     assert_eq!(s.ledger(&forged, json!({"cmd": "accounts"}), None).await.0, 401);
-    let (_, ts) = s.ledger(&op_a, json!({"cmd": "transfers"}), None).await;
-    assert_eq!(ts.as_array().unwrap().len(), 1);
+    let (_, ts) = s.ledger(&op_a, json!({"cmd": "transfers", "account": 1}), None).await;
+    assert_eq!(ts["transfers"].as_array().unwrap().len(), 1);
 }
 
 /// SEC-02: holding the user key does not make an operator.
@@ -148,7 +162,7 @@ async fn the_user_key_cannot_mint_an_operator() {
     assert_eq!(s.ledger(&op, json!({"cmd": "open", "currency": 392}), None).await.0, 200);
     // What anyone holding H5I_APP_SECRET could sign: tenant a, user 0.
     let forged_op = HmacAuth::<LedgerApp>::new(USER_SECRET, principal).issue(a, 0, 600);
-    let (st, body) = s.ledger(&forged_op, json!({"cmd": "transfers"}), None).await;
+    let (st, body) = s.ledger(&forged_op, json!({"cmd": "transfers", "account": 0}), None).await;
     assert_eq!(st, 401, "{body}");
     let audit = s.http.get(format!("{}/v1/ledger/audit", s.base)).bearer_auth(&forged_op).send().await.unwrap();
     assert_eq!(audit.status().as_u16(), 401);
@@ -156,7 +170,7 @@ async fn the_user_key_cannot_mint_an_operator() {
     // operator's account into its own.
     let user = user_token(a, 5);
     assert_eq!(s.ledger(&user, json!({"cmd": "open", "currency": 392}), None).await, (200, json!({"id": 1})));
-    assert_eq!(s.ledger(&user, json!({"cmd": "transfers"}), None).await.0, 403);
+    assert_eq!(s.ledger(&user, json!({"cmd": "transfers", "account": 1}), None).await.0, 403);
     let (st, body) = s.ledger(&user, json!({"cmd": "transfer", "id": 9, "debit": 0, "credit": 1, "amount": 1}), None).await;
     assert_eq!((st, body["error"].as_str()), (403, Some("forbidden")), "{body}");
     let audit = s.http.get(format!("{}/v1/ledger/audit", s.base)).bearer_auth(&user).send().await.unwrap();
@@ -186,9 +200,86 @@ async fn the_journal_names_the_operator() {
     // Operator 4 replaying operator 3's transfer gets the replay; the row keeps 3.
     let replay = json!({"cmd": "transfer", "id": 1, "debit": 0, "credit": 1, "amount": 10});
     assert_eq!(s.ledger(&op4, replay, None).await, (200, json!({"id": 1, "status": "exists"})));
-    let (st, ts) = s.ledger(&op4, json!({"cmd": "transfers"}), None).await;
+    let (st, ts) = s.ledger(&op4, json!({"cmd": "transfers", "account": 0}), None).await;
     assert_eq!(st, 200);
-    let mut by: Vec<(u64, u64)> = ts.as_array().unwrap().iter().map(|t| (t["id"].as_u64().unwrap(), t["operator"].as_u64().unwrap())).collect();
+    let mut by: Vec<(u64, u64)> = ts["transfers"].as_array().unwrap().iter().map(|t| (t["id"].as_u64().unwrap(), t["operator"].as_u64().unwrap())).collect();
     by.sort();
     assert_eq!(by, vec![(1, 3), (2, 4), (3, 0)]);
+}
+
+async fn account_states(l: &payment_storage::LedgerEngine, op: &payment_ledger::Principal) -> Vec<(u64, u64, u64)> {
+    let mut out = Vec::new();
+    for id in 0..3 {
+        match l.execute(op, &payment_ledger::Command::Account { id }).await.unwrap().unwrap() {
+            payment_ledger::Reply::Account(a) => out.push((a.debits, a.credits, a.changes)),
+            r => panic!("{r:?}"),
+        }
+    }
+    out
+}
+
+/// G4: transfers posted before the history existed (G1) have no history
+/// entries, so the paged journal would miss them; installing the schema
+/// gives each of their legs one entry, once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn transfers_from_before_the_history_are_backfilled() {
+    use h5i_pay_tests::ledger::{open, transfer};
+    use h5i_pay_tests::ScratchDb;
+    use payment_ledger as k;
+    use payment_storage::ledger::{audit_paged, journal, operator};
+    let Some(url) = database_url() else { return };
+    let db = ScratchDb::create(&url).await;
+    let org = fresh_tenant();
+    let op = operator(org, 2);
+    let ids = |ts: Vec<k::Transfer>| ts.iter().map(|t| t.id).collect::<Vec<_>>();
+    {
+        let (l, _) = payment_storage::engines(&db.url, 2, EngineConfig::default()).await.unwrap();
+        for c in [open(0, 392, false), open(5, 392, true), open(6, 392, false)] {
+            l.execute(&op, &c).await.unwrap().unwrap();
+        }
+        l.execute(&op, &transfer(1, 0, 1, 100)).await.unwrap().unwrap();
+        l.execute(&principal(org, 5), &transfer(2, 1, 2, 30)).await.unwrap().unwrap();
+        // Two transfers as they were written before G1: rows and balances,
+        // no history entries.
+        let (c, conn) = tokio_postgres::connect(&db.url, tokio_postgres::NoTls).await.unwrap();
+        tokio::spawn(conn);
+        let t = org as i64;
+        c.batch_execute(&format!(
+            "INSERT INTO ledger.transfers (tenant_id, id, debit, credit, amount, currency, code, operator) VALUES
+               ({t}, 4, 1, 0, 5, 392, 8, 0), ({t}, 3, 0, 2, 7, 392, 9, 9);
+             UPDATE ledger.accounts SET debits = debits + 7, credits = credits + 5 WHERE tenant_id = {t} AND id = 0;
+             UPDATE ledger.accounts SET debits = debits + 5 WHERE tenant_id = {t} AND id = 1;
+             UPDATE ledger.accounts SET credits = credits + 7 WHERE tenant_id = {t} AND id = 2;
+             DELETE FROM ledger.h5i_pay_migrations WHERE name = 'g4-journal-history';"
+        ))
+        .await
+        .unwrap();
+        // Before the backfill the paged journal misses them and the audit says so.
+        assert_eq!(ids(journal(&l, &op, 0).await.unwrap()), vec![1]);
+        assert!(audit_paged(&l, &op).await.unwrap().is_err());
+    }
+    // Installing again (a restart) backfills: entries after the existing
+    // ones, by transfer id, debit leg first.
+    let (l, _) = payment_storage::engines(&db.url, 2, EngineConfig::default()).await.unwrap();
+    assert_eq!(ids(journal(&l, &op, 0).await.unwrap()), vec![1, 3, 4]);
+    assert_eq!(ids(journal(&l, &op, 1).await.unwrap()), vec![1, 2, 4]);
+    assert_eq!(ids(journal(&l, &op, 2).await.unwrap()), vec![2, 3]);
+    let after = account_states(&l, &op).await;
+    assert_eq!(after, vec![(107, 5, 4), (35, 100, 4), (0, 37, 3)]);
+    let r = audit_paged(&l, &op).await.unwrap().unwrap();
+    assert_eq!((r.accounts, r.transfers, r.in_flight), (3, 4, 0));
+    // The migrated entries say what is known: the leg, the actor, no time.
+    let h = match l.execute(&op, &k::Command::History { account: 0, from: 2, limit: 2 }).await.unwrap().unwrap() {
+        k::Reply::History(h, _) => h,
+        r => panic!("{r:?}"),
+    };
+    let e: Vec<_> = h.iter().map(|e| (e.command, e.transfer, e.by_operator, e.actor, e.at, e.debits_after, e.credits_after)).collect();
+    assert_eq!(e, vec![(k::CMD_MIGRATED, 3, true, 9, 0, 7, 0), (k::CMD_MIGRATED, 4, false, 5, 0, 0, 5)]);
+    // Once: a further install changes nothing, and new postings follow on.
+    drop(l);
+    let (l, _) = payment_storage::engines(&db.url, 2, EngineConfig::default()).await.unwrap();
+    assert_eq!(account_states(&l, &op).await, after);
+    l.execute(&op, &transfer(5, 0, 2, 1)).await.unwrap().unwrap();
+    assert_eq!(ids(journal(&l, &op, 2).await.unwrap()), vec![2, 3, 5]);
+    assert!(audit_paged(&l, &op).await.unwrap().is_ok());
 }

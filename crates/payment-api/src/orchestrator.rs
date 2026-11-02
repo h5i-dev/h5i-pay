@@ -540,6 +540,29 @@ impl Orchestrator {
         }
     }
 
+    /// The orchestrator's postings (transfer ids with the system bit) in the
+    /// journals of the tenant's own accounts (owner 0) with these codes,
+    /// each once, read page by page (G4: no whole-journal load). Every
+    /// posting kind touches the PSP clearing or the refund holding account
+    /// of its currency: captures and refund settlements the clearing
+    /// account, reservations, settlements and releases the holding one.
+    pub async fn system_postings(&self, tenant: u64, codes: &[u32]) -> Result<Vec<l::Transfer>> {
+        let op = self.op_l(tenant);
+        let mut seen = std::collections::HashSet::new();
+        let mut out = Vec::new();
+        for a in ledger::accounts_of(&self.ledger, &op, 0).await? {
+            if !codes.contains(&a.code) {
+                continue;
+            }
+            for t in ledger::journal(&self.ledger, &op, a.id).await? {
+                if t.id & SYSTEM_TRANSFER_BIT != 0 && seen.insert(t.id) {
+                    out.push(t);
+                }
+            }
+        }
+        Ok(out)
+    }
+
     /// Finish what crashes and timeouts left half done, for one tenant
     /// (`POST /v1/recover`). Finds the work from the kernels' state
     /// ([`Orchestrator::find_work`]), then [`Orchestrator::recover_work`].
@@ -554,8 +577,7 @@ impl Orchestrator {
     /// even though it is marked (`needs_ledger_sync`).
     pub async fn find_work(&self, tenant: u64) -> Result<payment_storage::RecoveryWork> {
         let pay = self.payments.snapshot(TenantId(tenant)).await?;
-        let journal = self.ledger.snapshot(TenantId(tenant)).await?;
-        let ids: std::collections::HashSet<u64> = journal.transfers.iter().map(|t| t.id).collect();
+        let ids = self.system_postings(tenant, &[PSP_CLEARING, REFUND_HOLDING]).await?.into_iter().map(|t| t.id).collect::<std::collections::HashSet<u64>>();
         let mut w = payment_storage::RecoveryWork { tenant, ..Default::default() };
         let mut ps = pay.payments.clone();
         ps.sort_by_key(|p| p.id);
@@ -691,10 +713,11 @@ impl Orchestrator {
                 status: payment_reconcile::inputs::SETTLED,
             })
             .collect();
-        // The ledger's view: capture postings and settled refunds.
-        let journal = self.ledger.snapshot(TenantId(tenant)).await?;
+        // The ledger's view: capture postings and settled refunds, all in the
+        // journals of the tenant's PSP clearing accounts (paged, G4).
+        let journal = self.system_postings(tenant, &[PSP_CLEARING]).await?;
         let mut ledger_rows = Vec::new();
-        for t in &journal.transfers {
+        for t in &journal {
             if t.id & SYSTEM_TRANSFER_BIT == 0 {
                 continue;
             }

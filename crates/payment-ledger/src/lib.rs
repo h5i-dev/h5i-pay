@@ -21,7 +21,7 @@
 // The kernel is written in the Rust subset Charon and Aeneas translate:
 // `&Vec` parameters, `Vec::new` + `push`, explicit index loops and spelled-out
 // branches are deliberate, so these style lints are off for this crate.
-#![allow(clippy::ptr_arg, clippy::vec_init_then_push, clippy::if_same_then_else, clippy::len_zero, clippy::manual_range_contains)]
+#![allow(clippy::ptr_arg, clippy::vec_init_then_push, clippy::if_same_then_else, clippy::len_zero, clippy::manual_range_contains, clippy::single_match)]
 
 /// Who acts inside a tenant.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -172,6 +172,9 @@ h5i_app_schema::schema! {
 pub const CMD_OPEN: u32 = 1;
 /// `HistoryEntry::command`: a transfer was posted to it (alone or in a batch).
 pub const CMD_POST: u32 = 2;
+/// `HistoryEntry::command` of entries the G4 migration wrote for transfers
+/// posted before the history existed (the kernel never writes it).
+pub const CMD_MIGRATED: u32 = 3;
 
 /// A transfer as a client asks for it. `code` is the application's
 /// transfer type (capture, refund, payout, ...); the ledger only stores it.
@@ -198,8 +201,14 @@ pub enum Command {
     /// `from + limit - 1` among the owner's accounts (`Account::seq`),
     /// `limit` at most `MAX_PAGE`. A user may list only its own.
     Accounts { owner: u64, from: u64, limit: u32 },
-    /// The journal; operators only.
-    Transfers,
+    /// One page of `account`'s journal (operators only, G4): the transfers
+    /// of its history entries numbered `from` to `from + limit - 1`, in that
+    /// order, `limit` at most `MAX_PAGE`. Every transfer is in the journal
+    /// of its debit and of its credit account.
+    Transfers { account: u64, from: u64, limit: u32 },
+    /// One page of the tenant's accounts by id (operators only, G4): those
+    /// with ids `from` to `from + limit - 1`.
+    AccountRange { from: u64, limit: u32 },
     /// One page of an account's history (operators only): its entries
     /// numbered `from` to `from + limit - 1`, `limit` at most `MAX_PAGE`.
     History { account: u64, from: u64, limit: u32 },
@@ -228,7 +237,8 @@ pub enum Reply {
     /// A page of accounts, and where the next page starts (`None`: this
     /// was the last).
     Accounts(Vec<Account>, Option<u64>),
-    Transfers(Vec<Transfer>),
+    /// A page of an account's journal, and where the next page starts.
+    Transfers(Vec<Transfer>, Option<u64>),
     /// A page of an account's history, and where the next page starts.
     History(Vec<HistoryEntry>, Option<u64>),
 }
@@ -592,6 +602,64 @@ fn history_page(actor: &Principal, s: &Snapshot, account: u64, from: u64, limit:
     }
 }
 
+/// The transfers `entries` name, in their order (an opening names none).
+fn transfers_of(s: &Snapshot, entries: &Vec<HistoryEntry>) -> Vec<Transfer> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < entries.len() {
+        match find_transfer(&s.transfers, entries[i].transfer) {
+            Some(t) => out.push(t),
+            None => {}
+        }
+        i += 1;
+    }
+    out
+}
+
+fn journal_page(actor: &Principal, s: &Snapshot, account: u64, from: u64, limit: u32) -> Outcome {
+    if limit == 0 || limit > MAX_PAGE {
+        return Err(Error::BadPage);
+    }
+    if !is_operator(actor) {
+        return Err(Error::Forbidden);
+    }
+    match find_account(&s.accounts, account) {
+        None => Err(Error::NotFound),
+        Some(a) => {
+            let end = page_end(from, limit);
+            let next = if end < a.changes { Some(end) } else { None };
+            let entries = history_range(s, account, from, end);
+            Ok((Vec::new(), Reply::Transfers(transfers_of(s, &entries), next)))
+        }
+    }
+}
+
+/// The accounts with ids `from` up to (not including) `end`, in table order.
+fn id_range(s: &Snapshot, from: u64, end: u64) -> Vec<Account> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < s.accounts.len() {
+        let a = s.accounts[i];
+        if from <= a.id && a.id < end {
+            out.push(a);
+        }
+        i += 1;
+    }
+    out
+}
+
+fn account_range(actor: &Principal, s: &Snapshot, from: u64, limit: u32) -> Outcome {
+    if limit == 0 || limit > MAX_PAGE {
+        return Err(Error::BadPage);
+    }
+    if !is_operator(actor) {
+        return Err(Error::Forbidden);
+    }
+    let end = page_end(from, limit);
+    let next = if end < s.ledger.next_account { Some(end) } else { None };
+    Ok((Vec::new(), Reply::Accounts(id_range(s, from, end), next)))
+}
+
 /// The ledger's logic: a command's writes and reply, or a refusal that
 /// commits nothing. Every account a command changes gets one history entry
 /// per change, written right after the account (`Theorems.every_change_logged`).
@@ -604,13 +672,8 @@ pub fn transition(actor: &Principal, s: &Snapshot, cmd: &Command) -> Outcome {
         Command::Batch { transfers } => batch(actor, s, transfers),
         Command::Account { id } => read_account(actor, s, *id),
         Command::Accounts { owner, from, limit } => accounts_page(actor, s, *owner, *from, *limit),
-        Command::Transfers => {
-            if is_operator(actor) {
-                Ok((Vec::new(), Reply::Transfers(s.transfers.clone())))
-            } else {
-                Err(Error::Forbidden)
-            }
-        }
+        Command::Transfers { account, from, limit } => journal_page(actor, s, *account, *from, *limit),
+        Command::AccountRange { from, limit } => account_range(actor, s, *from, *limit),
         Command::History { account, from, limit } => history_page(actor, s, *account, *from, *limit),
     }
 }
@@ -631,6 +694,7 @@ pub const TRANSFER_ID: u32 = 0;
 pub const OWNER_KEY: u32 = 0;
 pub const HISTORY_ACCOUNT: u32 = 0;
 pub const HISTORY_N: u32 = 1;
+pub const HISTORY_TRANSFER: u32 = 6;
 
 /// Every batch the kernel accepts has a plan (F3: no whole-tenant loads).
 pub const MAX_PLANNED_BATCH: usize = MAX_BATCH;
@@ -667,6 +731,11 @@ fn seq_range(col: u32, from: u64, end: u64) -> h5i_app_sql::Pred {
     p
 }
 
+/// `account`'s history entries numbered `from` to `end - 1` (`from < end`).
+fn entry_range(account: u64, from: u64, end: u64) -> h5i_app_sql::Pred {
+    h5i_app_sql::Pred::And(Box::new(p_eq(HISTORY_ACCOUNT, v_int(account))), Box::new(seq_range(HISTORY_N, from, end)))
+}
+
 /// The plan of a non-empty batch: every account and transfer id it names.
 fn batch_reads(ts: &Vec<TransferReq>) -> Vec<h5i_app_sql::Read> {
     let mut accts = accounts_of(&ts[0]);
@@ -681,6 +750,18 @@ fn batch_reads(ts: &Vec<TransferReq>) -> Vec<h5i_app_sql::Read> {
     out.push(rd_where(T_ACCOUNTS, accts));
     out.push(rd_where(T_TRANSFERS, trs));
     out
+}
+
+/// `cmd` only reads: whenever `transition` accepts it, it writes nothing
+/// (`payment_ledger.ReadOnly.sound`). The engine runs these in a
+/// `SERIALIZABLE READ ONLY DEFERRABLE` transaction, which takes no
+/// predicate locks and never aborts a concurrent write (G4: the paged
+/// audit runs next to live transfers).
+pub fn read_only(cmd: &Command) -> bool {
+    matches!(
+        cmd,
+        Command::Account { .. } | Command::Accounts { .. } | Command::Transfers { .. } | Command::AccountRange { .. } | Command::History { .. }
+    )
 }
 
 /// The rows `transition(actor, _, cmd)` reads, one declarative read per
@@ -729,10 +810,35 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
             }
             Some(out)
         }
-        Command::Transfers => {
+        Command::Transfers { account, from, limit } => {
             let mut out = Vec::new();
-            if is_operator(actor) {
-                out.push(rd_where(T_TRANSFERS, h5i_app_sql::Pred::All));
+            // Refused pages read nothing.
+            if *limit != 0 && *limit <= MAX_PAGE && is_operator(actor) {
+                out.push(rd_where(T_ACCOUNTS, p_eq(ACCOUNT_ID, v_int(*account))));
+                let end = page_end(*from, *limit);
+                if *from < end {
+                    out.push(rd_where(T_HISTORY, entry_range(*account, *from, end)));
+                    // The transfers those entries name.
+                    let named = h5i_app_sql::Pred::In {
+                        col: TRANSFER_ID,
+                        table: T_HISTORY,
+                        pred: Box::new(entry_range(*account, *from, end)),
+                        of: HISTORY_TRANSFER,
+                        window: h5i_app_sql::whole(),
+                    };
+                    out.push(rd_where(T_TRANSFERS, named));
+                }
+            }
+            Some(out)
+        }
+        Command::AccountRange { from, limit } => {
+            let mut out = Vec::new();
+            if *limit != 0 && *limit <= MAX_PAGE && is_operator(actor) {
+                let end = page_end(*from, *limit);
+                if *from < end {
+                    out.push(rd_where(T_ACCOUNTS, seq_range(ACCOUNT_ID, *from, end)));
+                }
+                out.push(rd_where(T_LEDGER, h5i_app_sql::Pred::All));
             }
             Some(out)
         }
@@ -743,9 +849,7 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
                 out.push(rd_where(T_ACCOUNTS, p_eq(ACCOUNT_ID, v_int(*account))));
                 let end = page_end(*from, *limit);
                 if *from < end {
-                    let range = seq_range(HISTORY_N, *from, end);
-                    let pred = h5i_app_sql::Pred::And(Box::new(p_eq(HISTORY_ACCOUNT, v_int(*account))), Box::new(range));
-                    out.push(rd_where(T_HISTORY, pred));
+                    out.push(rd_where(T_HISTORY, entry_range(*account, *from, end)));
                 }
             }
             Some(out)
@@ -868,7 +972,7 @@ mod tests {
         let by = |s: &Snapshot, id| find_transfer(&s.transfers, id).unwrap().operator;
         assert_eq!((by(&s, 10), by(&s, 11)), (9, 0));
         // A user is never an operator, whatever its id.
-        assert_eq!(run(&s, user(9), Command::Transfers).1, Err(Error::Forbidden));
+        assert_eq!(run(&s, user(9), Command::Transfers { account: 1, from: 0, limit: 8 }).1, Err(Error::Forbidden));
     }
 
     #[test]
@@ -904,6 +1008,33 @@ mod tests {
         assert_eq!((hs.iter().map(|h| h.n).collect::<Vec<_>>(), next), (vec![1, 2], Some(3)));
         assert_eq!(run(&s, user(1), Command::History { account: 1, from: 0, limit: 2 }).1, Err(Error::Forbidden));
         assert_eq!(run(&s, op(), Command::History { account: 99, from: 0, limit: 2 }).1, Err(Error::NotFound));
+    }
+
+    #[test]
+    fn the_journal_is_paged_per_account() {
+        let s = setup();
+        let (s, _) = run(&s, op(), Command::Transfer { t: tr(10, 0, 1, 100) });
+        let (s, _) = run(&s, user(1), Command::Transfer { t: tr(11, 1, 2, 30) });
+        let (s, _) = run(&s, user(1), Command::Transfer { t: tr(12, 1, 2, 20) });
+        let page = |s: &Snapshot, acc, from, limit| match run(s, op(), Command::Transfers { account: acc, from, limit }).1 {
+            Ok(Reply::Transfers(ts, next)) => (ts.iter().map(|t| t.id).collect::<Vec<_>>(), next),
+            r => panic!("{r:?}"),
+        };
+        // Account 1: opened (entry 0, no transfer), then 10, 11, 12.
+        assert_eq!(page(&s, 1, 0, 2), (vec![10], Some(2)));
+        assert_eq!(page(&s, 1, 2, 2), (vec![11, 12], None));
+        assert_eq!(page(&s, 2, 0, 64), (vec![11, 12], None));
+        assert_eq!(page(&s, 0, 0, 64), (vec![10], None));
+        assert_eq!(run(&s, op(), Command::Transfers { account: 1, from: 0, limit: 65 }).1, Err(Error::BadPage));
+        assert_eq!(run(&s, op(), Command::Transfers { account: 9, from: 0, limit: 1 }).1, Err(Error::NotFound));
+        // Accounts by id, operators only.
+        let ids = |r: Result<Reply, Error>| match r {
+            Ok(Reply::Accounts(v, n)) => (v.iter().map(|a| a.id).collect::<Vec<_>>(), n),
+            r => panic!("{r:?}"),
+        };
+        assert_eq!(ids(run(&s, op(), Command::AccountRange { from: 0, limit: 3 }).1), (vec![0, 1, 2], Some(3)));
+        assert_eq!(ids(run(&s, op(), Command::AccountRange { from: 3, limit: 3 }).1), (vec![3], None));
+        assert_eq!(run(&s, user(1), Command::AccountRange { from: 0, limit: 3 }).1, Err(Error::Forbidden));
     }
 
     #[test]
@@ -953,7 +1084,7 @@ mod tests {
         }), Ok((1, Some(1))));
         assert!(matches!(run(&s, op(), Command::Accounts { owner: 2, from: 1, limit: 1 }).1, Ok(Reply::Accounts(ref v, None)) if v[0].id == 3));
         assert!(matches!(run(&s, op(), Command::Accounts { owner: 2, from: u64::MAX, limit: 5 }).1, Ok(Reply::Accounts(ref v, None)) if v.is_empty()));
-        assert_eq!(run(&s, user(2), Command::Transfers).1, Err(Error::Forbidden));
+        assert_eq!(run(&s, user(2), Command::Transfers { account: 2, from: 0, limit: 8 }).1, Err(Error::Forbidden));
         assert_eq!(
             run(&s, user(2), Command::Open { owner: 2, currency: 1, code: 2, no_overdraft: true, no_overcredit: true }).1,
             Err(Error::InvalidFlags)

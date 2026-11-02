@@ -88,7 +88,7 @@ async fn every_route_checks_its_scope() {
     assert_eq!(api.post("/v1/reconcile", &recon, json!({})).await.0, 200);
     assert_eq!(api.post("/v1/recover", &recon, json!({})).await.0, 403);
     assert_eq!(api.get("/v1/ledger/audit", &recon).await.0, 403);
-    assert_eq!(api.post("/v1/ledger", &recon, json!({"cmd": "transfers"})).await.0, 403);
+    assert_eq!(api.post("/v1/ledger", &recon, json!({"cmd": "transfers", "account": 0})).await.0, 403);
     assert_eq!(api.post("/v1/tokens/revoke", &recon, json!({"before": 1})).await.0, 403);
     let rec = k.issue_operator_scoped(org, 3, 600, scope::RECOVER).unwrap();
     assert_eq!(api.post("/v1/recover", &rec, json!({})).await.0, 200);

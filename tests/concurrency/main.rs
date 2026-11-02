@@ -12,7 +12,7 @@ use h5i_app_pg::{Engine, EngineConfig};
 use h5i_pay_tests::ledger::{balance, op, open, transfer, user};
 use h5i_pay_tests::{database_url, fresh_tenant, Rng};
 use payment_ledger as k;
-use payment_storage::ledger::{audit, LedgerApp, LedgerStore};
+use payment_storage::ledger::{audit, audit_paged as paged, LedgerApp, LedgerStore};
 use payment_storage::{schema_pool, LEDGER_SCHEMA};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -44,6 +44,22 @@ async fn run_random_transfers(tenant_lock: bool) {
     setup(&e, org, wallets, each).await;
     let retries_before = e.stats.retries.load(std::sync::atomic::Ordering::Relaxed);
 
+    // G4: the paged audit, run over and over while the transfers commit:
+    // each run reads every account and journal page by page, and must hold.
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let auditor = {
+        let (e, done) = (e.clone(), done.clone());
+        tokio::spawn(async move {
+            let (mut runs, mut in_flight) = (0u64, 0u64);
+            while !done.load(std::sync::atomic::Ordering::Relaxed) {
+                let r = paged(&e, &op(org)).await.unwrap().expect("the paged audit holds during concurrent transfers");
+                runs += 1;
+                in_flight += r.in_flight;
+            }
+            (runs, in_flight)
+        })
+    };
+
     let mut tasks = Vec::new();
     for task in 0..16u64 {
         let e = e.clone();
@@ -74,8 +90,14 @@ async fn run_random_transfers(tenant_lock: bool) {
         posted.extend(p);
         refused.extend(r);
     }
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    let (runs, in_flight) = auditor.await.unwrap();
+    eprintln!("paged audit: {runs} runs during the transfers, {in_flight} transfers seen in flight");
     let snap = e.snapshot(TenantId(org)).await.unwrap();
     audit(&snap).expect("ledger invariants hold after concurrent transfers");
+    let r = paged(&e, &op(org)).await.unwrap().unwrap();
+    assert_eq!((r.accounts, r.transfers, r.in_flight), (snap.accounts.len() as u64, snap.transfers.len() as u64, 0));
+    assert!(r.pages > r.accounts, "journals span several pages");
     // Money is conserved: the wallets still hold what was funded.
     let total: i128 = snap.accounts.iter().filter(|a| a.no_overdraft).map(balance).sum();
     assert_eq!(total, i128::from(wallets * each));
@@ -108,6 +130,56 @@ async fn concurrent_transfers_serializable_retries() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn concurrent_transfers_with_tenant_lock() {
     run_random_transfers(true).await;
+}
+
+/// G4: with more accounts than one page, the paged audit reads the account
+/// rows in several transactions, so a transfer between accounts on
+/// different pages can commit in between and be in one side's journal
+/// only. The audit must find it past the other side's bound and still
+/// balance. Transfers go on until some audit has seen one in flight.
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn paged_audit_across_account_pages() {
+    let Some(url) = database_url() else { return };
+    let e = engine(&url, true, 16).await;
+    let org = fresh_tenant();
+    let wallets = u64::from(k::MAX_PAGE) + 16;
+    setup(&e, org, wallets, 1_000_000).await;
+    let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut tasks = Vec::new();
+    for task in 0..8u64 {
+        let (e, done) = (e.clone(), done.clone());
+        tasks.push(tokio::spawn(async move {
+            let mut rng = Rng(task * 31 + 7);
+            let mut i = 0;
+            while !done.load(std::sync::atomic::Ordering::Relaxed) && i < 20_000 {
+                // One side on the first page of accounts, the other on the second.
+                let a = 1 + rng.below(u64::from(k::MAX_PAGE) - 1);
+                let b = u64::from(k::MAX_PAGE) + rng.below(16);
+                let (from, to) = if rng.below(2) == 0 { (a, b) } else { (b, a) };
+                i += 1;
+                let r = e.execute(&user(org, from), &transfer(task * 100_000 + i, from, to, 1 + rng.below(50))).await.unwrap();
+                assert!(matches!(r, Ok(k::Reply::Posted(_)) | Err(k::Error::Insufficient)), "{r:?}");
+            }
+        }));
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    let (mut runs, mut in_flight) = (0u64, 0u64);
+    while in_flight == 0 && std::time::Instant::now() < deadline {
+        let r = paged(&e, &op(org)).await.unwrap().expect("the paged audit holds during concurrent transfers");
+        assert_eq!(r.accounts, wallets + 1);
+        runs += 1;
+        in_flight += r.in_flight;
+    }
+    done.store(true, std::sync::atomic::Ordering::Relaxed);
+    for t in tasks {
+        t.await.unwrap();
+    }
+    eprintln!("paged audit across pages: {runs} runs, {in_flight} transfers seen in flight");
+    assert!(in_flight > 0, "no audit run saw a transfer in flight in {runs} runs");
+    let snap = e.snapshot(TenantId(org)).await.unwrap();
+    audit(&snap).unwrap();
+    let r = paged(&e, &op(org)).await.unwrap().unwrap();
+    assert_eq!((r.transfers, r.in_flight), (snap.transfers.len() as u64, 0));
 }
 
 /// The same transfer submitted concurrently many times commits once.
@@ -257,7 +329,12 @@ async fn load_for_matches_the_whole_tenant() {
             5 => k::Command::Batch { transfers: (0..rng.below(71)).map(|_| req(&mut rng)).collect() },
             // Pages, some refused (limit 0, another owner's for a user).
             6 => k::Command::Accounts { owner: rng.below(4), from: rng.below(4), limit: rng.below(4) as u32 },
-            7 => k::Command::Transfers,
+            // G1/G4: history and journal pages, accounts by id (some refused).
+            7 => match rng.below(3) {
+                0 => k::Command::Transfers { account: acct(&mut rng), from: rng.below(5), limit: rng.below(4) as u32 },
+                1 => k::Command::History { account: acct(&mut rng), from: rng.below(5), limit: rng.below(4) as u32 },
+                _ => k::Command::AccountRange { from: rng.below(6), limit: rng.below(5) as u32 },
+            },
             _ => k::Command::Account { id: acct(&mut rng) },
         };
         if k::reads(&actor, &cmd).is_some() {

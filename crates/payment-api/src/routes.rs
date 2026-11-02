@@ -11,7 +11,6 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use h5i_app_core::TenantId;
 use h5i_app_http::{error_body, reply, Actor, Auth, H5iApp};
 use h5i_app_json::Value as Out;
 use payment_connectors::{Psp, WebhookError};
@@ -268,21 +267,22 @@ async fn ledger_audit(State(st): State<AppState>, Authed(c): Authed) -> Response
     if !payment_ledger::is_operator(p) {
         return reply(StatusCode::FORBIDDEN, error_body("forbidden"));
     }
-    match st.ledger_engine.snapshot(TenantId(p.org)).await {
-        Ok(snap) => match ledger::audit(&snap) {
-            Ok(()) => reply(
-                StatusCode::OK,
-                Out::obj([
-                    ("ok", true.into()),
-                    ("accounts", (snap.accounts.len() as u64).into()),
-                    ("transfers", (snap.transfers.len() as u64).into()),
-                ]),
-            ),
-            Err(e) => {
-                tracing::error!(tenant = p.org, error = %e, "ledger invariant violated");
-                reply(StatusCode::INTERNAL_SERVER_ERROR, Out::obj([("ok", false.into()), ("violation", Out::str(e))]))
-            }
-        },
+    // G4: paged reads, each account against its own journal (no snapshot).
+    match ledger::audit_paged(&st.ledger_engine, p).await {
+        Ok(Ok(r)) => reply(
+            StatusCode::OK,
+            Out::obj([
+                ("ok", true.into()),
+                ("accounts", r.accounts.into()),
+                ("transfers", r.transfers.into()),
+                ("pages", r.pages.into()),
+                ("in_flight", r.in_flight.into()),
+            ]),
+        ),
+        Ok(Err(e)) => {
+            tracing::error!(tenant = p.org, error = %e, "ledger invariant violated");
+            reply(StatusCode::INTERNAL_SERVER_ERROR, Out::obj([("ok", false.into()), ("violation", Out::str(e))]))
+        }
         Err(e) => {
             tracing::error!(error = %e, "audit failed");
             reply(StatusCode::SERVICE_UNAVAILABLE, error_body("unavailable"))

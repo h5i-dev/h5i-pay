@@ -178,6 +178,74 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### G4: the Transfers journal paged
+
+- Ledger kernel: `Command::Transfers{account, from, limit}` returns one
+  page of an account's journal, the transfers named by its G1 history
+  entries `from..from+limit` (in order), and `next` while the account's
+  `changes` counter is beyond the page. `Command::AccountRange{from,
+  limit}` lists accounts by id, one page. `limit` is 1 to `MAX_PAGE` (64);
+  anything else is `BadPage` before reading. Both are operator-only, like
+  `History`. The read plans name one account row plus its history rows
+  `(account, from..end)` plus the transfers those name
+  (`HISTORY_TRANSFER`), or one id range of accounts. Frame theorems
+  (`journal_page_congr`, `account_range_congr`, with `transfers_of_spec`,
+  `id_range_spec`): the planned rows give the whole-tenant reply. New
+  gated theorem `payment_ledger.Theorems.operator_reads`: only operators
+  run `Transfers`, `AccountRange` and `History`; they write nothing
+  (`journal_page_writes`, `account_range_writes`).
+- Transfers from before G1 had no history entries. A one-off backfill
+  (`h5i_pay_migrations` row `g4-journal-history`, in one transaction)
+  gives every such transfer an entry on both legs: command
+  `CMD_MIGRATED` (3), time 0, the leg's amount, actor the transfer's
+  operator or else the debit account's owner; `changes` is set to the
+  entry count. The entries are new rows only; the append-only triggers
+  stay on.
+- Callers moved to paged reads (`payment_storage::ledger::{journal,
+  accounts_of, all_pages, audit_paged}`):
+  - the HTTP route: `{"cmd":"transfers"}` now requires `account` (400
+    without it), takes `from`/`limit` and returns `next`;
+  - the audit (`GET /v1/ledger/audit`, operator): walks the accounts by
+    id in pages and each account's journal in pages up to the `changes`
+    it saw on the account row, so each account's balance is checked
+    against exactly the entries it had then. A transfer seen on one leg
+    only was committed after the other account's page was read; the
+    audit reads that account's journal past its bound to find it and
+    counts it `in_flight`. The reply reports accounts, transfers, pages
+    and in-flight transfers.
+  - the orchestrator: `system_postings(tenant, codes)` reads the system
+    accounts' journals (PSP clearing, refund holding) for `find_work`
+    and `reconcile_inputs` instead of the ledger snapshot.
+  The export reads no journal. No caller takes a ledger snapshot any more
+  except the benchmark report's row count (`benchmarks/src/bin/e2e.rs`).
+  The payments snapshot in `reconcile_inputs` and in the export is G6.
+- Tests: `ledger_api` (paged journal, `next`, limit 65 refused,
+  users refused, accounts by id, the audit's counts),
+  `transfers_from_before_the_history_are_backfilled` (a scratch database
+  with transfers written as before G1, the marker removed, the migration
+  run: journal pages and the audit agree), `run_random_transfers` now
+  runs the paged audit continuously while transfers commit (always
+  balanced), and `paged_audit_across_account_pages` (`MAX_PAGE`+16
+  wallets, transfers across the two account pages during the audit, until
+  an audit sees a transfer in flight: it does, and still balances).
+- Read-only transactions: with the paged audit running next to 16
+  writers, the concurrency suite ran PostgreSQL out of predicate locks
+  ("out of shared memory", `max_pred_locks_per_transaction` 64): every
+  page was a SERIALIZABLE read-write transaction holding SIRead locks
+  (28k at the peak). The ledger now declares `Account`, `Accounts`,
+  `Transfers`, `AccountRange` and `History` read-only
+  (`payment_ledger::read_only`, `LedgerApp::read_only`), so h5i-app-pg
+  runs them `SERIALIZABLE READ ONLY DEFERRABLE`: no predicate locks, no
+  aborts caused for writers, never retried for serialization. h5i-app's
+  obligation `H5iAppLib.ReadOnly.Sound` is proven and gated
+  (`payment_ledger.ReadOnly.sound`, from `reads_nothing`); `h5i app lint`
+  ok. The suite then passes 8/8 (twice in a row).
+- Proofs: ledger gate 362 theorems in 15 modules; mutants 19/19 caught
+  (18 in the full run, then `transfer_declared_read_only` alone), the new
+  ones `journal_plan_wrong_column`, `account_range_past_end`,
+  `journal_open_to_users`, `transfer_declared_read_only`. Tests: 101
+  passed in the workspace.
+
 ### G3: scoped tokens, an OIDC identity provider, revocation
 
 - Token format, versioned (`payment_api::auth`): the API now issues v2
