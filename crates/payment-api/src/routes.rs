@@ -101,9 +101,51 @@ pub fn router(state: AppState) -> Router {
 /// One ledger command as JSON, e.g.
 /// `{"cmd":"transfer","id":7,"debit":0,"credit":1,"amount":500}`.
 async fn ledger_rpc(State(st): State<AppState>, actor: Actor<LedgerApp>, headers: HeaderMap, Json(body): Json<serde_json::Value>) -> Response {
-    match ledger::decode_for(actor.principal(), body) {
-        Ok(cmd) => st.ledger.respond(&actor, cmd, &headers).await,
+    let p = *actor.principal();
+    match ledger::decode_for(&p, body) {
+        Ok(cmd) => {
+            if let Some(r) = legacy_key::<LedgerApp, LedgerStore>(&st, payment_storage::LEDGER_SCHEMA, p.org, payment_ledger::is_operator(&p), &headers, &cmd).await {
+                return r;
+            }
+            st.ledger.respond(&actor, cmd, &headers).await
+        }
         Err(m) => reply(StatusCode::BAD_REQUEST, error_body(&m)),
+    }
+}
+
+/// G2: an operator's keyed request whose key some operator used before
+/// idempotency keys became per principal (stored under `u0/<key>`) replays
+/// that reply if the command is the same, and is refused if it differs, as
+/// it was then (`payment_storage::idempotency`). `None`: no such key (or no
+/// database configured for the lookup), run the request.
+async fn legacy_key<K, S>(st: &AppState, schema: &str, tenant: u64, operator: bool, headers: &HeaderMap, cmd: &K::Command) -> Option<Response>
+where
+    K: h5i_app_core::Kernel,
+    S: h5i_app_pg::ReplyCodec<K> + h5i_app_http::Api<K>,
+{
+    if !operator {
+        return None;
+    }
+    let k = key(headers)?;
+    let ops = st.ops.as_ref()?;
+    match payment_storage::idempotency::legacy_reply(&ops.0, &ops.1, schema, tenant, k).await {
+        Ok(None) => None,
+        Ok(Some((fp, bytes))) => {
+            if fp != S::fingerprint(cmd) {
+                return Some(reply(StatusCode::UNPROCESSABLE_ENTITY, error_body("idempotency key reused")));
+            }
+            Some(match S::decode(&bytes) {
+                Ok(r) => reply(StatusCode::OK, S::encode_reply(&r)),
+                Err(e) => {
+                    tracing::error!(error = %e, "stored reply does not decode");
+                    reply(StatusCode::SERVICE_UNAVAILABLE, error_body("unavailable"))
+                }
+            })
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "legacy idempotency lookup failed");
+            Some(reply(StatusCode::SERVICE_UNAVAILABLE, error_body("unavailable")))
+        }
     }
 }
 
@@ -141,8 +183,14 @@ async fn payments_rpc(State(st): State<AppState>, actor: Actor<PaymentsApp>, hea
     if st.orchestrator.is_none() {
         return unavailable();
     }
-    match payments::decode_for(actor.principal(), body) {
-        Ok(cmd) => st.payments.respond(&actor, cmd, &headers).await,
+    let p = *actor.principal();
+    match payments::decode_for(&p, body) {
+        Ok(cmd) => {
+            if let Some(r) = legacy_key::<PaymentsApp, PaymentsStore>(&st, payment_storage::PAYMENTS_SCHEMA, p.org, payment_domain::is_operator(&p), &headers, &cmd).await {
+                return r;
+            }
+            st.payments.respond(&actor, cmd, &headers).await
+        }
         Err(m) => reply(StatusCode::BAD_REQUEST, error_body(&m)),
     }
 }

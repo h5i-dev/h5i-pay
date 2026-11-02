@@ -421,7 +421,11 @@ impl Orchestrator {
         }
         let key = format!("system-account-{owner}-{currency}-{code}");
         let cmd = l::Command::Open { owner, currency, code, no_overdraft, no_overcredit: false };
-        let id = match self.ledger.execute_idempotent(&self.op_l(tenant), &key, &cmd).await?.map_err(OrchError::Ledger)? {
+        // Always as the orchestrator, whoever this orchestrator acts for
+        // (`acting_as`): idempotency keys are per actor (G2), and the
+        // account must be opened once whichever process opens it first.
+        let system = ledger::operator(tenant, payment_storage::ORCHESTRATOR_OPERATOR);
+        let id = match self.ledger.execute_idempotent(&system, &key, &cmd).await?.map_err(OrchError::Ledger)? {
             l::Reply::Created(id) => id,
             r => unreachable!("open replied {r:?}"),
         };

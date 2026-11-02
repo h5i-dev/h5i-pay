@@ -178,6 +178,37 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### G2: idempotency keys per principal
+
+- `ReplyCodec::scope` (both kernels) is now the whole principal: `u<id>`
+  for a user, `o<id>` for an operator, system operators included
+  (`payment_storage::idempotency::scope`). Before, every operator used
+  `u0`, so two operators (or an operator and the orchestrator) with the
+  same key got each other's replies or a conflict.
+- System jobs: the orchestrator opens the system's ledger accounts
+  (`system-account-…` keys) always as `ORCHESTRATOR_OPERATOR`, also when it
+  acts for the recovery job or a calling operator (`acting_as`), so the key
+  is found whichever process opens the account first.
+- Migration, at startup with the schema: `u0/system-…` keys are renamed to
+  the orchestrator's scope (once; a key already there wins). Other `u0/…`
+  keys were made by operators through the API and cannot be attributed to
+  one: they stay, are never written again (no principal has scope `u0`;
+  user ids start at 1), and an operator's keyed request on
+  `/v1/ledger` or `/v1/payments/rpc` looks its key up there first
+  (`routes::legacy_key`, read-only): the same command replays the stored
+  reply, another is refused (422), as before the change.
+- Tests (`tests/integration/idempotency.rs`, 89 tests in all now):
+  `keys_are_per_principal` (operator 3 replays its own reply, operator 4
+  with the same key and command opens its own account, a user's keys are
+  separate; the stored keys are `o3/…`, `o4/…`, `u7/…`) and
+  `keys_from_before_are_migrated_or_still_replay` (pre-G2 rows written by
+  hand; after startup the system key is under `o<orchestrator>/`, the
+  orchestrator replays its old reply instead of opening a second account,
+  an operator's old key replays over HTTP or is refused for another
+  command, users are unaffected, nothing new is written under `u0`).
+- Kernels unchanged (`h5i app extract --check` up to date); clippy plain,
+  mock-psp and CUDA clean.
+
 ### G1: append-only operator audit history, written by the kernels
 
 - Both kernels have a `history` table (`HistoryEntry`, key `(payment, n)`

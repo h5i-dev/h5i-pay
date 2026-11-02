@@ -13,6 +13,65 @@
 pub mod ledger;
 pub mod payments;
 
+/// Idempotency-key namespaces (G2).
+///
+/// h5i-app stores a keyed request's reply under `(tenant, "<scope>/<key>")`
+/// in each kernel's `h5i_idempotency` table, the scope coming from
+/// `ReplyCodec::scope`. Since G2 the scope is the whole principal: `u<id>`
+/// for user `id`, `o<id>` for operator `id` (system operators included),
+/// so two actors using the same key run two requests, and one actor's
+/// retry replays only its own reply.
+///
+/// Before G2 every operator, people and the system's processes alike, used
+/// `u0`. The migration (`migrate_system_keys`, run at startup with the
+/// schema) moves the system's deterministic keys (`system-…`, the
+/// orchestrator's accounts) to the orchestrator's scope, the operator that
+/// now always sends them. The other `u0/…` keys were made by operators
+/// through the API and cannot be attributed to one: they stay where they
+/// are, are never written again (no principal has scope `u0`: user ids
+/// start at 1), and an operator's keyed request first looks its key up
+/// there ([`legacy_reply`]): the same command replays its stored reply, a
+/// different one is refused as before. So a retry of a request sent before
+/// the upgrade still replays, for any operator, as it did then.
+pub mod idempotency {
+    use super::{connect_direct, DbTls};
+    use h5i_app_pg::DbError;
+
+    /// The scope of a principal's keys: `u<id>` or `o<id>`.
+    pub fn scope(operator: bool, id: u64) -> String {
+        if operator { format!("o{id}") } else { format!("u{id}") }
+    }
+
+    /// The scope every operator shared before G2.
+    pub const LEGACY_OPERATOR_SCOPE: &str = "u0";
+
+    /// Rename the system's `u0/system-…` keys to the orchestrator's scope,
+    /// once (a key already there wins; the statement is a no-op after the
+    /// first run).
+    pub fn migrate_system_keys() -> String {
+        let to = scope(true, super::ORCHESTRATOR_OPERATOR);
+        format!(
+            "UPDATE h5i_idempotency AS i SET key = '{to}/' || substr(i.key, 4)              WHERE i.key LIKE 'u0/system-%' AND NOT EXISTS                (SELECT 1 FROM h5i_idempotency j WHERE j.tenant_id = i.tenant_id AND j.key = '{to}/' || substr(i.key, 4))"
+        )
+    }
+
+    /// What a pre-G2 operator key `key` stored in `schema`, if anything:
+    /// `(fingerprint, reply)`. Read-only; legacy rows never change.
+    pub async fn legacy_reply(url: &str, tls: &DbTls, schema: &str, tenant: u64, key: &str) -> Result<Option<(Vec<u8>, Vec<u8>)>, DbError> {
+        let (c, conn) = connect_direct(url, tls).await?;
+        let t = i64::try_from(tenant).map_err(|_| DbError::Decode("tenant id out of range".into()))?;
+        let sql = format!("SELECT fingerprint, reply FROM {schema}.h5i_idempotency WHERE tenant_id = $1 AND key = $2");
+        let row = match c.query_opt(sql.as_str(), &[&t, &format!("{LEGACY_OPERATOR_SCOPE}/{key}")]).await {
+            Ok(r) => r,
+            Err(e) if e.code() == Some(&tokio_postgres::error::SqlState::UNDEFINED_TABLE) => None,
+            Err(e) => return Err(e.into()),
+        };
+        drop(c);
+        let _ = conn.await;
+        Ok(row.map(|r| (r.get(0), r.get(1))))
+    }
+}
+
 use h5i_app_pg::{Clock, Engine, EngineConfig, Pool, DbError};
 use std::sync::Arc;
 

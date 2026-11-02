@@ -207,7 +207,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    entry with the acting principal, and that history is never rewritten
    (only appended). Expose it read-only to the tenant's operators (paged).
    Mutants: a change without an entry, a wrong actor, an entry overwritten.
-2. [ ] **Idempotency namespaces per actor.** All operators share the `u0`
+2. [x] **Idempotency namespaces per actor.** All operators share the `u0`
    idempotency namespace, so two operators (or an operator and a system
    job) using the same key collide. Key idempotency by the full principal
    (`User(id)` / `Operator(id)`, system operators included), keep an

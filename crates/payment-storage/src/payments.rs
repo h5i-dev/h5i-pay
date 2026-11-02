@@ -90,6 +90,8 @@ impl Store<PaymentsApp> for PaymentsStore {
         // table itself is `schema_ddl`'s, append-only.
         ddl.push(crate::add_column("payments", "changes", "BIGINT NOT NULL DEFAULT 0"));
         ddl.extend(crate::append_only_history());
+        // G2: the system operators' keys move out of the shared `u0`.
+        ddl.push(crate::idempotency::migrate_system_keys());
         ddl
     }
 
@@ -498,10 +500,12 @@ impl ReplyCodec<PaymentsApp> for PaymentsStore {
         format!("{cmd:?}").into_bytes()
     }
 
-    /// Idempotency keys are per user; operators share the tenant's operator
-    /// namespace (`u0`, as before SEC-02).
+    /// Idempotency keys are per principal (G2): `u<id>` for a user,
+    /// `o<id>` for an operator, the system operators included. Two actors'
+    /// keys never collide, and no actor replays another's reply. Before G2
+    /// every operator used `u0`; see [`crate::idempotency`].
     fn scope(actor: &k::Principal) -> String {
-        format!("u{}", k::user_of(actor))
+        crate::idempotency::scope(k::is_operator(actor), k::actor_id(actor))
     }
 
     fn encode(r: &k::Reply) -> Vec<u8> {
