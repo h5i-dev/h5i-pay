@@ -37,6 +37,14 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 sha2.workspace = true
 futures-util = "0.3"
+# G3: v2 tokens (HMAC-SHA256, base64url), OIDC/JWT signature checks
+# (RS256, ES256) and JWKS fetches. ring is already in the tree (rustls).
+hmac.workspace = true
+base64 = "0.22"
+ring = "0.17"
+reqwest.workspace = true
+hex.workspace = true
+tokio-postgres = "0.7"
 
 [dev-dependencies]
 # tests/process_kill.rs: the h5i-pay binary against PostgreSQL and a fake Stripe.

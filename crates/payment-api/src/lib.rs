@@ -15,14 +15,19 @@
 //! * `POST /v1/reconcile` — compares payments with the PSP's settlement
 //!   report and with the ledger journal; a report only, it moves no money.
 //!
-//! Authentication is h5i-app's HMAC bearer token (`v1.<tenant>.<user>.<exp>.<mac>`),
-//! signed with one key for users and another for operators ([`auth`]). `Idempotency-Key` makes a request run
-//! at most once.
+//! Authentication ([`auth`], G3): v2 HMAC tokens with scopes and a token id
+//! (h5i-app's v1 tokens still accepted), signed with one key for users and
+//! another for operators, or access tokens from a configured OIDC issuer
+//! ([`oidc`]); every route checks a scope before a kernel runs, and every
+//! token is checked against the revocation list ([`revocation`]).
+//! `Idempotency-Key` makes a request run at most once.
 
 pub mod auth;
 pub mod batch;
 pub mod jobs;
+pub mod oidc;
 pub mod orchestrator;
+pub mod revocation;
 pub mod routes;
 
 pub use auth::Keys;

@@ -411,6 +411,21 @@ CREATE TABLE IF NOT EXISTS ops.reconciliation_reports (
   counts TEXT NOT NULL,
   PRIMARY KEY (tenant_id, run)
 );
+CREATE TABLE IF NOT EXISTS ops.revocations (
+  id BIGSERIAL PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  jti TEXT,
+  actor_kind TEXT,
+  actor_id BIGINT,
+  before BIGINT,
+  expires_at BIGINT,
+  revoked_by BIGINT NOT NULL,
+  revoked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reason TEXT NOT NULL DEFAULT '',
+  CHECK (jti IS NOT NULL OR before IS NOT NULL),
+  CHECK ((actor_kind IS NULL) = (actor_id IS NULL))
+);
+CREATE INDEX IF NOT EXISTS revocations_tenant ON ops.revocations (tenant_id, id);
 CREATE TABLE IF NOT EXISTS ops.reconciliation_exceptions (
   tenant_id BIGINT NOT NULL,
   run TEXT NOT NULL,
@@ -421,6 +436,90 @@ CREATE TABLE IF NOT EXISTS ops.reconciliation_exceptions (
   amount BIGINT NOT NULL,
   PRIMARY KEY (tenant_id, run, n)
 )";
+
+    /// A token revocation (G3), for one tenant. `jti`: that token. `actor`
+    /// (`("user" | "operator", id)`) with `before`: that actor's tokens
+    /// issued at or before `before` (seconds since the Unix epoch). `before`
+    /// alone: every token of the tenant issued then or earlier. v1 tokens
+    /// have no issue time and count as issued at 0, so a revocation by
+    /// actor or by date covers them whatever its date.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Revocation {
+        pub id: i64,
+        pub tenant: u64,
+        pub jti: Option<String>,
+        pub actor: Option<(String, u64)>,
+        pub before: Option<u64>,
+        /// For a token: when it expires anyway (the entry can be forgotten then).
+        pub expires_at: Option<u64>,
+        pub revoked_by: u64,
+        pub reason: String,
+    }
+
+    /// Record a revocation; its id.
+    pub async fn revoke(url: &str, tls: &DbTls, r: &Revocation) -> Result<i64, DbError> {
+        let (c, conn) = connect(url, tls).await?;
+        let t = i64::try_from(r.tenant).map_err(|_| DbError::Decode("tenant id out of range".into()))?;
+        let int = |x: Option<u64>| x.map(|v| v as i64);
+        let row = c
+            .query_one(
+                "INSERT INTO ops.revocations (tenant_id, jti, actor_kind, actor_id, before, expires_at, revoked_by, reason) \
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id",
+                &[
+                    &t,
+                    &r.jti,
+                    &r.actor.as_ref().map(|a| a.0.clone()),
+                    &int(r.actor.as_ref().map(|a| a.1)),
+                    &int(r.before),
+                    &int(r.expires_at),
+                    &(r.revoked_by as i64),
+                    &r.reason,
+                ],
+            )
+            .await?;
+        drop(c);
+        let _ = conn.await;
+        Ok(row.get(0))
+    }
+
+    fn revocation_of(r: &tokio_postgres::Row) -> Revocation {
+        let kind: Option<String> = r.get(3);
+        let id: Option<i64> = r.get(4);
+        Revocation {
+            id: r.get(0),
+            tenant: r.get::<_, i64>(1) as u64,
+            jti: r.get(2),
+            actor: kind.zip(id.map(|i| i as u64)),
+            before: r.get::<_, Option<i64>>(5).map(|v| v as u64),
+            expires_at: r.get::<_, Option<i64>>(6).map(|v| v as u64),
+            revoked_by: r.get::<_, i64>(7) as u64,
+            reason: r.get(8),
+        }
+    }
+
+    const REVOCATION_COLS: &str = "id, tenant_id, jti, actor_kind, actor_id, before, expires_at, revoked_by, reason";
+
+    /// Every revocation with an id above `after`, in id order, on an open
+    /// connection (the API's refresh task keeps one).
+    pub async fn revocations_since(c: &tokio_postgres::Client, after: i64) -> Result<Vec<Revocation>, DbError> {
+        let sql = format!("SELECT {REVOCATION_COLS} FROM ops.revocations WHERE id > $1 ORDER BY id");
+        Ok(c.query(sql.as_str(), &[&after]).await?.iter().map(revocation_of).collect())
+    }
+
+    /// A tenant's revocations, newest first, at most `limit`.
+    pub async fn revocations_of(url: &str, tls: &DbTls, tenant: u64, limit: i64) -> Result<Vec<Revocation>, DbError> {
+        let (c, conn) = connect(url, tls).await?;
+        let sql = format!("SELECT {REVOCATION_COLS} FROM ops.revocations WHERE tenant_id = $1 ORDER BY id DESC LIMIT $2");
+        let rows = c.query(sql.as_str(), &[&(tenant as i64), &limit]).await?;
+        drop(c);
+        let _ = conn.await;
+        Ok(rows.iter().map(revocation_of).collect())
+    }
+
+    /// A connection for [`revocations_since`].
+    pub async fn connect_ops(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Client, tokio::task::JoinHandle<()>), DbError> {
+        connect(url, tls).await
+    }
 
     /// One exception row of a worker report.
     #[derive(Clone, Debug, PartialEq, Eq)]

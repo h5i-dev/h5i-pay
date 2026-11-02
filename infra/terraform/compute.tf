@@ -232,7 +232,7 @@ locals {
     readonlyRootFilesystem = true
     user                   = "65532:65532"
     portMappings           = [{ containerPort = 8080, protocol = "tcp" }]
-    environment = [
+    environment = concat([
       { name = "LISTEN", value = "0.0.0.0:8080" },
       { name = "H5I_PAY_PSP", value = var.psp_mode },
       { name = "DB_HOST", value = aws_db_instance.main.address },
@@ -242,7 +242,7 @@ locals {
       { name = "DB_CA_FILE", value = "/etc/h5i-pay/rds-global-bundle.pem" },
       { name = "RUST_LOG", value = "info,h5i_app_pg=warn" },
       { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://127.0.0.1:4317" },
-    ]
+    ], local.oidc_env)
     secrets = local.api_secrets
     # Health is checked by the ALB (/healthz); the distroless image has no shell.
     logConfiguration = {

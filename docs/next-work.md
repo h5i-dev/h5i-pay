@@ -214,7 +214,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    operator from replaying another's key, and keep the system jobs'
    deterministic keys working (they act as their named system operators).
    Migrate existing keys. Tests for the collision and for replays.
-3. [ ] **Scoped tokens, identity provider, revocation.**
+3. [x] **Scoped tokens, identity provider, revocation.**
    - Scopes: tokens carry scopes (e.g. `payments:read`, `payments:write`,
      `refunds:write`, `ledger:read`, `ledger:write`, `reconcile:read`,
      `recover`, `operator:*`); every route checks its scope before the

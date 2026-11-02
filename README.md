@@ -135,4 +135,21 @@ pay $MERCHANT /v1/payments/0/capture '{"amount":1000}'
 pay $MERCHANT /v1/payments/0/refunds '{"amount":300}'
 pay $OP /v1/reconcile '{}'
 curl -s -H "Authorization: Bearer $OP" localhost:8080/v1/reconcile/reports   # latest nightly batch report (after h5i-pay export / worker / ingest)
+pay $OP /v1/payments/rpc '{"cmd":"history","payment":0}'                     # who changed it, when, how (G1)
+
+# Scoped tokens (G3): a read-only merchant token and a reconciliation-only
+# operator token; revoke one token, or everything an operator holds.
+RO=$(H5I_APP_ISSUE=1:7:3600:payments:read cargo run -q -p payment-api --features mock-psp --bin h5i-pay)
+pay $RO /v1/payments '{"amount":5,"currency":"jpy","payment_method":"tok_visa"}'   # 403 insufficient_scope
+RECON=$(H5I_PAY_ISSUE_OPERATOR=1:2:3600:reconcile:read cargo run -q -p payment-api --features mock-psp --bin h5i-pay)
+pay $OP /v1/tokens/revoke '{"actor":{"kind":"operator","id":2},"reason":"left the team"}'
 ```
+
+Tokens: the API issues v2 HMAC tokens (`v2.<payload>.<mac>`) with scopes
+(`payments:read`, `payments:write`, `refunds:write`, `ledger:read`,
+`ledger:write` for users; also `reconcile:read`, `recover`,
+`tokens:revoke` for operators; `operator:*` is all), a token id and an
+issue time; h5i-app's v1 tokens still work. With `H5I_PAY_OIDC_ISSUER` and
+`H5I_PAY_OIDC_AUDIENCE` it also accepts RS256/ES256 access tokens from that
+issuer (`crates/payment-api/src/oidc.rs` for the claims). Revocation:
+`docs/runbooks/secret-rotation.md`.

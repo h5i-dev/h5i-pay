@@ -746,6 +746,7 @@ name = "h5i-pay-tests"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "h5i-app-core",
  "h5i-app-gpu",
  "h5i-app-http",
@@ -759,6 +760,7 @@ dependencies = [
  "payment-reconcile",
  "payment-storage",
  "reqwest",
+ "ring",
  "serde_json",
  "tokio",
  "tokio-postgres",
@@ -1361,12 +1363,15 @@ name = "payment-api"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "futures-util",
  "h5i-app",
  "h5i-app-core",
  "h5i-app-http",
  "h5i-app-json",
  "h5i-app-pg",
+ "hex",
+ "hmac 0.12.1",
  "payment-batch",
  "payment-connectors",
  "payment-domain",
@@ -1374,6 +1379,7 @@ dependencies = [
  "payment-reconcile",
  "payment-storage",
  "reqwest",
+ "ring",
  "serde",
  "serde_json",
  "serde_urlencoded",

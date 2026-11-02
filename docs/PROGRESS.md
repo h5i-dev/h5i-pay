@@ -178,6 +178,71 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### G3: scoped tokens, an OIDC identity provider, revocation
+
+- Token format, versioned (`payment_api::auth`): the API now issues v2
+  HMAC tokens `v2.<payload>.<mac>` (payload base64url JSON with tenant,
+  kind `u`/`o`, id, `iat`, `exp`, a random 128-bit `jti` and the scopes;
+  HMAC-SHA256 with the user or the operator key by kind, checked in
+  constant time against current and previous keys). h5i-app's v1 tokens
+  still verify (users with the user scopes, operators with all scopes, no
+  `jti`, issue time 0). h5i-app itself is unchanged: the new format lives
+  here, next to it.
+- Scopes: `payments:read`, `payments:write`, `refunds:write`,
+  `ledger:read`, `ledger:write` (the only ones a user may hold),
+  `reconcile:read`, `recover`, `tokens:revoke`; `operator:*` is all. Every
+  route authenticates with `routes::Authed` (no route uses h5i-app's
+  extractor any more) and checks its scope before calling a kernel (ledger
+  commands: `open`/`transfer`/`batch` need `ledger:write`, the reads
+  `ledger:read`); a missing scope is 403 `insufficient_scope`. CLI:
+  `H5I_APP_ISSUE=<tenant>:<user>[:<ttl>[:<scopes>]]`,
+  `H5I_PAY_ISSUE_OPERATOR=<tenant>:<id>[:<ttl>[:<scopes>]]`.
+- Identity provider (`payment_api::oidc`): with `H5I_PAY_OIDC_ISSUER` and
+  `H5I_PAY_OIDC_AUDIENCE`, RS256/ES256 access tokens of that issuer are
+  accepted. The JWKS comes from discovery (or `H5I_PAY_OIDC_JWKS_URL`), is
+  cached ten minutes and re-read for an unknown `kid` (at most every 30 s).
+  Checked: algorithm (RS256/ES256 only, key type must match; `none` and
+  HS256 refused), signature (ring), `iss`, `aud` (or `client_id` without
+  `aud`, as Cognito access tokens have), `exp`, `nbf`, `iat`, `jti`; claims
+  mapped to tenant (`h5i_tenant`), operator (`h5i_operator`, 1 to 2^62 − 1,
+  at most 12 h) or user (`h5i_user`), scopes from `scope`/`scp` with a
+  configurable prefix removed (users keep only user scopes). Verified with
+  ring directly (no JWT crate: the ones on crates.io either pull the `rsa`
+  crate, with an open advisory, or aws-lc).
+- Revocation (`payment_api::revocation`, table `ops.revocations`): by token
+  (`jti`), by actor (its tokens issued at or before a time, default now)
+  and by date (all of a tenant's tokens issued then or earlier); v1 tokens
+  count as issued at 0. Routes `POST /v1/tokens/revoke` and
+  `GET /v1/tokens/revocations` (operators with `tokens:revoke`, own tenant
+  only; the revoker is recorded). Each process caches the whole list and
+  re-reads new rows every 2 s (`H5I_PAY_REVOCATION_REFRESH_MS`); the
+  recording process applies it at once. Stated staleness: within the
+  refresh interval plus one query on every server; a server that cannot
+  read the list for five intervals (10 s) refuses every token (503).
+- Terraform: variables `oidc_issuer_url`, `oidc_audience`,
+  `oidc_scope_prefix`, `create_cognito_user_pool` (user pool without
+  self-sign-up, MFA on, a resource server with the API's scopes, an
+  operators' client with one-hour access tokens and revocation on) and
+  `cognito_pre_token_lambda_arn` (the V2_0 trigger that must add the
+  tenant and actor claims; not in this repository). `terraform validate`
+  ok; checkov 400 passed, 0 failed, 44 skipped.
+- Tests (98 now): auth unit tests (v2 round trip, scopes, forged scopes or
+  kind refused, v1 compatibility), OIDC claim and JWKS unit tests,
+  revocation-list unit tests, and `tests/integration/tokens.rs`:
+  `every_route_checks_its_scope` (read-only merchant, ledger read vs
+  write, refunds, a reconciliation-only operator, v1 tokens),
+  `revocation_by_token_by_actor_and_by_date` (with a second API process
+  that picks the revocation up within its refresh), and
+  `access_tokens_from_an_oidc_issuer` (a local issuer with an RSA key from
+  `openssl` and a P-256 key from ring: operator and merchant tokens and
+  their scopes; wrong issuer, audience, expired, not yet valid, unknown
+  key, changed payload, HS256 with the public key as secret, `none`
+  refused; key rotation picked up; IdP tokens revoked by `jti` and by
+  actor).
+- Docs: `docs/security-review.md` (SEC-02 closed, what remains about v1
+  tokens and shared HMAC keys), `docs/runbooks/secret-rotation.md`
+  (revocation, IdP keys), README.
+
 ### G2: idempotency keys per principal
 
 - `ReplyCodec::scope` (both kernels) is now the whole principal: `u<id>`

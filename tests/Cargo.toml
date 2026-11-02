@@ -51,3 +51,6 @@ serde_json.workspace = true
 reqwest.workspace = true
 axum.workspace = true
 tokio-postgres = "0.7"
+# G3: a local OIDC issuer (RS256, ES256 keys) for the identity-provider tests.
+ring = "0.17"
+base64 = "0.22"

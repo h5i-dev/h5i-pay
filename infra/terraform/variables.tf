@@ -178,3 +178,34 @@ variable "recover_schedule" {
     error_message = "recover_schedule must be empty, rate(...) or cron(...)."
   }
 }
+
+# G3: access tokens from an identity provider, next to the HMAC tokens.
+variable "oidc_issuer_url" {
+  description = "An OIDC issuer whose RS256/ES256 access tokens the API accepts (H5I_PAY_OIDC_ISSUER). Empty: none, unless create_cognito_user_pool."
+  type        = string
+  default     = ""
+}
+
+variable "oidc_audience" {
+  description = "The audience (aud, or client_id for Cognito access tokens) the issuer's tokens must name. Empty with Cognito: the operators' app client id."
+  type        = string
+  default     = ""
+}
+
+variable "oidc_scope_prefix" {
+  description = "Prefix removed from each scope of an IdP token (Cognito: the resource server identifier and a slash)."
+  type        = string
+  default     = ""
+}
+
+variable "create_cognito_user_pool" {
+  description = "Create a Cognito user pool, resource server (the API's scopes) and an operators' app client, and accept its access tokens."
+  type        = bool
+  default     = false
+}
+
+variable "cognito_pre_token_lambda_arn" {
+  description = "A V2_0 pre-token-generation Lambda that adds h5i_tenant and h5i_operator / h5i_user to access tokens. Without it Cognito tokens carry no tenant and the API refuses them."
+  type        = string
+  default     = ""
+}

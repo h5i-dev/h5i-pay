@@ -20,11 +20,19 @@
 //!   `STRIPE_SECRET_KEY`, which must be `sk_test_…`, and `STRIPE_WEBHOOK_SECRET`)
 //!   or `mock`, only in builds with the `mock-psp` feature (then the default);
 //! * `H5I_PAY_MOCK_WEBHOOK_SECRET` — the Mock PSP's signing secret (`mock-psp` builds);
-//! * `H5I_APP_ISSUE=<tenant>:<user>` — print a one-day user token (user ≥ 1)
-//!   and exit; needs only `H5I_APP_SECRET`;
-//! * `H5I_PAY_ISSUE_OPERATOR=<tenant>:<operator-id>[:<ttl-secs>]` — print an
-//!   operator token (default one hour, at most twelve) and exit; needs only
-//!   `H5I_PAY_OPERATOR_SECRET`.
+//! * `H5I_APP_ISSUE=<tenant>:<user>[:<ttl-secs>[:<scopes>]]` — print a v2
+//!   user token (user ≥ 1; default one day, every user scope) and exit;
+//!   needs only `H5I_APP_SECRET`;
+//! * `H5I_PAY_ISSUE_OPERATOR=<tenant>:<operator-id>[:<ttl-secs>[:<scopes>]]` —
+//!   print a v2 operator token (default one hour, at most twelve; default
+//!   every scope) and exit; needs only `H5I_PAY_OPERATOR_SECRET`. Scopes are
+//!   comma-separated (`payments:read,reconcile:read`; `operator:*` for all);
+//! * `H5I_PAY_OIDC_ISSUER`, `H5I_PAY_OIDC_AUDIENCE` (and optionally
+//!   `H5I_PAY_OIDC_JWKS_URL`, `…_TENANT_CLAIM`, `…_USER_CLAIM`,
+//!   `…_OPERATOR_CLAIM`, `…_SCOPE_PREFIX`) — also accept access tokens from
+//!   this OIDC issuer (`payment_api::oidc`);
+//! * `H5I_PAY_REVOCATION_REFRESH_MS` — how often the revocation list is
+//!   re-read (default 2000; `payment_api::revocation`).
 //!
 //! `h5i-pay recover` runs one recovery pass over every tenant with work
 //! (the scheduled ECS task), prints a JSON summary line and exits: 0 when
@@ -56,16 +64,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
     let required = |k: &'static str| env(k).ok_or(format!("{k} is required"));
     if let Some(spec) = env("H5I_APP_ISSUE") {
-        let (t, u) = spec.split_once(':').ok_or("H5I_APP_ISSUE=<tenant>:<user>")?;
-        println!("{}", auth::issue_user(required("H5I_APP_SECRET")?.as_bytes(), t.parse()?, u.parse()?, 86_400)?);
+        let mut it = spec.splitn(4, ':');
+        let usage = "H5I_APP_ISSUE=<tenant>:<user>[:<ttl-secs>[:<scopes>]]";
+        let (t, u) = (it.next().ok_or(usage)?, it.next().ok_or(usage)?);
+        let ttl = it.next().map(str::parse).transpose()?.unwrap_or(86_400);
+        let scopes = it.next().map(auth::Scopes::parse).transpose()?.unwrap_or(auth::USER_SCOPES);
+        println!("{}", auth::issue_user_scoped(required("H5I_APP_SECRET")?.as_bytes(), t.parse()?, u.parse()?, ttl, scopes)?);
         return Ok(());
     }
     if let Some(spec) = env("H5I_PAY_ISSUE_OPERATOR") {
-        let mut it = spec.split(':');
-        let usage = "H5I_PAY_ISSUE_OPERATOR=<tenant>:<operator-id>[:<ttl-secs>]";
+        let mut it = spec.splitn(4, ':');
+        let usage = "H5I_PAY_ISSUE_OPERATOR=<tenant>:<operator-id>[:<ttl-secs>[:<scopes>]]";
         let (t, o) = (it.next().ok_or(usage)?, it.next().ok_or(usage)?);
         let ttl = it.next().map(str::parse).transpose()?.unwrap_or(auth::DEFAULT_OPERATOR_TTL);
-        println!("{}", auth::issue_operator(required("H5I_PAY_OPERATOR_SECRET")?.as_bytes(), t.parse()?, o.parse()?, ttl)?);
+        let scopes = it.next().map(auth::Scopes::parse).transpose()?.unwrap_or(auth::ALL_SCOPES);
+        println!("{}", auth::issue_operator_scoped(required("H5I_PAY_OPERATOR_SECRET")?.as_bytes(), t.parse()?, o.parse()?, ttl, scopes)?);
         return Ok(());
     }
     let (url, from_rds_secret) = database_url()?;
@@ -116,7 +129,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let keys = keys.expect("keys are loaded unless running a job");
     payment_storage::ops::install(&url, &tls).await?;
-    let state = AppState::with_payments(ledger_engine, payments_engine, psp, &keys).with_ops(&url, &tls);
+    let revocations = payment_api::revocation::Revocations::start(&url, &tls, payment_api::revocation::Revocations::refresh_from_env()).await?;
+    let mut state = AppState::with_payments(ledger_engine, payments_engine, psp, &keys).with_ops(&url, &tls).with_revocations(revocations);
+    if let Some(cfg) = payment_api::oidc::OidcConfig::from_env()? {
+        let issuer = cfg.issuer.clone();
+        state = state.with_oidc(Arc::new(payment_api::oidc::Oidc::connect(cfg).await?));
+        tracing::info!(%issuer, "accepting access tokens from the identity provider");
+    }
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!(%addr, "h5i-pay listening");
     axum::serve(listener, router(state)).with_graceful_shutdown(async {

@@ -4,7 +4,7 @@
 // h5i-app-http's `H5iApp::run` does; boxing it would only add unboxing.
 #![allow(clippy::result_large_err)]
 
-use crate::auth::Keys;
+use crate::auth::{scope, Caller, Keys, Scopes, Who};
 use crate::orchestrator::{CheckoutParams, OrchError, Orchestrator, View};
 use axum::extract::{FromRef, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -23,8 +23,18 @@ use payment_storage::{LedgerEngine, PaymentsEngine};
 use serde::Deserialize;
 use std::sync::Arc;
 
+/// How the routes authenticate (G3): the HMAC keys (v1, v2 tokens), the
+/// identity provider if one is configured, and the revocation list if one
+/// is loaded.
+pub struct Verifier {
+    pub keys: Keys,
+    pub oidc: Option<Arc<crate::oidc::Oidc>>,
+    pub revocations: Option<Arc<crate::revocation::Revocations>>,
+}
+
 #[derive(Clone)]
 pub struct AppState {
+    pub auth: Arc<Verifier>,
     pub ledger: H5iApp<LedgerApp, LedgerStore>,
     pub payments: H5iApp<PaymentsApp, PaymentsStore>,
     pub ledger_engine: Arc<LedgerEngine>,
@@ -69,7 +79,22 @@ impl AppState {
             ))
         });
         let payments = H5iApp::new(payments_engine, crate::auth::payments_auth(keys));
-        AppState { ledger, payments, ledger_engine, orchestrator, ops: None }
+        let auth = Arc::new(Verifier { keys: keys.clone(), oidc: None, revocations: None });
+        AppState { auth, ledger, payments, ledger_engine, orchestrator, ops: None }
+    }
+
+    /// Also accept access tokens from this identity provider.
+    pub fn with_oidc(mut self, oidc: Arc<crate::oidc::Oidc>) -> Self {
+        let v = &self.auth;
+        self.auth = Arc::new(Verifier { keys: v.keys.clone(), oidc: Some(oidc), revocations: v.revocations.clone() });
+        self
+    }
+
+    /// Check every token against this revocation list.
+    pub fn with_revocations(mut self, r: Arc<crate::revocation::Revocations>) -> Self {
+        let v = &self.auth;
+        self.auth = Arc::new(Verifier { keys: v.keys.clone(), oidc: v.oidc.clone(), revocations: Some(r) });
+        self
     }
 
     /// Serve ingested batch reconciliation reports from this database.
@@ -95,15 +120,100 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/recover", post(recover))
         .route("/v1/reconcile", post(reconcile))
         .route("/v1/reconcile/reports", get(reconcile_reports))
+        .route("/v1/tokens/revoke", post(revoke_tokens))
+        .route("/v1/tokens/revocations", get(list_revocations))
         .with_state(state)
+}
+
+/// The authenticated caller (G3): a v2 or v1 HMAC token, or an access token
+/// from the identity provider; refused if revoked. Every handler takes this
+/// and checks a scope before calling a kernel.
+pub struct Authed(pub Caller);
+
+fn bearer(headers: &HeaderMap) -> Result<&str, String> {
+    let h = headers.get("authorization").ok_or("missing authorization")?;
+    let h = h.to_str().map_err(|_| "bad authorization header")?;
+    Ok(h.strip_prefix("Bearer ").ok_or("expected Bearer token")?)
+}
+
+/// A JWT: three base64url segments (HMAC tokens start with `v1.`/`v2.`).
+fn looks_like_jwt(t: &str) -> bool {
+    !t.starts_with("v1.") && !t.starts_with("v2.") && t.split('.').count() == 3
+}
+
+impl axum::extract::FromRequestParts<AppState> for Authed {
+    type Rejection = Response;
+
+    async fn from_request_parts(parts: &mut axum::http::request::Parts, st: &AppState) -> Result<Self, Response> {
+        let unauthorized = |m: &str| reply(StatusCode::UNAUTHORIZED, error_body(m));
+        let token = bearer(&parts.headers).map_err(|m| unauthorized(&m))?;
+        let verified = if looks_like_jwt(token) {
+            match &st.auth.oidc {
+                Some(o) => o.verify(token).await,
+                None => Err(h5i_app_http::AuthError("no identity provider is configured".into())),
+            }
+        } else {
+            st.auth.keys.verify(token)
+        };
+        let c = verified.map_err(|h5i_app_http::AuthError(m)| unauthorized(&m))?;
+        if let Some(r) = &st.auth.revocations {
+            match r.check(&c) {
+                Ok(()) => {}
+                Err(crate::revocation::Refusal::Revoked) => return Err(unauthorized("token revoked")),
+                Err(crate::revocation::Refusal::Stale) => {
+                    tracing::error!("revocation list stale: refusing tokens");
+                    return Err(reply(StatusCode::SERVICE_UNAVAILABLE, error_body("revocation list unavailable")));
+                }
+            }
+        }
+        if let Who::Operator(operator_id) = c.who {
+            tracing::info!(tenant = c.tenant, operator_id, jti = c.jti.as_deref().unwrap_or("-"), kind = ?c.kind, "operator request");
+        }
+        Ok(Authed(c))
+    }
+}
+
+/// 403 unless the token carries scope `s`.
+fn need(c: &Caller, s: Scopes) -> Result<(), Response> {
+    if c.scopes.contains(s) {
+        Ok(())
+    } else {
+        let name = s.names().join(" ");
+        Err(reply(StatusCode::FORBIDDEN, Out::obj([("error", "insufficient_scope".into()), ("scope", Out::str(name.as_bytes()))])))
+    }
+}
+
+fn ledger_actor(c: &Caller) -> Actor<LedgerApp> {
+    Actor::assume_authenticated(c.ledger_principal())
+}
+
+fn payments_actor(c: &Caller) -> Actor<PaymentsApp> {
+    Actor::assume_authenticated(c.payments_principal())
+}
+
+/// Return the response of a failed check.
+macro_rules! check {
+    ($e:expr) => {
+        if let Err(r) = $e {
+            return r;
+        }
+    };
 }
 
 /// One ledger command as JSON, e.g.
 /// `{"cmd":"transfer","id":7,"debit":0,"credit":1,"amount":500}`.
-async fn ledger_rpc(State(st): State<AppState>, actor: Actor<LedgerApp>, headers: HeaderMap, Json(body): Json<serde_json::Value>) -> Response {
+async fn ledger_rpc(State(st): State<AppState>, Authed(c): Authed, headers: HeaderMap, Json(body): Json<serde_json::Value>) -> Response {
+    let actor = ledger_actor(&c);
     let p = *actor.principal();
     match ledger::decode_for(&p, body) {
         Ok(cmd) => {
+            let s = match cmd {
+                payment_ledger::Command::Open { .. } | payment_ledger::Command::Transfer { .. } | payment_ledger::Command::Batch { .. } => {
+                    scope::LEDGER_WRITE
+                }
+                _ => scope::LEDGER_READ,
+            };
+            check!(need(&c, s));
             if let Some(r) = legacy_key::<LedgerApp, LedgerStore>(&st, payment_storage::LEDGER_SCHEMA, p.org, payment_ledger::is_operator(&p), &headers, &cmd).await {
                 return r;
             }
@@ -151,7 +261,9 @@ where
 
 /// Re-check conservation, the balanced journal and the account limits on
 /// the committed rows of the caller's tenant. Operators only.
-async fn ledger_audit(State(st): State<AppState>, actor: Actor<LedgerApp>) -> Response {
+async fn ledger_audit(State(st): State<AppState>, Authed(c): Authed) -> Response {
+    check!(need(&c, scope::LEDGER_READ));
+    let actor = ledger_actor(&c);
     let p = actor.principal();
     if !payment_ledger::is_operator(p) {
         return reply(StatusCode::FORBIDDEN, error_body("forbidden"));
@@ -179,7 +291,9 @@ async fn ledger_audit(State(st): State<AppState>, actor: Actor<LedgerApp>) -> Re
 }
 
 /// Read-only payment commands (`get`, `list`, `get_refund`, `refunds`).
-async fn payments_rpc(State(st): State<AppState>, actor: Actor<PaymentsApp>, headers: HeaderMap, Json(body): Json<serde_json::Value>) -> Response {
+async fn payments_rpc(State(st): State<AppState>, Authed(c): Authed, headers: HeaderMap, Json(body): Json<serde_json::Value>) -> Response {
+    check!(need(&c, scope::PAYMENTS_READ));
+    let actor = payments_actor(&c);
     if st.orchestrator.is_none() {
         return unavailable();
     }
@@ -285,7 +399,9 @@ fn key(headers: &HeaderMap) -> Option<&str> {
     headers.get("idempotency-key").and_then(|v| v.to_str().ok())
 }
 
-async fn create_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, headers: HeaderMap, Json(body): Json<CreatePayment>) -> Response {
+async fn create_payment(State(st): State<AppState>, Authed(c): Authed, headers: HeaderMap, Json(body): Json<CreatePayment>) -> Response {
+    check!(need(&c, scope::PAYMENTS_WRITE));
+    let actor = payments_actor(&c);
     let o = match orch(&st) {
         Ok(o) => o,
         Err(r) => return r,
@@ -300,7 +416,9 @@ async fn create_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, h
     }
 }
 
-async fn get_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, Path(id): Path<u64>) -> Response {
+async fn get_payment(State(st): State<AppState>, Authed(c): Authed, Path(id): Path<u64>) -> Response {
+    check!(need(&c, scope::PAYMENTS_READ));
+    let actor = payments_actor(&c);
     let o = match orch(&st) {
         Ok(o) => o,
         Err(r) => return r,
@@ -317,7 +435,9 @@ struct CaptureBody {
     amount: Option<u64>,
 }
 
-async fn capture_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, Path(id): Path<u64>, body: Option<Json<CaptureBody>>) -> Response {
+async fn capture_payment(State(st): State<AppState>, Authed(c): Authed, Path(id): Path<u64>, body: Option<Json<CaptureBody>>) -> Response {
+    check!(need(&c, scope::PAYMENTS_WRITE));
+    let actor = payments_actor(&c);
     let o = match orch(&st) {
         Ok(o) => o,
         Err(r) => return r,
@@ -329,7 +449,9 @@ async fn capture_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, 
     }
 }
 
-async fn cancel_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, Path(id): Path<u64>) -> Response {
+async fn cancel_payment(State(st): State<AppState>, Authed(c): Authed, Path(id): Path<u64>) -> Response {
+    check!(need(&c, scope::PAYMENTS_WRITE));
+    let actor = payments_actor(&c);
     let o = match orch(&st) {
         Ok(o) => o,
         Err(r) => return r,
@@ -346,7 +468,9 @@ struct RefundBody {
     amount: u64,
 }
 
-async fn refund_payment(State(st): State<AppState>, actor: Actor<PaymentsApp>, headers: HeaderMap, Path(id): Path<u64>, Json(body): Json<RefundBody>) -> Response {
+async fn refund_payment(State(st): State<AppState>, Authed(c): Authed, headers: HeaderMap, Path(id): Path<u64>, Json(body): Json<RefundBody>) -> Response {
+    check!(need(&c, scope::REFUNDS_WRITE));
+    let actor = payments_actor(&c);
     let o = match orch(&st) {
         Ok(o) => o,
         Err(r) => return r,
@@ -376,7 +500,9 @@ struct CheckoutBody {
     cancel_url: String,
 }
 
-async fn checkout(State(st): State<AppState>, actor: Actor<PaymentsApp>, headers: HeaderMap, Json(body): Json<CheckoutBody>) -> Response {
+async fn checkout(State(st): State<AppState>, Authed(c): Authed, headers: HeaderMap, Json(body): Json<CheckoutBody>) -> Response {
+    check!(need(&c, scope::PAYMENTS_WRITE));
+    let actor = payments_actor(&c);
     let o = match orch(&st) {
         Ok(o) => o,
         Err(r) => return r,
@@ -450,7 +576,9 @@ struct RecoverQuery {
 }
 
 /// Finish payments and refunds left half done (operators only).
-async fn recover(State(st): State<AppState>, actor: Actor<PaymentsApp>, Query(q): Query<RecoverQuery>) -> Response {
+async fn recover(State(st): State<AppState>, Authed(c): Authed, Query(q): Query<RecoverQuery>) -> Response {
+    check!(need(&c, scope::RECOVER));
+    let actor = payments_actor(&c);
     let o = match orch(&st) {
         Ok(o) => o,
         Err(r) => return r,
@@ -535,7 +663,9 @@ fn report_json(r: &payment_reconcile::Recon, rep: &Report) -> Out {
 /// Compare the payment kernel with the PSP's settlement report and with the
 /// ledger journal. A report only: corrections are separate, audited ledger
 /// transfers. Operators only.
-async fn reconcile(State(st): State<AppState>, actor: Actor<PaymentsApp>, Query(q): Query<ReconcileQuery>) -> Response {
+async fn reconcile(State(st): State<AppState>, Authed(c): Authed, Query(q): Query<ReconcileQuery>) -> Response {
+    check!(need(&c, scope::RECONCILE_READ));
+    let actor = payments_actor(&c);
     let o = match orch(&st) {
         Ok(o) => o,
         Err(r) => return r,
@@ -572,7 +702,9 @@ struct ReportsQuery {
 
 /// The tenant's latest (or `run`'s) ingested batch reconciliation report,
 /// with its exceptions (operators only). Read-only; it moves no money.
-async fn reconcile_reports(State(st): State<AppState>, actor: Actor<PaymentsApp>, Query(q): Query<ReportsQuery>) -> Response {
+async fn reconcile_reports(State(st): State<AppState>, Authed(c): Authed, Query(q): Query<ReportsQuery>) -> Response {
+    check!(need(&c, scope::RECONCILE_READ));
+    let actor = payments_actor(&c);
     let p = actor.principal();
     if !payment_domain::is_operator(p) {
         return reply(StatusCode::FORBIDDEN, error_body("forbidden"));
@@ -623,5 +755,122 @@ fn json_out(v: &serde_json::Value) -> Out {
         serde_json::Value::String(s) => Out::str(s.as_bytes()),
         serde_json::Value::Bool(b) => Out::Bool(*b),
         serde_json::Value::Null => Out::Null,
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ActorKind {
+    User,
+    Operator,
+}
+
+#[derive(Deserialize)]
+struct ActorRef {
+    kind: ActorKind,
+    id: u64,
+}
+
+/// One revocation: a token (`jti`), an actor's tokens issued at or before
+/// `before` (default: now), or (`before` alone) all of the tenant's tokens
+/// issued at or before it.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RevokeBody {
+    #[serde(default)]
+    jti: Option<String>,
+    /// For a token: when it expires (lets servers forget the entry then).
+    #[serde(default)]
+    expires_at: Option<u64>,
+    #[serde(default)]
+    actor: Option<ActorRef>,
+    #[serde(default)]
+    before: Option<u64>,
+    #[serde(default)]
+    reason: String,
+}
+
+fn revocation_json(r: &payment_storage::ops::Revocation) -> Out {
+    Out::obj([
+        ("id", (r.id as u64).into()),
+        ("jti", r.jti.as_deref().map_or(Out::Null, |j| Out::str(j.as_bytes()))),
+        (
+            "actor",
+            r.actor.as_ref().map_or(Out::Null, |(k, i)| Out::obj([("kind", Out::str(k.as_bytes())), ("id", (*i).into())])),
+        ),
+        ("before", r.before.map_or(Out::Null, Out::from)),
+        ("expires_at", r.expires_at.map_or(Out::Null, Out::from)),
+        ("revoked_by", r.revoked_by.into()),
+        ("reason", Out::str(r.reason.as_bytes())),
+    ])
+}
+
+/// Revoke tokens of the caller's tenant (operators with `tokens:revoke`).
+/// Takes effect here at once and on every server within the refresh
+/// interval (`revocation`).
+async fn revoke_tokens(State(st): State<AppState>, Authed(c): Authed, Json(b): Json<RevokeBody>) -> Response {
+    check!(need(&c, scope::TOKENS_REVOKE));
+    let Who::Operator(by) = c.who else { return reply(StatusCode::FORBIDDEN, error_body("forbidden")) };
+    let Some(list) = st.auth.revocations.clone() else {
+        return reply(StatusCode::SERVICE_UNAVAILABLE, error_body("revocation is not configured"));
+    };
+    let now = crate::auth::now();
+    let mut r = payment_storage::ops::Revocation {
+        id: 0,
+        tenant: c.tenant,
+        jti: None,
+        actor: None,
+        before: None,
+        expires_at: None,
+        revoked_by: by,
+        reason: b.reason.chars().take(500).collect(),
+    };
+    match (b.jti, b.actor, b.before) {
+        (Some(j), None, None) if !j.is_empty() && j.len() <= 256 => {
+            r.jti = Some(j);
+            r.expires_at = b.expires_at;
+        }
+        (None, Some(a), before) => {
+            let kind = match a.kind {
+                ActorKind::User => "user",
+                ActorKind::Operator => "operator",
+            };
+            r.actor = Some((kind.into(), a.id));
+            r.before = Some(before.unwrap_or(now));
+        }
+        (None, None, Some(before)) => r.before = Some(before),
+        _ => return reply(StatusCode::BAD_REQUEST, error_body("give jti, or actor (and before), or before")),
+    }
+    match list.revoke(&r).await {
+        Ok(id) => {
+            r.id = id;
+            tracing::warn!(tenant = c.tenant, operator_id = by, revocation = id, "tokens revoked");
+            reply(StatusCode::OK, Out::obj([("revoked", revocation_json(&r))]))
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "revocation failed");
+            reply(StatusCode::SERVICE_UNAVAILABLE, error_body("unavailable"))
+        }
+    }
+}
+
+#[derive(Deserialize, Default)]
+struct RevocationsQuery {
+    limit: Option<i64>,
+}
+
+/// The tenant's revocations, newest first (operators with `tokens:revoke`).
+async fn list_revocations(State(st): State<AppState>, Authed(c): Authed, Query(q): Query<RevocationsQuery>) -> Response {
+    check!(need(&c, scope::TOKENS_REVOKE));
+    if !c.is_operator() {
+        return reply(StatusCode::FORBIDDEN, error_body("forbidden"));
+    }
+    let Some(list) = st.auth.revocations.clone() else {
+        return reply(StatusCode::SERVICE_UNAVAILABLE, error_body("revocation is not configured"));
+    };
+    let (url, tls) = list.db();
+    match payment_storage::ops::revocations_of(url, tls, c.tenant, q.limit.unwrap_or(100).clamp(1, 1000)).await {
+        Ok(rs) => reply(StatusCode::OK, Out::obj([("revocations", Out::Arr(rs.iter().map(revocation_json).collect()))])),
+        Err(e) => reply(StatusCode::SERVICE_UNAVAILABLE, error_body(&e.to_string())),
     }
 }

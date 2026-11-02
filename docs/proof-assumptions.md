@@ -117,7 +117,12 @@ committed history is such a sequence.
    principal, the kernels prove who may do what and that every row records
    the acting operator's id (`transfers_record_operator`,
    `writes_record_operator`); that the principal names the right person is
-   the token's job.
+   the token's job. Since G3 the token also limits what the principal may
+   ask (scopes, checked by the routes before a kernel runs), and a revoked
+   token is refused; both are shell checks (`payment_api::routes::Authed`),
+   not proven: a kernel theorem holds for every principal the shell passes,
+   whatever its scopes. Access tokens from the identity provider are
+   trusted as far as the issuer and its keys are (`payment_api::oidc`).
 
 7. **The ledger marker (F2).** The payment kernel proves that only an
    operator's `MarkPosted` sets `ledger_done`, only on the state it names
