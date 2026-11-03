@@ -205,6 +205,15 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
   latency at H2's level; `POST /v1/recover` 64.7 / 283.9 / 3461 ms →
   14.7 / 72.4 / 544.0 ms; paged audit 80 / 418 / 4642 ms → 35 / 159 /
   1480 ms; scheduled recovery passes +3 to +13 ms (pruning).
+- Checks at `82a2074` (h5i `9ec26b5`): `cargo test --workspace` (107
+  pass, TLS suites included), clippy plain, `mock-psp` and CUDA, the GPU
+  differential test (6), `build-device.sh --check`, `cargo deny check`;
+  the README's commands `h5i app extract --check`, `lint`, `check` (375 /
+  450 / 69 theorems in 15 / 10 / 3 modules, standard axioms) and `mutate`
+  (22/22, 23/23, 6/6 caught) on the three kernels.
+- Open: h5i `app/pipeline-errors` has no PR yet (no `gh` here); once it is
+  merged, move every pin to the main commit. CI on GitHub was not checked
+  from here.
 
 ### I3: `find_work` without a whole-tenant load
 
