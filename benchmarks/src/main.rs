@@ -244,6 +244,22 @@ fn main() {
             drop(g);
             println!("{}", json!({"gpu_init_ms": ms, "device_free_mib": free >> 20, "device_total_mib": total >> 20}));
         }
+        Some("gen-files") => {
+            // J1: synthetic reconciliation inputs as files for the worker:
+            // <dir>/i.h5ib, e.h5ib (binary records) and, with --csv, i.csv, e.csv.
+            let rows: usize = args[2].parse().unwrap();
+            let dir = std::path::Path::new(&args[3]);
+            std::fs::create_dir_all(dir).unwrap();
+            let t = Instant::now();
+            let r = payment_batch::synth::recon(rows, rows as u64);
+            payment_batch::binfile::write(&dir.join("i.h5ib"), &r.internal).unwrap();
+            payment_batch::binfile::write(&dir.join("e.h5ib"), &r.external).unwrap();
+            if args.get(4).map(String::as_str) == Some("--csv") {
+                payment_batch::files::write_records(&dir.join("i.csv"), &r.internal).unwrap();
+                payment_batch::files::write_records(&dir.join("e.csv"), &r.external).unwrap();
+            }
+            println!("{}", json!({"rows": rows, "internal": r.internal.len(), "external": r.external.len(), "ms": t.elapsed().as_secs_f64() * 1e3}));
+        }
         Some("all") => {
             let mut sizes = vec![10_000usize, 100_000, 1_000_000, 10_000_000];
             let mut out = "benchmarks/results/latest.json".to_string();

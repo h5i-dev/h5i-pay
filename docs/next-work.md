@@ -355,3 +355,74 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
 
 After I: re-run all checks and the B4 end-to-end benchmarks interleaved
 with `d71881b`, update `docs/benchmarks.md` and PROGRESS.md, and report.
+
+## J. A short README, and a GPU batch path that pays off end to end
+
+Same ground rules. Tick each off here and in PROGRESS.md as it lands.
+
+1. [x] **GPU batch on binary input, measured end to end.** Today a 10M-row
+   reconciliation job takes 6.7 s on the GPU vs 9.0 s on 4 CPU threads,
+   because about 6.2 s is single-threaded CSV parsing (`docs/benchmarks.md`,
+   "The batch worker, with its files"); the kernels themselves are ~8.6×
+   faster. CSV need not be the only input. Goal: when the input is binary,
+   the GPU job is several times faster than the best CPU job **end to end**
+   (file in, report out), and that is measured honestly.
+   - Input format: a binary columnar format the worker reads with no
+     parsing, e.g. a small documented header (magic, version, row count,
+     column offsets, checksum) followed by little-endian columns (`key u64`,
+     `amount u64`, `currency u32`, `status u32`), or Arrow IPC / Parquet if
+     you can justify the dependency and its decode cost. Validate the
+     header and sizes (untrusted input), mmap the file, and copy columns
+     to the device without a per-row step (pinned host buffers, chunked
+     and overlapped H2D with compute where it helps).
+   - Producers: `h5i-pay export` writes the binary format (from PostgreSQL;
+     consider `COPY ... (FORMAT binary)` or range reads streamed into
+     columns), and a converter from the PSP's CSV/settlement report, so
+     the nightly run can use it. Keep CSV supported.
+   - Output: the report stays the same (exceptions only); write it without
+     a per-row formatting bottleneck (binary exception list plus the JSON
+     summary, or parallel formatting).
+   - Long-lived worker: a mode that keeps the CUDA context (and PTX JIT)
+     warm and takes many files/periods per process (e.g. a directory or a
+     queue of jobs), so the ~150 ms context cost is paid once per run, not
+     per file.
+   - CPU baseline must be fair: the same binary input, mmap, and the best
+     CPU engine (parallel), so the comparison is GPU vs the best CPU on the
+     same I/O, not GPU vs CSV parsing.
+   - Measure at 1M, 10M and 100M rows per side if memory allows (state the
+     limit; chunk the join if the device or host cannot hold it), cold and
+     warm page cache, one-shot and long-lived: file read, H2D, kernels,
+     D2H, report write, total. Report the GPU/CPU ratio end to end for each.
+     If the GPU is not several times faster somewhere, say where the time
+     goes and what would change it; do not tune the benchmark to the claim.
+   - Keep correctness: the binary reader is tested against the CSV reader
+     on the same data (same report), GPU differential tests still pass, and
+     the format parser rejects truncated/oversized/misaligned files (tests,
+     and a fuzz run if `cargo fuzz` works here).
+   - Update the nightly Step Functions run (`infra/terraform/reconcile.tf`,
+     `batch-entrypoint.sh`) to use the binary format, and
+     `docs/benchmarks.md` with the new section and conclusions.
+2. [ ] **A short README.** The current README (144 lines, 863 words) is
+   still hard to read. Rewrite it to be short and scannable:
+   - target roughly 60–80 lines; one-sentence opening; then at most these
+     sections: what it is (with one mermaid diagram of the architecture:
+     HTTP API → orchestrator → kernels (proven in Lean) → PostgreSQL, PSP,
+     batch worker / GPU), Quick start (one code block), Use (one code
+     block), Verified (three or four short lines on what is proven and what
+     is trusted, link), Performance (one small table, ≤ 5 rows, including
+     the new GPU end-to-end result from J1), Docs (one line of links),
+     License;
+   - a second mermaid diagram only if it replaces text (e.g. the payment
+     state machine `CREATED → PROCESSING → AUTHORIZED → CAPTURED`, refunds);
+   - no paragraph longer than three sentences, no list of every command,
+     no crate-by-crate prose (a compact table or nothing), no history;
+   - everything removed goes to `docs/` (api.md, development.md, design)
+     and is linked from the Docs line; commands must still work as written
+     and numbers must come from `docs/benchmarks.md`;
+   - check that the mermaid renders on GitHub (valid syntax; keep it simple).
+   Do J2 after J1 so the README carries J1's numbers.
+
+After J: re-run all checks, update PROGRESS.md and report. Disk is tight
+(about 3 GB free): delete stale build output and large test files you no
+longer need before generating 100M-row inputs, and remove those inputs
+after measuring.

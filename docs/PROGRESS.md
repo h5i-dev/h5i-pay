@@ -178,6 +178,69 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### J1: the GPU batch path on binary input, end to end
+
+- Binary records file (`.h5ib`, `payment_batch::binfile`,
+  `docs/batch-files.md`): a 128-byte header (magic, version, rows, column
+  offsets, file length, data and header checksums) and four little-endian
+  columns. The reader maps the file, checks every header field, the exact
+  layout and length and the block checksum (on every thread), and hands
+  out the columns as slices of the mapping. Tests: round trips, every
+  header field, truncated / oversized / misaligned / flipped files, 20,000
+  random corruptions; `cargo fuzz` targets `records_file` and
+  `records_csv` (`crates/payment-batch/fuzz`, 240 s each: 15.9M and 4.1M
+  inputs, no failure).
+- Engines on columns: `payment_reconcile::cpu_parallel_cols` (the parallel
+  engine, now generic over `Rows`: records or columns) and
+  `Gpu::reconcile_cols` (new kernels `recon_build_cols`,
+  `recon_internal_cols`, `recon_external_cols` from the same `rules.rs`,
+  `internal_row_cols`; PTX rebuilt). The GPU path copies each column
+  through three 8 MiB pinned staging buffers on a copy stream, both key
+  columns first, so the table builds and the external probe overlap the
+  remaining copies; one-byte codes back to pinned memory; device and pinned
+  buffers cached across calls.
+- The parallel CPU engine uses about 1,024 rows per partition
+  (`partitions`), not 8 partitions per thread: in memory 10M rows 1,726 →
+  433 ms, 1M 88.6 → 40.4 ms. The records CSV is parsed on every thread
+  (10M rows: 6.2 → 1.7 s). The report is formatted on every thread and
+  written in row order (same bytes).
+- Worker: binary or CSV inputs (by magic bytes); `jobs` (long-lived: many
+  jobs in one process, the CUDA context once; a failed job is logged, the
+  rest run, non-zero exit); `convert` (CSV ↔ binary); phase timings in the
+  log line. `--min-gpu-rows` defaults: 6,000,000 for one-shot `reconcile`
+  (measured crossover ~3M rows per side), 200,000 in `jobs`.
+- Producers: `h5i-pay export <dir> [--format binary|csv]`, binary by
+  default. Nightly: `batch-entrypoint.sh reconcile-run` builds a jobs list
+  of every tenant's pair (`.h5ib`, or `.csv`) and runs one `h5i-pay-batch
+  jobs` process; checked locally with a fake `aws` (two tenants, binary and
+  CSV, same report bodies). `reconcile.tf` and `ops-entrypoint.sh`
+  comments updated.
+- Correctness: `cpu_column_engine_matches_the_reference`,
+  `gpu_columns_match_the_reference` (all cases, a 1.5M-row case across
+  staging chunks, growing and shrinking buffers, reserved key refused);
+  `crates/payment-gpu/tests/worker.rs` (every engine, CSV vs binary, one-shot
+  and `jobs`, same report bytes after `engine`/`elapsed_ms`; `convert`
+  round trip; bad files refused in every engine; a failed job in `jobs`);
+  `batch_job` exports binary and CSV and compares the reports byte for
+  byte.
+- Measured (`docs/benchmarks.md`, "The batch worker on binary input (J1)";
+  raw `benchmarks/results/j1-batch-g5.xlarge.jsonl`; inputs on the
+  instance-store NVMe): GPU/CPU end to end, long-lived and warm, 4.0× at
+  1M, 4.6× at 10M (144 vs 663 ms), 13.5× at 100M rows per side; one-shot
+  warm 0.3× at 1M and 2.1× at 10M (context, JIT and buffers ~180 ms);
+  cold 1.0–1.8× (disk-bound, 0.33–1 GB/s). At 100M the 4.8 GB of input do
+  not fit next to the engines in the ~7 GB this host has free (another
+  project holds 4.5 GB of tmpfs): the CPU engine thrashes (10–34 s), so
+  the 100M ratios are about memory. At 10M the GPU's engine time (68 ms)
+  is now smaller than the shared phases (verify 30 ms, report 43 ms); H2D
+  runs at the PCIe Gen4 x8 link's 13 GB/s.
+- Checks: `cargo test --workspace` (116 pass, TLS included), clippy plain,
+  `mock-psp` and CUDA, the GPU differential test (8) and worker tests (2,
+  CUDA), `build-device.sh --check`, `cargo deny check`; `h5i app extract
+  --check`, `check` (69 theorems) and `mutate` (6/6) on
+  `crates/payment-reconcile` (the ledger and payment kernels are
+  unchanged).
+
 ### I4: the README in the style of h5i-ai-gateway
 
 - `README.md` rewritten after h5i-ai-gateway's: an opening paragraph, then

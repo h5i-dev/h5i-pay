@@ -24,7 +24,7 @@ pub mod inputs;
 pub mod join;
 pub mod period;
 
-pub use rules::Record;
+pub use rules::{Cols, Record};
 use rules::*;
 use std::collections::BTreeMap;
 
@@ -72,6 +72,8 @@ pub enum ReconError {
     ReservedKey { external: bool, index: usize },
     /// More rows than a `u32` index can name.
     TooLarge,
+    /// The columns of one side have different lengths.
+    ColumnLengths { external: bool },
 }
 
 impl std::fmt::Display for ReconError {
@@ -201,17 +203,20 @@ impl<T> Disjoint<T> {
 
 /// Row indices grouped by partition (stable: increasing within a partition),
 /// with the start of each partition. Two-pass parallel radix partition.
-fn partition(rows: &[Record], parts: usize) -> (Vec<u32>, Vec<usize>) {
+fn partition<R: Rows + ?Sized>(rows: &R, parts: usize) -> (Vec<u32>, Vec<usize>) {
     use rayon::prelude::*;
     let part = |k: u64| ((hash(k) >> 40) as usize) % parts;
-    let chunk = rows.len().div_ceil(rayon::current_num_threads() * 4).max(4096);
+    let n = rows.len();
+    let chunk = n.div_ceil(rayon::current_num_threads() * 4).max(4096);
+    let chunks = n.div_ceil(chunk);
+    let range = |c: usize| c * chunk..((c + 1) * chunk).min(n);
     // Pass 1: a histogram per chunk.
-    let hist: Vec<Vec<usize>> = rows
-        .par_chunks(chunk)
+    let hist: Vec<Vec<usize>> = (0..chunks)
+        .into_par_iter()
         .map(|c| {
             let mut h = vec![0usize; parts];
-            for r in c {
-                h[part(r.key)] += 1;
+            for i in range(c) {
+                h[part(rows.key(i))] += 1;
             }
             h
         })
@@ -229,28 +234,135 @@ fn partition(rows: &[Record], parts: usize) -> (Vec<u32>, Vec<usize>) {
     }
     starts[parts] = acc;
     // Pass 2: scatter, each chunk into its own ranges.
-    let mut out = vec![0u32; rows.len()];
+    let mut out = vec![0u32; n];
     let dst = Disjoint::new(&mut out);
-    rows.par_chunks(chunk).zip(offsets.into_par_iter()).enumerate().for_each(|(c, (rs, mut off))| {
-        let base = c * chunk;
-        for (k, r) in rs.iter().enumerate() {
-            let p = part(r.key);
+    offsets.into_par_iter().enumerate().for_each(|(c, mut off)| {
+        for i in range(c) {
+            let p = part(rows.key(i));
             // SAFETY: the offsets of different (chunk, partition) pairs are disjoint ranges.
-            unsafe { dst.write(off[p], (base + k) as u32) };
+            unsafe { dst.write(off[p], i as u32) };
             off[p] += 1;
         }
     });
     (out, starts)
 }
 
+/// One side's rows as the parallel engine reads them: a slice of records,
+/// or the four columns of a binary records file ([`Cols`]).
+pub trait Rows: Sync {
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    fn key(&self, i: usize) -> u64;
+    fn get(&self, i: usize) -> Record;
+    fn amount(&self, i: usize) -> u64 {
+        self.get(i).amount
+    }
+}
+
+impl Rows for [Record] {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        <[Record]>::len(self)
+    }
+    #[inline(always)]
+    fn key(&self, i: usize) -> u64 {
+        self[i].key
+    }
+    #[inline(always)]
+    fn get(&self, i: usize) -> Record {
+        self[i]
+    }
+}
+
+impl Rows for Vec<Record> {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        <[Record]>::len(self)
+    }
+    #[inline(always)]
+    fn key(&self, i: usize) -> u64 {
+        self[i].key
+    }
+    #[inline(always)]
+    fn get(&self, i: usize) -> Record {
+        self[i]
+    }
+}
+
+impl Rows for Cols<'_> {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.key.len()
+    }
+    #[inline(always)]
+    fn key(&self, i: usize) -> u64 {
+        self.key[i]
+    }
+    #[inline(always)]
+    fn get(&self, i: usize) -> Record {
+        Cols::get(self, i)
+    }
+    #[inline(always)]
+    fn amount(&self, i: usize) -> u64 {
+        self.amount[i]
+    }
+}
+
+/// [`validate`] for columns: equal column lengths, `u32` row indices, no
+/// reserved key. The key scan runs on every thread.
+pub fn validate_cols(internal: &Cols<'_>, external: &Cols<'_>) -> Result<(), ReconError> {
+    use rayon::prelude::*;
+    for (external, c) in [(false, internal), (true, external)] {
+        let n = c.key.len();
+        if c.amount.len() != n || c.currency.len() != n || c.status.len() != n {
+            return Err(ReconError::ColumnLengths { external });
+        }
+        if n >= u32::MAX as usize {
+            return Err(ReconError::TooLarge);
+        }
+        const CHUNK: usize = 1 << 16;
+        if let Some(chunk) = c.key.par_chunks(CHUNK).position_first(|ks| ks.contains(&EMPTY)) {
+            let index = chunk * CHUNK + c.key[chunk * CHUNK..].iter().position(|k| *k == EMPTY).expect("found above");
+            return Err(ReconError::ReservedKey { external, index });
+        }
+    }
+    Ok(())
+}
+
 /// rayon: partition both sides by key hash, then reconcile each partition
 /// independently. Equal keys always land in the same partition.
 pub fn cpu_parallel(r: &Recon) -> Result<Report, ReconError> {
-    use rayon::prelude::*;
     validate(r)?;
-    let parts = (rayon::current_num_threads() * 8).next_power_of_two();
-    let ((ip, is), (ep, es)) = rayon::join(|| partition(&r.internal, parts), || partition(&r.external, parts));
-    let mut out = Report { internal: vec![0; r.internal.len()], matched: vec![0; r.internal.len()], external: vec![0; r.external.len()] };
+    Ok(parallel_rows(&r.internal[..], &r.external[..], true))
+}
+
+/// [`cpu_parallel`] on columns. Without `matched` the report's `matched`
+/// is empty (the batch worker's report does not use it).
+pub fn cpu_parallel_cols(internal: Cols<'_>, external: Cols<'_>, matched: bool) -> Result<Report, ReconError> {
+    validate_cols(&internal, &external)?;
+    Ok(parallel_rows(&internal, &external, matched))
+}
+
+/// How many partitions the parallel engine uses for `n` rows on `threads`
+/// threads: about 1 024 rows each (J1: the per-partition hash tables then
+/// stay in cache; at 10M rows per side this halved the engine time against
+/// the previous 8 per thread), at least 8 per thread, at most 65 536.
+pub fn partitions(n: usize, threads: usize) -> usize {
+    let min = (threads * 8).next_power_of_two();
+    (n / 1024).next_power_of_two().clamp(min, 1 << 16)
+}
+
+fn parallel_rows<R: Rows + ?Sized>(internal: &R, external: &R, with_matched: bool) -> Report {
+    use rayon::prelude::*;
+    let parts = partitions(internal.len().max(external.len()), rayon::current_num_threads());
+    let ((ip, is), (ep, es)) = rayon::join(|| partition(internal, parts), || partition(external, parts));
+    let mut out = Report {
+        internal: vec![0; internal.len()],
+        matched: if with_matched { vec![0; internal.len()] } else { Vec::new() },
+        external: vec![0; external.len()],
+    };
     let (oi, om, oe) = (Disjoint::new(&mut out.internal), Disjoint::new(&mut out.matched), Disjoint::new(&mut out.external));
     (0..parts).into_par_iter().for_each(|p| {
         let irows = &ip[is[p]..is[p + 1]];
@@ -259,16 +371,17 @@ pub fn cpu_parallel(r: &Recon) -> Result<Report, ReconError> {
         // proven single-thread join; local indices map back through
         // `irows`/`erows`. Every key's rows are all in this partition, so
         // the counts and the first external row are the whole input's.
-        let int: Vec<Record> = irows.iter().map(|&i| r.internal[i as usize]).collect();
-        let ext: Vec<Record> = erows.iter().map(|&j| r.external[j as usize]).collect();
+        let int: Vec<Record> = irows.iter().map(|&i| internal.get(i as usize)).collect();
+        let ext: Vec<Record> = erows.iter().map(|&j| external.get(j as usize)).collect();
         let j = join::join(&int, &ext);
         for (l, &i) in irows.iter().enumerate() {
-            let m = j.matched[l];
-            let m = if m == NONE { NONE } else { erows[m as usize] };
             // SAFETY: every row index is in exactly one partition.
-            unsafe {
-                oi.write(i as usize, j.internal[l]);
-                om.write(i as usize, m);
+            unsafe { oi.write(i as usize, j.internal[l]) };
+            if with_matched {
+                let m = j.matched[l];
+                let m = if m == NONE { NONE } else { erows[m as usize] };
+                // SAFETY: as above.
+                unsafe { om.write(i as usize, m) };
             }
         }
         for (l, &e) in erows.iter().enumerate() {
@@ -276,7 +389,7 @@ pub fn cpu_parallel(r: &Recon) -> Result<Report, ReconError> {
             unsafe { oe.write(e as usize, j.external[l]) };
         }
     });
-    Ok(out)
+    out
 }
 
 pub mod simd;

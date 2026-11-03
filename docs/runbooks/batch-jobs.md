@@ -3,8 +3,12 @@
 Queues: `h5i-pay-<env>-batch-gpu` (EC2 GPU, scales from zero) and
 `h5i-pay-<env>-batch-cpu` (Fargate). Same image; the worker picks the GPU
 only when one answers and the batch has at least `--min-gpu-rows`
-(default 2,000,000: each job pays the CUDA context and JIT once;
-`docs/benchmarks.md` explains the threshold).
+rows, both sides counted (default 6,000,000 for a one-shot `reconcile`,
+which pays the CUDA context, JIT and buffers; 200,000 in `jobs` mode,
+where one process does the whole run and pays them once;
+`docs/benchmarks.md`, "J1", explains the thresholds). The nightly run is
+one `jobs` process; inputs are binary records files
+([`docs/batch-files.md`](../batch-files.md)), CSV pairs still work.
 
 Nightly: the `h5i-pay-<env>-reconcile` Step Functions state machine
 (`infra/terraform/reconcile.tf`) runs export → `reconcile-run` on the GPU

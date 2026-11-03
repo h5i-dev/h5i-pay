@@ -1,10 +1,12 @@
 # Benchmarks
 
-Two parts: **end to end** (B4: the API, the scheduled recovery and the
+Three parts: **end to end** (B4: the API, the scheduled recovery and the
 batch worker through PostgreSQL, files and the PSP adapter, before and
-after the B1–B3 data-path changes), and the **batch engines** alone (M3,
-re-run after the GPU kernels became Rust in A). The end-to-end numbers say
-where the time goes; read them first.
+after the B1–B3 data-path changes), **the batch worker on binary input**
+(J1: file in, report out, GPU against the parallel CPU engine on the same
+files), and the **batch engines** alone (M3, re-run after the GPU kernels
+became Rust in A). The end-to-end numbers say where the time goes; read
+them first.
 
 ## End to end (B4)
 
@@ -450,6 +452,10 @@ of the medians.)
 
 ### The batch worker, with its files
 
+(B4, before J1. J1 added binary inputs, a parallel CSV parser, a faster
+CPU engine and the long-lived `jobs` mode; see "The batch worker on binary
+input (J1)" below.)
+
 `h5i-pay-batch reconcile` on CSV files in the page cache (local disk, not
 S3), 1% amount mismatches and 0.5% missing rows; `elapsed_ms` is the
 engine (including CUDA context creation for the GPU), `total_ms` the whole
@@ -479,6 +485,127 @@ at 10k, and independent of tenant size. For the batch path the GPU is the
 fastest engine from about 100k rows when its context is warm, but a
 one-shot job spends most of its time parsing text; binary inputs (or a
 long-lived worker) would matter more than any engine change.
+
+## The batch worker on binary input (J1)
+
+`h5i-pay-batch reconcile` and `jobs` on binary records files
+([batch-files.md](batch-files.md)), file in, report out, GPU against the
+parallel CPU engine on the same files and the same I/O: both map the files,
+verify the checksums on every thread, and write the report with the same
+parallel formatter. Raw results:
+[`benchmarks/results/j1-batch-g5.xlarge.jsonl`](../benchmarks/results/j1-batch-g5.xlarge.jsonl)
+(`benchmarks/j1-batch.sh`, summarized by `benchmarks/j1-summary.py`;
+2026-11-03, worker at the J1 commit).
+
+Setup. g5.xlarge as below (4 vCPU = 2 cores, 16 GiB, A10G on a PCIe Gen4
+**x8** link). Inputs and reports on the instance-store NVMe
+(`/mnt/scratch`, XFS); nothing on the root EBS volume or tmpfs. *Warm*:
+the inputs in the page cache; *cold*: evicted per file with `dd
+iflag=nocache` before the run. *One-shot*: a process per job (`reconcile`);
+*long-lived*: one `jobs` process for 4 jobs (2 at 100M), the first job
+listed separately because it pays the CUDA context and the buffers; for the
+cold long-lived runs at 1M and 10M every job reads its own copy of the
+files. Engines forced with `--engine`; 5 rounds at 1M and 10M, 2 at 100M,
+GPU and CPU interleaved; medians. Synthetic data (`bench gen-files`, the
+`synth::recon` mix: ~3.3% of rows are exceptions). Rows per side: 1.0M
+(2 × 24 MB), 10.0M (2 × 240 MB), 100.1M (2 × 2.4 GB).
+
+End to end, median ms, GPU/CPU = CPU time / GPU time:
+
+| rows/side | mode | cache | GPU | CPU (parallel) | GPU/CPU |
+|---:|---|---|---:|---:|---:|
+| 1M | one-shot | warm | 178 | 61 | 0.3× |
+| 1M | one-shot | cold | 291 | 82 | 0.3× |
+| 1M | long-lived, later jobs | warm | 16.4 | 64.8 | 4.0× |
+| 1M | long-lived, later jobs | cold | 38.1 | 80.7 | 2.1× |
+| 10M | one-shot | warm | 341 | 700 | 2.1× |
+| 10M | one-shot | cold | 784 | 1,118 | 1.4× |
+| 10M | long-lived, first job | warm | 316 | 715 | 2.3× |
+| 10M | long-lived, later jobs | warm | **144** | 663 | **4.6×** |
+| 10M | long-lived, later jobs | cold | 1,457 | 1,452 | 1.0× |
+| 100M | one-shot | warm | 9,518 (2,440–16,597) | 13,139 | 1.4× |
+| 100M | one-shot | cold | 15,388 | 28,328 | 1.8× |
+| 100M | long-lived, later jobs | warm | 1,447 | 19,594 (11,302–27,886) | 13.5× |
+| 10M, CSV | one-shot | warm | 2,175 | 2,246 | 1.0× |
+
+Where the time goes at 10M rows per side, warm (median ms):
+
+| phase | GPU one-shot | GPU long-lived | CPU |
+|---|---:|---:|---:|
+| map + verify checksums (480 MB) | 25 | 30 | 24–30 |
+| CUDA context + PTX JIT | 144 | 0 | – |
+| reserved-key scan | 5 | 6 | (in engine) |
+| device + pinned buffers | 34 | 0 | – |
+| H2D, 480 MB through pinned staging | 37 | 37 | – |
+| kernels (overlap H2D) / after the last copy | 48 / 24 | 48 / 24 | – |
+| D2H, 20 MB of one-byte codes | 1.5 | 1.5 | – |
+| engine, total | 102 | 68 | 579–586 |
+| report (330k exceptions, 28 MB JSON) | 66 | 43 | 48–76 |
+| **total** | **341** | **144** | **663–700** |
+
+What this says:
+
+- **The GPU is several times faster only in the long-lived worker with
+  the input in memory**: 4.0× at 1M, 4.6× at 10M and 13.5× at 100M rows
+  per side (later jobs, warm). That is the mode the nightly run now uses
+  (one `jobs` process per run).
+- **A one-shot job is 2.1× faster at 10M and slower at 1M.** It pays
+  ~180 ms of fixed cost (context and JIT 140–150 ms, buffers 20–35 ms)
+  against a CPU job of 61 ms at 1M. The one-shot `--min-gpu-rows` default
+  is therefore 6,000,000 rows (both sides; the measured crossover is about
+  3M per side); in `jobs` mode it is 200,000, and the GPU is faster than
+  the CPU from 30k rows per side once the context is up (0.6 vs 1.7 ms).
+- **Cold runs are bound by the disk, for both engines.** The instance-store
+  NVMe read 0.33–1 GB/s for these files (`dd` alone: 0.48 s for 480 MB
+  after idle, 1.46 s back to back), so a cold 10M job spends 0.5–1.3 s
+  reading and the engines' difference (~0.5 s) matters less: 1.0–1.4×.
+  Back-to-back cold jobs (long-lived) hit the slower rate; this shared
+  device also held another project's files during the runs.
+- **The GPU's own work is now small next to the shared phases.** At 10M
+  rows its engine time is 68 ms, while verifying the files (30 ms) and
+  writing the report (43 ms) take as long again, and both engines pay
+  them. H2D runs at the link's rate (480 MB in 37 ms, 13 GB/s on Gen4 x8;
+  4.8 GB in 360 ms at 100M), so a wider link or fewer bytes per row
+  (narrower currency and status columns) would move it, not more copy
+  overlap. The kernels (48 ms) mostly overlap the copies.
+- **The CPU baseline got faster in J1.** The parallel engine now uses about
+  1,024 rows per partition (`payment_reconcile::partitions`) instead of 8
+  partitions per thread, so each partition's hash tables stay in cache:
+  in memory, 10M rows 1,726 → 433 ms and 1M rows 88.6 → 40.4 ms
+  (`bench one recon parallel`, p50; the GPU's in-memory time is unchanged,
+  202.8 ms at 10M). Before the change the 10M long-lived ratio measured
+  12.6× (GPU 181 ms, CPU 2,294 ms); the tables above are against the
+  faster engine. On the
+  mapped columns the engine takes 580 ms at 10M (vs 433 ms on records in
+  memory): four columns are gathered per row instead of one 24-byte
+  record. Gathering the columns into records first was not faster (100–160
+  ms of gathering, then the same engine).
+- **100M rows per side do not fit this host's memory.** The inputs are
+  4.8 GB; with 16 GiB total, 4.5 GB of it held by another project's tmpfs,
+  about 7 GB were available, so the page cache could not keep both files
+  next to either engine's working set. The CPU engine gathers rows at
+  random from the mapping and re-reads evicted pages (709k major page
+  faults in one run): 10–34 s, with wide spread. The GPU reads each file
+  in two sequential passes (verify, staging copy) and takes 1.4–2.4 s when
+  the pages stay cached, 16.6 s in one run where they did not. The 100M
+  ratios are therefore about memory, not the engines; a host with room
+  for the inputs would be needed for a clean 100M comparison. Device
+  memory was not the limit: 12.7 GiB of 22.5 GiB at 100M.
+- **CSV is still a parsing job.** The records CSV is now parsed on every
+  thread (1.7 s for 2 × 310 MB at 10M, was 6.2 s single-threaded), and the
+  CSV job is about as fast on both engines (2.2 s): the binary format, not
+  the GPU, is what removes that cost. `h5i-pay-batch convert` turns a PSP's
+  records CSV into a binary file with the same parser.
+
+Correctness: at 1M and 10M the script compares the body of the last
+binary report with the CSV one (equal);
+`crates/payment-gpu/tests/worker.rs` checks that every engine gives the
+same report from CSV and binary in one-shot and `jobs` mode, and
+`gpu_columns_match_the_reference` checks the column kernels row by row.
+The binary reader refuses truncated, oversized, misaligned and corrupted
+files (`binfile` tests: every header field, 20,000 random corruptions) and
+was fuzzed (`cargo fuzz`, 240 s per target: `records_file` 15.9M inputs,
+`records_csv` 4.1M inputs, no failure).
 
 ## Batch engines (M3, re-run after A)
 
@@ -592,6 +719,10 @@ after the context existed). For policy validation the increase is the
 output vector itself (4 bytes per request), the same in every engine.
 
 ## What the numbers say
+
+(M3's engine comparison, in memory. Since J1 the parallel CPU engine is
+about 4× faster at 10M rows, 433 ms instead of 1,726, so the GPU's lead
+in memory is 2.1× there, not 8.6×; end to end on files see J1 above.)
 
 **Where the GPU wins.** With the CUDA context already up (a long-lived
 worker), the GPU is the fastest engine for reconciliation from about

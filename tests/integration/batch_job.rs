@@ -7,7 +7,7 @@
 
 use h5i_app_pg::EngineConfig;
 use h5i_pay_tests::{database_url, fresh_tenant, ScratchDb};
-use payment_batch::files;
+use payment_batch::{binfile, files};
 use payment_connectors::mock::MockPsp;
 use payment_reconcile::{Engine, Recon};
 use payment_storage::DbTls;
@@ -61,7 +61,11 @@ async fn export_reconcile_ingest() {
 
     let dir = tempdir("export");
     let o = payment_api::orchestrator::Orchestrator::new(ledger.clone(), payments.clone(), mock.clone());
-    let m = payment_api::batch::export(&o, &db.url, &DbTls::Off, &dir).await.unwrap();
+    let m = payment_api::batch::export(&o, &db.url, &DbTls::Off, &dir, payment_api::batch::Format::Binary).await.unwrap();
+    assert_eq!(m["format"], "h5ib", "{m}");
+    // The same export as CSV (still supported) holds the same rows.
+    let csv_dir = tempdir("export-csv");
+    payment_api::batch::export(&o, &db.url, &DbTls::Off, &csv_dir, payment_api::batch::Format::Csv).await.unwrap();
     let mut tenants: Vec<u64> = m["tenants"].as_array().unwrap().iter().map(|t| t["tenant"].as_u64().unwrap()).collect();
     tenants.sort_unstable();
     let mut want = vec![a, b];
@@ -76,12 +80,22 @@ async fn export_reconcile_ingest() {
     let reports = dir.join("reports");
     std::fs::create_dir_all(&reports).unwrap();
     for t in [a, b] {
-        let internal = files::read_records(dir.join(format!("internal/{t}.csv")).to_str().unwrap()).unwrap();
-        let external = files::read_records(dir.join(format!("external/{t}.csv")).to_str().unwrap()).unwrap();
+        let path = |d: &std::path::Path, side: &str, ext: &str| d.join(format!("{side}/{t}.{ext}")).to_str().unwrap().to_string();
+        let (pi, pe) = (path(&dir, "internal", "h5ib"), path(&dir, "external", "h5ib"));
+        let (fi, fe) = (binfile::Mapped::open(&pi).unwrap().verify(&pi).unwrap(), binfile::Mapped::open(&pe).unwrap().verify(&pe).unwrap());
+        let rep = payment_reconcile::cpu_parallel_cols(fi.cols(), fe.cols(), false).unwrap();
+        let out = reports.join(format!("{t}.json"));
+        files::write_report_rows(out.to_str().unwrap(), &fi.cols(), &fe.cols(), &rep.internal, &rep.external, "parallel", 1.0).unwrap();
+        // The CSV path gives the same report, byte for byte.
+        let internal = files::read_records(&path(&csv_dir, "internal", "csv")).unwrap();
+        let external = files::read_records(&path(&csv_dir, "external", "csv")).unwrap();
         let r = Recon { internal, external };
         let rep = Engine::Parallel.run(&r).unwrap();
-        files::write_report(reports.join(format!("{t}.json")).to_str().unwrap(), &r, &rep, "parallel", 1.0).unwrap();
+        let csv_out = csv_dir.join(format!("{t}.json"));
+        files::write_report(csv_out.to_str().unwrap(), &r, &rep, "parallel", 1.0).unwrap();
+        assert_eq!(std::fs::read(&out).unwrap(), std::fs::read(&csv_out).unwrap());
     }
+    let _ = std::fs::remove_dir_all(&csv_dir);
 
     let s = payment_api::batch::ingest(&db.url, &DbTls::Off, "2026-11-01", &reports).await.unwrap();
     assert_eq!((s["reports"].as_u64(), s["exceptions"].as_u64()), (Some(2), Some(1)), "{s}");

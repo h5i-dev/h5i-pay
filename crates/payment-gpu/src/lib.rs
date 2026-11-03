@@ -22,7 +22,7 @@
 #[cfg(feature = "cuda")]
 mod cuda;
 #[cfg(feature = "cuda")]
-pub use cuda::{Gpu, Timings};
+pub use cuda::{ColTimings, ColsOut, Gpu, Timings};
 
 /// Whether this build has the CUDA engines.
 pub const BUILT_WITH_CUDA: bool = cfg!(feature = "cuda");

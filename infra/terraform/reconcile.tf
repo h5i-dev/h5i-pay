@@ -3,9 +3,12 @@
 #
 #   1. export  — ECS task (ops image): `h5i-pay export`, every tenant's
 #                internal records (payment kernel) and external records (PSP
-#                settlement report) to s3://<settlements>/runs/<run>/.
+#                settlement report) as binary records files (`.h5ib`,
+#                payment_batch::binfile) to s3://<settlements>/runs/<run>/.
 #   2. worker  — AWS Batch (GPU queue, CPU fallback on failure):
-#                `reconcile-run <run>`, reports to s3://<batch>/runs/<run>/reports/
+#                `reconcile-run <run>`: every tenant's pair in one long-lived
+#                `h5i-pay-batch jobs` process (the CUDA context is created
+#                once per run), reports to s3://<batch>/runs/<run>/reports/
 #                and the Object-Lock audit bucket.
 #   3. ingest  — ECS task (ops image): `h5i-pay ingest <run>`, reports and
 #                exceptions into the `ops` schema; operators read them with

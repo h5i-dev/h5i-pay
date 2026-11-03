@@ -18,6 +18,7 @@
 //! SERIALIZABLE transaction afterwards; reconciliation produces a report.
 //! No engine here — in particular not the GPU — commits financial state.
 
+pub mod binfile;
 pub mod files;
 pub mod policy_simd;
 

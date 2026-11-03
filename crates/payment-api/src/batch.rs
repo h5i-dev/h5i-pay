@@ -1,10 +1,12 @@
 //! The nightly batch reconciliation, around the GPU worker
 //! (`h5i-pay-batch`), which has no database access:
 //!
-//! 1. `h5i-pay export <dir>` ([`export`]): for every tenant with payments,
-//!    `internal/<tenant>.csv` from the payment kernel's state (the same
-//!    records `POST /v1/reconcile` compares), `external/<tenant>.csv` from
-//!    the PSP's settlement report, and `manifest.json`.
+//! 1. `h5i-pay export <dir> [--format binary|csv]` ([`export`]): for every
+//!    tenant with payments, `internal/<tenant>.h5ib` from the payment
+//!    kernel's state (the same records `POST /v1/reconcile` compares),
+//!    `external/<tenant>.h5ib` from the PSP's settlement report, and
+//!    `manifest.json`. Binary records files (`payment_batch::binfile`) by
+//!    default; `.csv` with `--format csv`.
 //! 2. The worker reconciles each pair (`batch-entrypoint.sh reconcile-run`)
 //!    and writes `reports/<tenant>.json`.
 //! 3. `h5i-pay ingest <run> <dir>` ([`ingest`]): stores each report and its
@@ -80,10 +82,43 @@ pub fn external_records(report: &[psp::SettlementRecord]) -> Vec<Record> {
         .collect()
 }
 
+/// The file format `export` writes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Format {
+    /// `payment_batch::binfile`, `.h5ib`.
+    Binary,
+    /// `payment_batch::files` records CSV, `.csv`.
+    Csv,
+}
+
+impl Format {
+    pub fn parse(s: &str) -> Option<Format> {
+        match s {
+            "binary" => Some(Format::Binary),
+            "csv" => Some(Format::Csv),
+            _ => None,
+        }
+    }
+
+    pub fn extension(self) -> &'static str {
+        match self {
+            Format::Binary => "h5ib",
+            Format::Csv => "csv",
+        }
+    }
+
+    fn write(self, path: &Path, rows: &[Record]) -> std::io::Result<()> {
+        match self {
+            Format::Binary => payment_batch::binfile::write(path, rows),
+            Format::Csv => payment_batch::files::write_records(path, rows),
+        }
+    }
+}
+
 /// Write every tenant's internal and external records under `dir`, and a
 /// manifest; returns the manifest. A tenant whose PSP report fails is
 /// listed with its error and left out; the others are still exported.
-pub async fn export(o: &Orchestrator, url: &str, tls: &DbTls, dir: &Path) -> Result<Value, BatchError> {
+pub async fn export(o: &Orchestrator, url: &str, tls: &DbTls, dir: &Path, format: Format) -> Result<Value, BatchError> {
     std::fs::create_dir_all(dir.join("internal"))?;
     std::fs::create_dir_all(dir.join("external"))?;
     let mut tenants = Vec::new();
@@ -108,11 +143,12 @@ pub async fn export(o: &Orchestrator, url: &str, tls: &DbTls, dir: &Path) -> Res
             }
         };
         let external = external_records(&report);
-        payment_batch::files::write_records(&dir.join(format!("internal/{t}.csv")), &internal)?;
-        payment_batch::files::write_records(&dir.join(format!("external/{t}.csv")), &external)?;
+        let ext = format.extension();
+        format.write(&dir.join(format!("internal/{t}.{ext}")), &internal)?;
+        format.write(&dir.join(format!("external/{t}.{ext}")), &external)?;
         tenants.push(json!({"tenant": t, "internal_rows": internal.len(), "external_rows": external.len()}));
     }
-    let manifest = json!({"event": "reconcile_export", "tenants": tenants, "failed": failed});
+    let manifest = json!({"event": "reconcile_export", "format": format.extension(), "tenants": tenants, "failed": failed});
     std::fs::write(dir.join("manifest.json"), serde_json::to_vec_pretty(&manifest).expect("json"))?;
     Ok(manifest)
 }

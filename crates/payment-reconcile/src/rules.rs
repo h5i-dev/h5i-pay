@@ -159,6 +159,44 @@ pub fn internal_row(x: &Record, external: &[Record], int: TableRef<'_>, ext: Tab
     (classify_internal(x, ic, ec, first), ef)
 }
 
+/// One side's records as four columns (the layout of the batch worker's
+/// binary records file, `payment_batch::binfile`): row `i` is
+/// `(key[i], amount[i], currency[i], status[i])`. All four have one length.
+#[derive(Clone, Copy, Debug)]
+pub struct Cols<'a> {
+    pub key: &'a [u64],
+    pub amount: &'a [u64],
+    pub currency: &'a [u32],
+    pub status: &'a [u32],
+}
+
+impl Cols<'_> {
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.key.len()
+    }
+
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.key.is_empty()
+    }
+
+    /// Row `i` as a record.
+    #[inline(always)]
+    pub fn get(&self, i: usize) -> Record {
+        Record { key: self.key[i], amount: self.amount[i], currency: self.currency[i], status: self.status[i] }
+    }
+}
+
+/// [`internal_row`] with the external side as columns.
+#[inline(always)]
+pub fn internal_row_cols(x: &Record, external: Cols<'_>, int: TableRef<'_>, ext: TableRef<'_>) -> (u32, u32) {
+    let (ic, _) = int.get(x.key);
+    let (ec, ef) = ext.get(x.key);
+    let first = if ec == 0 { None } else { Some(external.get(ef as usize)) };
+    (classify_internal(x, ic, ec, first.as_ref()), ef)
+}
+
 /// External row with key `k`: its code.
 #[inline(always)]
 pub fn external_row(k: u64, int: TableRef<'_>, ext: TableRef<'_>) -> u32 {

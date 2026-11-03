@@ -3,7 +3,8 @@
 # infra/terraform/reconcile.tf), in the ops image: the production h5i-pay
 # binary plus the AWS CLI. Same database credentials and TLS as the API.
 #
-#   export <run>   h5i-pay export, then upload to s3://$INPUT_BUCKET/runs/<run>/
+#   export <run>   h5i-pay export (binary records files), then upload to
+#                  s3://$INPUT_BUCKET/runs/<run>/
 #   ingest <run>   download s3://$OUTPUT_BUCKET/runs/<run>/reports/, h5i-pay ingest
 set -eu
 cmd=${1:-}

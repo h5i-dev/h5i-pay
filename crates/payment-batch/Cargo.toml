@@ -10,5 +10,6 @@ publish.workspace = true
 h5i-app-gpu.workspace = true
 payment-domain.workspace = true
 payment-reconcile.workspace = true
+memmap2.workspace = true
 rayon.workspace = true
 serde_json.workspace = true

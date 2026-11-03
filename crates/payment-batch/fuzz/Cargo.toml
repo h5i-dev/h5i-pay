@@ -1,0 +1,34 @@
+# `cargo fuzz` targets for the batch worker's input parsers (J1). Not part of
+# the workspace (libFuzzer needs a nightly toolchain); run from
+# crates/payment-batch:
+#   cargo +nightly fuzz run records_file -- -max_total_time=300
+#   cargo +nightly fuzz run records_csv -- -max_total_time=300
+[package]
+name = "payment-batch-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+payment-batch = { path = ".." }
+
+[[bin]]
+name = "records_file"
+path = "fuzz_targets/records_file.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "records_csv"
+path = "fuzz_targets/records_csv.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

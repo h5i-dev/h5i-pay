@@ -15,7 +15,29 @@ use h5i_app_gpu::batch::Backend;
 use h5i_app_gpu::differential::compare;
 use payment_batch::{synth, PolicyBatch, PolicyParallel, PolicySimd, PolicySingle, ReconCpu};
 use payment_reconcile::rules::{key, EMPTY, KIND_CAPTURE};
-use payment_reconcile::{reference, Engine, Recon, Record, Report};
+use payment_reconcile::{cpu_parallel_cols, reference, Cols, Engine, Recon, Record, Report};
+
+/// One side as owned columns (what a binary records file holds).
+struct Owned {
+    key: Vec<u64>,
+    amount: Vec<u64>,
+    currency: Vec<u32>,
+    status: Vec<u32>,
+}
+
+impl Owned {
+    fn of(rows: &[Record]) -> Owned {
+        Owned {
+            key: rows.iter().map(|r| r.key).collect(),
+            amount: rows.iter().map(|r| r.amount).collect(),
+            currency: rows.iter().map(|r| r.currency).collect(),
+            status: rows.iter().map(|r| r.status).collect(),
+        }
+    }
+    fn cols(&self) -> Cols<'_> {
+        Cols { key: &self.key, amount: &self.amount, currency: &self.currency, status: &self.status }
+    }
+}
 
 fn rec(k: u64, amount: u64) -> Record {
     Record { key: k, amount, currency: 392, status: 0 }
@@ -83,6 +105,24 @@ fn cpu_reconcile_engines_match_the_reference() {
     }
 }
 
+/// The parallel engine on columns (the binary records file's layout).
+#[test]
+fn cpu_column_engine_matches_the_reference() {
+    for (name, r) in recon_cases() {
+        let want = reference(&r).unwrap();
+        let (i, e) = (Owned::of(&r.internal), Owned::of(&r.external));
+        assert_eq!(cpu_parallel_cols(i.cols(), e.cols(), true).unwrap(), want, "{name}");
+        let codes = cpu_parallel_cols(i.cols(), e.cols(), false).unwrap();
+        assert_eq!((codes.internal, codes.external), (want.internal, want.external), "{name}");
+        assert!(codes.matched.is_empty());
+    }
+    let bad = Owned::of(&[rec(1, 1), rec(EMPTY, 1)]);
+    assert!(cpu_parallel_cols(Owned::of(&[]).cols(), bad.cols(), false).is_err());
+    let mut uneven = Owned::of(&[rec(1, 1)]);
+    uneven.status.clear();
+    assert!(cpu_parallel_cols(uneven.cols(), Owned::of(&[]).cols(), false).is_err());
+}
+
 #[test]
 fn cpu_policy_engines_match_the_verified_check() {
     for (name, b) in policy_cases() {
@@ -144,6 +184,34 @@ mod gpu {
         }
         let bad = Recon { internal: vec![], external: vec![rec(EMPTY, 1)] };
         assert!(g.run((), &bad).is_err(), "reserved key must be an error on the GPU too");
+    }
+
+    /// The column path: staged, chunked copies on a second stream, one-byte
+    /// codes, buffers cached across calls (sizes grow and shrink here, and
+    /// the 1.5M-row case spans several 8 MiB staging chunks per column).
+    #[test]
+    fn gpu_columns_match_the_reference() {
+        let mut g = gpu();
+        let mut cases = recon_cases();
+        cases.push(("synthetic 1.5M".into(), synth::recon(1_500_000, 15)));
+        cases.push(("empty again".into(), Recon::default()));
+        cases.push(("synthetic 257 again".into(), synth::recon(257, 257)));
+        for (name, r) in cases {
+            let want = reference(&r).unwrap();
+            let (i, e) = (Owned::of(&r.internal), Owned::of(&r.external));
+            for with_matched in [true, false] {
+                let out = g.reconcile_cols(i.cols(), e.cols(), with_matched).unwrap();
+                let ci: Vec<u32> = out.internal.iter().map(|c| *c as u32).collect();
+                let ce: Vec<u32> = out.external.iter().map(|c| *c as u32).collect();
+                assert_eq!(ci, want.internal, "{name}");
+                assert_eq!(ce, want.external, "{name}");
+                if with_matched {
+                    assert_eq!(out.matched.as_deref(), Some(&want.matched[..]), "{name}");
+                }
+            }
+        }
+        let bad = Owned::of(&[rec(EMPTY, 1)]);
+        assert!(g.reconcile_cols(Owned::of(&[]).cols(), bad.cols(), false).is_err());
     }
 
     #[test]

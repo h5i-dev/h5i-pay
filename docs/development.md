@@ -82,6 +82,30 @@ cargo run --release -p payment-gpu --features cuda --bin h5i-pay-batch -- \
   reconcile internal.csv external.csv report.json --engine auto
 ```
 
+The worker's file formats (records CSV, the binary records file, the
+report, the `jobs` list) are in [batch-files.md](batch-files.md). With a
+release build in `target/release`:
+
+```sh
+cargo build --release -p payment-gpu --features cuda --bin h5i-pay-batch
+cargo build --release -p h5i-pay-benchmarks --features gpu --bin bench
+target/release/bench gen-files 1000000 /tmp/j1 --csv                   # synthetic i/e, .h5ib and .csv
+target/release/h5i-pay-batch convert /tmp/j1/e.csv /tmp/j1/e2.h5ib     # CSV -> binary (and back)
+target/release/h5i-pay-batch reconcile /tmp/j1/i.h5ib /tmp/j1/e2.h5ib /tmp/j1/report.json --engine gpu
+echo '/tmp/j1/i.h5ib /tmp/j1/e.h5ib /tmp/j1/r2.json' | target/release/h5i-pay-batch jobs - --engine auto
+# J1's measurements: inputs on a real disk (cold runs evict them), deleted afterwards.
+benchmarks/j1-batch.sh target/release/h5i-pay-batch target/release/bench /mnt/scratch/h5i-pay-bench 10000000 5 j1.jsonl
+benchmarks/j1-summary.py j1.jsonl
+```
+
+The binary format's parsers have `cargo fuzz` targets (`records_file`,
+`records_csv`) in `crates/payment-batch/fuzz`, outside the workspace
+because libFuzzer needs a nightly toolchain:
+
+```sh
+cd crates/payment-batch && cargo +nightly fuzz run records_file -- -max_total_time=240
+```
+
 The end-to-end benchmark is `benchmarks/src/bin/e2e.rs` (`e2e seed`,
 `e2e measure`); the results and how they were taken are in
 [benchmarks.md](benchmarks.md).

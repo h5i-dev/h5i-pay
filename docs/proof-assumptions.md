@@ -238,8 +238,20 @@ committed history is such a sequence.
   libNVVM 12.6, the PTX JIT, the CUDA driver and hardware, `cust`, the
   committed PTX being the output of `build-device.sh` (`--check` rebuilds
   and compares), and the device crate's launch shell and `recon_build`
-  (the hash-table build with atomics). The SIMD policy engine is a
-  separate implementation checked against `check` by tests.
+  (the hash-table build with atomics). Since J1 the same holds for the
+  column entry points (`recon_build_cols`, `recon_internal_cols`,
+  `recon_external_cols`: one byte per code, `rules::internal_row_cols`)
+  and the host's staged, two-stream copies (`Gpu::reconcile_cols`), which
+  `gpu_columns_match_the_reference` checks row by row. The SIMD policy
+  engine is a separate implementation checked against `check` by tests.
+- **The batch worker's input files are parsed by trusted code.**
+  `payment_batch::binfile` (header, layout, length and checksum checks, the
+  column views of the mapping) and the records-CSV parser are tested
+  (truncated, oversized, misaligned, corrupted and random inputs) and
+  fuzzed (`crates/payment-batch/fuzz`), not proven. The checksum detects
+  corruption, not tampering. The engines still refuse the reserved key
+  (`validate_cols`), so a file that passes the format checks cannot break
+  the join's preconditions.
 - **The hash joins: the single-thread join is proven, the others are
   tested.** `join.rs` (open addressing, linear probing from `rules::hash`
   masked to the capacity, per key a row count and the lowest row index) is
@@ -255,7 +267,9 @@ committed history is such a sequence.
   differential tests (every engine against the reference on every row):
   - `cpu_parallel`'s radix partition and the mapping back to global
     indices (that a partition holds all rows of its keys, in increasing
-    order, so local first rows are the global ones);
+    order, so local first rows are the global ones), on records or, since
+    J1, on columns (`cpu_parallel_cols`), with a partition count that grows
+    with the input (`partitions`);
   - the SIMD engine's `Table` and vector probe;
   - the GPU's `recon_build` (CAS on the key, `atomicAdd` on the count,
     `atomicMin` on the first index) and its probe `find_slot`. They

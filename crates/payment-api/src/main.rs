@@ -49,15 +49,20 @@ use std::sync::Arc;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt().with_env_filter(tracing_subscriber::EnvFilter::from_default_env()).init();
     let args: Vec<String> = std::env::args().collect();
-    // `recover`, `export <dir>` and `ingest <run> <dir>` are one-shot jobs
-    // (scheduled ECS tasks); without a command the binary serves the API.
+    // `recover`, `export <dir> [--format binary|csv]` and `ingest <run>
+    // <dir>` are one-shot jobs (scheduled ECS tasks); without a command the
+    // binary serves the API.
     let job = match args.get(1).map(String::as_str) {
         None => None,
         Some("recover") => Some(Job::Recover),
-        Some("export") if args.len() == 3 => Some(Job::Export(args[2].clone())),
+        Some("export") if args.len() == 3 => Some(Job::Export(args[2].clone(), payment_api::batch::Format::Binary)),
+        Some("export") if args.len() == 5 && args[3] == "--format" => {
+            let f = payment_api::batch::Format::parse(&args[4]).ok_or("export --format: binary or csv")?;
+            Some(Job::Export(args[2].clone(), f))
+        }
         Some("ingest") if args.len() == 4 => Some(Job::Ingest(args[2].clone(), args[3].clone())),
         Some(other) => {
-            return Err(format!("unknown command {other:?}; expected none, `recover`, `export <dir>` or `ingest <run> <dir>`").into());
+            return Err(format!("unknown command {other:?}; expected none, `recover`, `export <dir> [--format binary|csv]` or `ingest <run> <dir>`").into());
         }
     };
     let recover = job.is_some();
@@ -107,7 +112,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // records which one.
         let o = payment_api::orchestrator::Orchestrator::new(ledger_engine, payments_engine, psp).acting_as(match job {
             Job::Recover => payment_storage::RECOVERY_OPERATOR,
-            Job::Export(_) | Job::Ingest(..) => payment_storage::EXPORT_OPERATOR,
+            Job::Export(..) | Job::Ingest(..) => payment_storage::EXPORT_OPERATOR,
         });
         match job {
             Job::Recover => {
@@ -115,8 +120,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{}", r.summary_json());
                 std::process::exit(if r.failed.is_empty() { 0 } else { 1 });
             }
-            Job::Export(dir) => {
-                let m = payment_api::batch::export(&o, &url, &tls, std::path::Path::new(&dir)).await?;
+            Job::Export(dir, format) => {
+                let m = payment_api::batch::export(&o, &url, &tls, std::path::Path::new(&dir), format).await?;
                 let failed = m["failed"].as_array().map_or(0, Vec::len);
                 println!("{}", serde_json::json!({"event": "reconcile_export", "tenants": m["tenants"].as_array().map_or(0, Vec::len), "tenants_failed": failed}));
                 std::process::exit(if failed == 0 { 0 } else { 1 });
@@ -147,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 enum Job {
     Recover,
-    Export(String),
+    Export(String, payment_api::batch::Format),
     Ingest(String, String),
 }
 
