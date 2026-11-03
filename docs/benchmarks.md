@@ -220,6 +220,67 @@ INSERTs; without history the audit fails, so only throughput is used.
   of the transactions. Shorter transactions overlap more. Not fixed.
 - The empty recovery pass did not move (9.8–10.0 ms; pre-G 6.5).
 
+### After H (h5i `a98bcbd`)
+
+The B4-era seeds (`e2e_seed_*`), three builds interleaved, order rotating,
+three rounds per size, `E2E_CLIENTS=8,32`, medians [range] (raw:
+`benchmarks/results/e2e-afterH-g5.xlarge.json`): G (`74225cd`), H1
+(`ca8bbca`, h5i `a45b6e3`: clock and writes pipelined) and H2 (range reads,
+h5i `a98bcbd`). All three ran the same harness, which since H2 also times
+the paged audit (`GET /v1/ledger/audit`, two calls after the first) and 20
+pages of 64 of a merchant's payments (`List`) and of account 0's journal
+(`Transfers`), compiled against each revision. Load average 1.6–2.5.
+
+| | build | 1k | 10k | 100k |
+|---|---|---:|---:|---:|
+| 8 clients, payments/s | G | 140.0 [140–143] | 142.7 [141–144] | 150.7 [151–153] |
+| | H1 | 174.2 [171–176] | 172.4 [163–174] | 190.0 [188–190] |
+| | H2 | 172.0 [170–175] | 171.4 [170–173] | 190.0 [188–191] |
+| … retries per run | G / H1 / H2 | 0–8 / 4–12 / 13–42 | 0–2 / 15–27 / 13–24 | 0 / 0–8 / 5–13 |
+| 32 clients, payments/s | G | 141.4 [141–143] | 142.3 [142–144] | 141.5 [141–143] |
+| | H1 | 181.6 [178–182] | 179.5 [176–181] | 181.7 [181–183] |
+| | H2 | 181.2 [176–182] | 179.9 [180–183] | 182.0 [180–185] |
+| … retries per run | G / H1 / H2 | 9–15 / 13–22 / 14–24 | 5–18 / 14–18 / 10–17 | 2–13 / 10–21 / 13–29 |
+| `POST /v1/payments`, p50 ms | G / H1 / H2 | 23.5 / 19.2 / 19.1 | 23.4 / 19.2 / 18.1 | 21.1 / 16.6 / 16.9 |
+| `GET /v1/payments/{id}`, p50 ms | G / H1 / H2 | 1.09 / 0.78 / 0.77 | 1.09 / 0.78 / 0.78 | 1.09 / 0.78 / 0.78 |
+| recovery pass, 5 to fix, ms | G / H1 / H2 | 75.2 / 61.9 / 61.3 | 73.3 / 60.8 / 62.1 | 89.1 / 74.1 / 74.5 |
+| recovery pass, nothing to fix, ms | G / H1 / H2 | 7.8 / 7.8 / 7.9 | 9.9 / 10.0 / 10.0 | 25.0 / 23.5 / 22.7 |
+| `POST /v1/reconcile`, one call (first period), p50 ms | G | 284.7 | 423.3 | 348.1 |
+| | H1 | 221.0 | 341.1 | 267.1 |
+| | H2 | 14.6 | 27.0 | 24.2 |
+| whole tenant, all periods, ms | G | 252.4 | 1251.1 | 9618.1 |
+| | H1 | 188.3 | 1004.3 | 7301.1 |
+| | H2 | 14.3 | 72.4 | 529.7 |
+| … kernel transactions | G and H1 / H2 | 196 / 4 | 762 / 12 | 7056 / 112 |
+| paged audit, ms | G | 376.1 | 8482.2 | 7577.6 |
+| | H1 | 355.0 | 8343.8 | 6340.1 |
+| | H2 | 78.1 | 404.9 | 4558.6 |
+| `List` page of 64, p50 ms | G / H1 / H2 | 4.35 / 3.98 / 1.68 | 4.37 / 4.03 / 1.67 | 4.34 / 4.03 / 1.70 |
+| journal page of 64, p50 ms | G / H1 / H2 | 5.77 / 5.47 / 1.39 | 22.4 / 22.1 / 1.40 | 2.42 / 2.08 / 1.60 |
+
+(The pre-G single reconciliation call, from "After G": 12.9 / 61.5 / 509
+ms. The sweep's exceptions are the same in every build: the Mock PSP does
+not know the seeded payments, 1,100 / 11,000 / 110,000 PSP-side, none
+ledger-side.)
+
+- **Throughput** is H1's: H2 changes no write path. Against G, +20–29%;
+  against pre-G (183–184 / 179–182 at 10k, "H1") within 1–7%.
+- **Retries** stay at H1's level or a little above (5–42 per run at 8
+  clients), about 1% of transactions; the aborts are `Create` pivots on the
+  `payments` insert (see "H1"). Not fixed.
+- **Reconciliation**: a period is now 4 kernel transactions (one `Range`,
+  one `RefundRange`, two `TransferRange`s) instead of up to 256, each one index
+  range. One call 15–27 ms (G 285–423), the whole tenant 14 / 72 / 530 ms
+  (G 252 / 1251 / 9618): 1.1–1.2× the pre-G single whole-tenant call at
+  10k and 100k, and bounded per call.
+- **Paging**: a 64-row page is 1.4–1.7 ms at every size (G 2.4–22 ms; the
+  OR of 64 equalities cost planning time, and at 10k the journal's plan
+  was 22 ms, not traced). The paged audit is 5–21× faster at 1k and 10k;
+  at 100k only 1.7× (4.6 s): it reads about 3,400 journal pages of 64 and
+  is now bound by their number. Larger journal pages for the audit would
+  cut that; not done.
+- The empty recovery pass did not move (it is `open_payments`, G5).
+
 ### The batch worker, with its files
 
 `h5i-pay-batch reconcile` on CSV files in the page cache (local disk, not

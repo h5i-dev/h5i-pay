@@ -22,19 +22,19 @@ repository = "https://github.com/h5i-dev/h5i-pay"
 
 [workspace.dependencies]
 # Every h5i-app crate, and `h5i_app_lib` in proofs/*/lakefile.lean, from one
-# commit of github.com/h5i-dev/h5i: branch `app/range-reads` (H1, H2), not
-# yet merged or released. It is h5i-app 0.5.2 (main 02ccdde, published to
-# crates.io) plus the clock read and the writes pipelined (H1) and range
-# comparisons in reads (H2). Until it is released, h5i-pay depends on that
-# branch's commit by git rev.
-h5i-app = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
-h5i-app-core = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
-h5i-app-pg = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
-h5i-app-http = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
-h5i-app-json = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
-h5i-app-schema = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
-h5i-app-sql = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
-h5i-app-gpu = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
+# commit of github.com/h5i-dev/h5i: branch `app/range-compare` (H2, range
+# comparisons in reads), not merged yet. It is h5i main b1c7886, which has
+# H1 (the clock read and the writes pipelined; PR #773, squash-merged as
+# ae87ef7), plus one commit. Once it is merged, pin the main commit; once
+# h5i-app is released with it, go back to a crates.io version.
+h5i-app = { git = "https://github.com/h5i-dev/h5i", rev = "a98bcbdfe7a8dac618d0016424adf0f3ced3b772" }
+h5i-app-core = { git = "https://github.com/h5i-dev/h5i", rev = "a98bcbdfe7a8dac618d0016424adf0f3ced3b772" }
+h5i-app-pg = { git = "https://github.com/h5i-dev/h5i", rev = "a98bcbdfe7a8dac618d0016424adf0f3ced3b772" }
+h5i-app-http = { git = "https://github.com/h5i-dev/h5i", rev = "a98bcbdfe7a8dac618d0016424adf0f3ced3b772" }
+h5i-app-json = { git = "https://github.com/h5i-dev/h5i", rev = "a98bcbdfe7a8dac618d0016424adf0f3ced3b772" }
+h5i-app-schema = { git = "https://github.com/h5i-dev/h5i", rev = "a98bcbdfe7a8dac618d0016424adf0f3ced3b772" }
+h5i-app-sql = { git = "https://github.com/h5i-dev/h5i", rev = "a98bcbdfe7a8dac618d0016424adf0f3ced3b772" }
+h5i-app-gpu = { git = "https://github.com/h5i-dev/h5i", rev = "a98bcbdfe7a8dac618d0016424adf0f3ced3b772" }
 
 payment-ledger = { path = "crates/payment-ledger" }
 payment-domain = { path = "crates/payment-domain" }

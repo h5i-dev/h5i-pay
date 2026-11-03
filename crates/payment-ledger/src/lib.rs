@@ -86,6 +86,10 @@ pub const MAX_BATCH: usize = 64;
 /// The most accounts one `Accounts` page covers (sequence numbers per page).
 pub const MAX_PAGE: u32 = 64;
 
+/// The most ids one `TransferRange` covers (H2): one reconciliation period
+/// (`payment_api::orchestrator::MAX_PERIOD`), read as one id range.
+pub const MAX_RANGE: u32 = 4096;
+
 h5i_app_schema::schema! {
     mapping ledger_tables for payment_ledger, writes Write, lean "../../proofs/ledger/generated/LedgerSchema.lean";
 
@@ -213,7 +217,8 @@ pub enum Command {
     /// numbered `from` to `from + limit - 1`, `limit` at most `MAX_PAGE`.
     History { account: u64, from: u64, limit: u32 },
     /// The transfers with ids `from` to `from + limit - 1` (operators only,
-    /// G6), in table order; the reply's `next` is always `None`.
+    /// G6), `limit` at most `MAX_RANGE`, in table order; the reply's `next`
+    /// is always `None`.
     /// Reconciliation reads a period's system postings with it: their ids
     /// are contiguous per kind of posting.
     TransferRange { from: u64, limit: u32 },
@@ -268,7 +273,7 @@ pub enum Error {
     InvalidFlags,
     EmptyBatch,
     BatchTooLarge,
-    /// A page limit of 0 or above `MAX_PAGE`.
+    /// A page limit of 0 or above `MAX_PAGE` (`MAX_RANGE` for `TransferRange`).
     BadPage,
 }
 
@@ -680,7 +685,7 @@ fn transfer_ids(s: &Snapshot, from: u64, end: u64) -> Vec<Transfer> {
 }
 
 fn transfer_range(actor: &Principal, s: &Snapshot, from: u64, limit: u32) -> Outcome {
-    if limit == 0 || limit > MAX_PAGE {
+    if limit == 0 || limit > MAX_RANGE {
         return Err(Error::BadPage);
     }
     if !is_operator(actor) {
@@ -751,15 +756,21 @@ fn accounts_of(t: &TransferReq) -> h5i_app_sql::Pred {
     p_or(p_eq(ACCOUNT_ID, v_int(t.debit)), p_eq(ACCOUNT_ID, v_int(t.credit)))
 }
 
-/// `col` holds one of `from`, …, `end - 1` (`from < end`).
+/// The first `u64` stored as a negative `BIGINT`: `Column::to_val` keeps a
+/// `u64`'s 64 bits, so keys from 2^63 up sort below 0 in PostgreSQL.
+pub const SIGN: u64 = 0x8000_0000_0000_0000;
+
+/// `col` holds one of `from`, …, `end - 1` (`from < end`): one index range
+/// (`col >= from AND col < end`). In `BIGINT` order the ids wrap at 2^63, so
+/// a range that crosses it is `col >= from OR col < end`.
 fn seq_range(col: u32, from: u64, end: u64) -> h5i_app_sql::Pred {
-    let mut p = p_eq(col, v_int(from));
-    let mut x = from + 1;
-    while x < end {
-        p = p_or(p, p_eq(col, v_int(x)));
-        x += 1;
+    let ge = h5i_app_sql::Pred::Ge { col, val: v_int(from) };
+    let lt = h5i_app_sql::Pred::Lt { col, val: v_int(end) };
+    if from < SIGN && end >= SIGN {
+        p_or(ge, lt)
+    } else {
+        h5i_app_sql::Pred::And(Box::new(ge), Box::new(lt))
     }
-    p
 }
 
 /// `account`'s history entries numbered `from` to `end - 1` (`from < end`).
@@ -892,7 +903,7 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
         }
         Command::TransferRange { from, limit } => {
             let mut out = Vec::new();
-            if *limit != 0 && *limit <= MAX_PAGE && is_operator(actor) {
+            if *limit != 0 && *limit <= MAX_RANGE && is_operator(actor) {
                 let end = page_end(*from, *limit);
                 if *from < end {
                     out.push(rd_where(T_TRANSFERS, seq_range(TRANSFER_ID, *from, end)));

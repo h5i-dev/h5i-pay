@@ -30,6 +30,8 @@ def Window.abs (w : h5i_app_sql.Window) : Window := ⟨w.desc, w.offset.val, w.l
 def Pred.abs : h5i_app_sql.Pred → Pred Val
   | .All => .all
   | .Eq c v => .eq c.val v
+  | .Ge c v => .ge c.val v
+  | .Lt c v => .lt c.val v
   | .In c t p o w => .isIn c.val t.val (Pred.abs p) o.val (Window.abs w)
   | .And p q => .and (Pred.abs p) (Pred.abs q)
   | .Or p q => .or (Pred.abs p) (Pred.abs q)
@@ -53,10 +55,14 @@ def resultA : PspResult → List (Read Val)
 /-- `page_end` in numbers: `f + l`, or `U64.max` if that overflows. -/
 def pageEndN (f l : Nat) : Nat := if f > U64.max - l then U64.max else f + l
 
-def rangeStep (c : Nat) (p : Pred Val) (y : Nat) : Pred Val := .or p (.eq c (int y))
+/-- Where `BIGINT` order wraps the `u64` ids: `int` keeps a `u64`'s bits,
+so ids from 2^63 up are negative. -/
+abbrev signN : Nat := 2 ^ 63
 
-/-- Column `c` holds one of `f`, …, `x - 1` (`seq_range`). -/
-def rangeA (c f x : Nat) : Pred Val := (List.range' (f + 1) (x - (f + 1))).foldl (rangeStep c) (.eq c (int f))
+/-- Column `c` holds one of `f`, …, `x - 1` (`seq_range`, H2): `c ≥ f` and
+`c < x` as `BIGINT`s, or, for a range that crosses 2^63, `c ≥ f` or `c < x`. -/
+def rangeA (c f x : Nat) : Pred Val :=
+  if f < signN ∧ signN ≤ x then .or (.ge c (int f)) (.lt c (int x)) else .and (.ge c (int f)) (.lt c (int x))
 
 /-- A `List` page that is not refused: `merchant`'s payments numbered
 `from` to `end - 1`, and the merchant's counter. -/
@@ -100,10 +106,10 @@ def readsA (a : Principal) : Command → Option (List (Read Val))
     if l.val ≠ 0 ∧ l.val ≤ 64 ∧ a.operator = true then some (histA p f.val (pageEndN f.val l.val))
     else some []
   | .Range f l =>
-    if l.val ≠ 0 ∧ l.val ≤ 64 ∧ a.operator = true then some (rangePageA f.val (pageEndN f.val l.val))
+    if l.val ≠ 0 ∧ l.val ≤ 4096 ∧ a.operator = true then some (rangePageA f.val (pageEndN f.val l.val))
     else some []
   | .RefundRange f l =>
-    if l.val ≠ 0 ∧ l.val ≤ 64 ∧ a.operator = true then some (refundPageA f.val (pageEndN f.val l.val))
+    if l.val ≠ 0 ∧ l.val ≤ 4096 ∧ a.operator = true then some (refundPageA f.val (pageEndN f.val l.val))
     else some []
 
 /-! ## The extracted plans compute `readsA` -/
@@ -131,43 +137,23 @@ theorem page_end_spec (f : U64) (l : U32) : page_end f l ⦃ e => e.val = pageEn
   step*
   all_goals simp_all [core.num.U64.MAX, U64.rMax] <;> scalar_tac
 
-theorem rangeA_succ (c f x : Nat) (h : f < x) : rangeA c f (x + 1) = rangeStep c (rangeA c f x) x := by
-  unfold rangeA
-  have : x + 1 - (f + 1) = (x - (f + 1)) + 1 := by omega
-  rw [this, List.range'_concat, List.foldl_append]
-  have : f + 1 + (x - (f + 1)) = x := by omega
-  simp [this]
-
-theorem seq_range_loop_spec (col : U32) (e : U64) (f : Nat) (p : h5i_app_sql.Pred) (x : U64)
-    (hfx : f < x.val) (hxe : x.val ≤ e.val) (hp : Pred.abs p = rangeA col.val f x.val) :
-    seq_range_loop col e p x ⦃ r => Pred.abs r = rangeA col.val f e.val ⦄ := by
-  unfold seq_range_loop
-  apply loop.spec_decr_nat (measure := fun (y : h5i_app_sql.Pred × U64) => e.val - y.2.val)
-    (inv := fun y => f < y.2.val ∧ y.2.val ≤ e.val ∧ Pred.abs y.1 = rangeA col.val f y.2.val)
-  · rintro ⟨q, y⟩ ⟨h1, h2, h3⟩
-    unfold seq_range_loop.body
-    simp only at h1 h2 h3 ⊢
-    split
-    · rename_i hlt
-      simp only [v_int_eq, p_eq, p_or, bind_ok]
-      have : y.val + 1 ≤ U64.max := by scalar_tac
-      step*
-      refine ⟨by scalar_tac, by scalar_tac, ?_, by scalar_tac⟩
-      rw [x1_post, rangeA_succ _ _ _ h1, ← h3]; rfl
-    · rename_i hge
-      simp only [WP.spec_ok]
-      have : y.val = e.val := by scalar_tac
-      rw [h3, this]
-  · exact ⟨hfx, hxe, hp⟩
-
 theorem seq_range_spec (col : U32) (f e : U64) (h : f.val < e.val) :
     seq_range col f e ⦃ r => Pred.abs r = rangeA col.val f.val e.val ⦄ := by
-  unfold seq_range
-  simp only [v_int_eq, p_eq, bind_ok]
-  have : f.val + 1 ≤ U64.max := by scalar_tac
-  step*
-  apply seq_range_loop_spec col e f.val _ _ (by scalar_tac) (by scalar_tac)
-  rw [x_post]; simp [rangeA, Pred.abs]
+  unfold seq_range rangeA
+  simp only [v_int_eq, p_or, bind_ok]
+  have hs : SIGN.val = signN := by simp [SIGN, signN]
+  split
+  · rename_i h1
+    split
+    · rename_i h2
+      have : f.val < signN ∧ signN ≤ e.val := ⟨by scalar_tac, by scalar_tac⟩
+      simp [Pred.abs, this]
+    · rename_i h2
+      have : ¬ (f.val < signN ∧ signN ≤ e.val) := by scalar_tac
+      simp [Pred.abs, this]
+  · rename_i h1
+    have : ¬ (f.val < signN ∧ signN ≤ e.val) := by scalar_tac
+    simp [Pred.abs, this]
 
 /-- The extracted `reads` computes `readsA`. -/
 theorem reads_abs (a : Principal) (c : Command) : ∃ o, reads a c = ok o ∧ planOf o = readsA a c := by
@@ -295,14 +281,14 @@ theorem reads_abs (a : Principal) (c : Command) : ∃ o, reads a c = ok o ∧ pl
     by_cases h0 : l = 0#u32
     · subst h0; simp [planOf]
     have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
-    by_cases hm : l ≤ MAX_PAGE
-    · have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+    by_cases hm : l ≤ MAX_RANGE
+    · have hm' : l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       cases ha : a.operator
       · simp [h0, hm, ha, h0', hm', planOf]
       · simp only [h0, hm, ha, h0', hm', bne_iff_ne, ne_eq, not_false_eq_true, if_true, is_operator_eq, bind_ok,
           true_and, and_self, Bool.and_true, decide_true, Bool.true_and, and_true]
         exact page
-    · have hm' : ¬ l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+    · have hm' : ¬ l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       simp [h0, hm, hm', planOf]
   case RefundRange f l =>
     obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
@@ -334,14 +320,14 @@ theorem reads_abs (a : Principal) (c : Command) : ∃ o, reads a c = ok o ∧ pl
     by_cases h0 : l = 0#u32
     · subst h0; simp [planOf]
     have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
-    by_cases hm : l ≤ MAX_PAGE
-    · have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+    by_cases hm : l ≤ MAX_RANGE
+    · have hm' : l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       cases ha : a.operator
       · simp [h0, hm, ha, h0', hm', planOf]
       · simp only [h0, hm, ha, h0', hm', bne_iff_ne, ne_eq, not_false_eq_true, if_true, is_operator_eq, bind_ok,
           true_and, and_self, Bool.and_true, decide_true, Bool.true_and, and_true]
         exact page
-    · have hm' : ¬ l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+    · have hm' : ¬ l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       simp [h0, hm, hm', planOf]
   all_goals simp [reads, readsA, rd_where, p_eq, h5i_app_sql.whole, planOf, Read.abs, Pred.abs,
     Window.abs, eqU, alloc.vec.Vec.push, alloc.vec.Vec.new, T_PAYMENTS, T_REFUNDS, T_REFS, T_COUNTER,

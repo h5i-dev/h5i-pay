@@ -742,7 +742,7 @@ impl Orchestrator {
 
     /// The payment kernel's reconciliation records of the whole tenant
     /// ([`payment_reconcile::inputs::internal_records`]), read in `Range`
-    /// pages of `MAX_PAGE` ids, each its own read-only transaction, instead
+    /// pages of `MAX_RANGE` ids, each its own read-only transaction, instead
     /// of one snapshot (G6; the export). A page and the ones after it can
     /// see payments the earlier pages did not: the result is not one
     /// instant of the tenant, but every id below the counter as it was
@@ -751,7 +751,7 @@ impl Orchestrator {
         let mut out = Vec::new();
         let mut at = 0;
         loop {
-            let (rows, next) = self.records_page(tenant, at, d::MAX_PAGE).await?;
+            let (rows, next) = self.records_page(tenant, at, d::MAX_RANGE).await?;
             out.extend(rows);
             match next {
                 Some(n) => at = n,
@@ -793,7 +793,8 @@ impl Orchestrator {
         if to < from || to - from > MAX_PERIOD || to > 1 << 56 {
             return Err(OrchError::BadRequest(format!("a period is at most {MAX_PERIOD} ids below 2^56")));
         }
-        let page = u64::from(d::MAX_PAGE);
+        // One page per table and kind of posting (H2: a range read).
+        let page = u64::from(d::MAX_RANGE).min(u64::from(l::MAX_RANGE));
         let op_l = self.op_l(tenant);
         let mut internal = Vec::new();
         let mut closed = false;
@@ -856,9 +857,11 @@ impl Orchestrator {
 }
 
 /// The most ids one reconciliation period covers (`POST /v1/reconcile`,
-/// G6): 64 `Range` and 64 `RefundRange` pages of the payment kernel, 128 `TransferRange` pages
-/// of the ledger and one period of the PSP's report.
+/// G6): since H2 one `Range` and one `RefundRange` of the payment kernel,
+/// two `TransferRange`s of the ledger (captures, refund settlements), each
+/// one id-range read, and one period of the PSP's report.
 pub const MAX_PERIOD: u64 = 4096;
+const _: () = assert!(MAX_PERIOD == d::MAX_RANGE as u64 && MAX_PERIOD == l::MAX_RANGE as u64);
 
 /// One reconciliation period (G6): the inputs whose ids are in
 /// `[from, to)`.

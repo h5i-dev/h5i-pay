@@ -20,7 +20,7 @@ set_option maxRecDepth 2048
 namespace payment_domain
 
 /-- [h5i_app_sql::Val]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 8:0-8:12
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 8:0-8:12
     Name pattern: [h5i_app_sql::Val]
     Visibility: public -/
 @[discriminant isize, rust_type "h5i_app_sql::Val"]
@@ -32,7 +32,7 @@ inductive h5i_app_sql.Val where
 | Null : h5i_app_sql.Val
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for u64}::to_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 25:4-25:27
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 25:4-25:27
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u64>}::to_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u64>}::to_val"]
@@ -42,7 +42,7 @@ def U64.Insts.H5i_app_sqlColumn.to_val
   ok (h5i_app_sql.Val.Int i)
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for u64}::from_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 28:4-28:39
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 28:4-28:39
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u64>}::from_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u64>}::from_val"]
@@ -58,7 +58,7 @@ def U64.Insts.H5i_app_sqlColumn.from_val
   | h5i_app_sql.Val.Null => ok none
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for u32}::to_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 37:4-37:27
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 37:4-37:27
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u32>}::to_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u32>}::to_val"]
@@ -68,7 +68,7 @@ def U32.Insts.H5i_app_sqlColumn.to_val
   ok (h5i_app_sql.Val.Int i)
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for u32}::from_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 40:4-40:39
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 40:4-40:39
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u32>}::from_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u32>}::from_val"]
@@ -90,7 +90,7 @@ def U32.Insts.H5i_app_sqlColumn.from_val
   | h5i_app_sql.Val.Null => ok none
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for bool}::to_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 55:4-55:27
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 55:4-55:27
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<bool>}::to_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<bool>}::to_val"]
@@ -99,7 +99,7 @@ def Bool.Insts.H5i_app_sqlColumn.to_val
   ok (h5i_app_sql.Val.Bool self)
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for bool}::from_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 58:4-58:40
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 58:4-58:40
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<bool>}::from_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<bool>}::from_val"]
@@ -113,7 +113,7 @@ def Bool.Insts.H5i_app_sqlColumn.from_val
   | h5i_app_sql.Val.Null => ok none
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for alloc::vec::Vec<u8>}::to_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 67:4-67:27
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 67:4-67:27
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<alloc::vec::Vec<u8>>}::to_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<alloc::vec::Vec<u8>>}::to_val"]
@@ -123,7 +123,7 @@ def alloc.vec.VecU8.Insts.H5i_app_sqlColumn.to_val
   ok (h5i_app_sql.Val.Bytes v)
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for alloc::vec::Vec<u8>}::from_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 70:4-70:43
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 70:4-70:43
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<alloc::vec::Vec<u8>>}::from_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<alloc::vec::Vec<u8>>}::from_val"]
@@ -139,7 +139,7 @@ def alloc.vec.VecU8.Insts.H5i_app_sqlColumn.from_val
   | h5i_app_sql.Val.Null => ok none
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Zero for u64}::zero]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 104:4-104:20
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 104:4-104:20
     Name pattern: [h5i_app_sql::{h5i_app_sql::Zero<u64>}::zero]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Zero<u64>}::zero"]
@@ -147,7 +147,7 @@ def U64.Insts.H5i_app_sqlZero.zero : Result Std.U64 := do
   ok 0#u64
 
 /-- [h5i_app_sql::val_eq]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 134:0-134:39
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 134:0-134:39
     Name pattern: [h5i_app_sql::val_eq]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::val_eq"]
@@ -193,7 +193,7 @@ def h5i_app_sql.val_eq
     | h5i_app_sql.Val.Null => ok true
 
 /-- [h5i_app_sql::has_col]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 160:0-160:59
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 160:0-160:59
     Name pattern: [h5i_app_sql::has_col]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::has_col"]
@@ -213,7 +213,7 @@ def h5i_app_sql.has_col
   else ok false
 
 /-- [h5i_app_sql::Write]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 171:0-171:14
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 171:0-171:14
     Name pattern: [h5i_app_sql::Write]
     Visibility: public -/
 @[discriminant isize, rust_type "h5i_app_sql::Write"]
@@ -227,7 +227,7 @@ inductive h5i_app_sql.Write where
 | DelWhere : Std.U32 → Std.U32 → h5i_app_sql.Val → h5i_app_sql.Write
 
 /-- [h5i_app_sql::Window]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 237:0-237:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 237:0-237:17
     Name pattern: [h5i_app_sql::Window]
     Visibility: public -/
 @[rust_type "h5i_app_sql::Window"]
@@ -237,7 +237,7 @@ structure h5i_app_sql.Window where
   limit : Option Std.U64
 
 /-- [h5i_app_sql::whole]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 244:0-244:24
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 244:0-244:24
     Name pattern: [h5i_app_sql::whole]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::whole"]
@@ -245,13 +245,15 @@ def h5i_app_sql.whole : Result h5i_app_sql.Window := do
   ok { desc := false, offset := 0#u64, limit := none }
 
 /-- [h5i_app_sql::Pred]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 250:0-250:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 250:0-250:13
     Name pattern: [h5i_app_sql::Pred]
     Visibility: public -/
 @[discriminant isize, rust_type "h5i_app_sql::Pred"]
 inductive h5i_app_sql.Pred where
 | All : h5i_app_sql.Pred
 | Eq : Std.U32 → h5i_app_sql.Val → h5i_app_sql.Pred
+| Ge : Std.U32 → h5i_app_sql.Val → h5i_app_sql.Pred
+| Lt : Std.U32 → h5i_app_sql.Val → h5i_app_sql.Pred
 | In :
   Std.U32 →
   Std.U32 →
@@ -263,7 +265,7 @@ inductive h5i_app_sql.Pred where
 | Or : h5i_app_sql.Pred → h5i_app_sql.Pred → h5i_app_sql.Pred
 
 /-- [h5i_app_sql::Read]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 265:0-265:15
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 271:0-271:15
     Name pattern: [h5i_app_sql::Read]
     Visibility: public -/
 @[rust_type "h5i_app_sql::Read"]
@@ -273,7 +275,7 @@ structure h5i_app_sql.Read where
   window : h5i_app_sql.Window
 
 /-- [payment_domain::Payment]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure Payment where
   id : Std.U64
@@ -293,7 +295,7 @@ structure Payment where
   changes : Std.U64
 
 /-- [payment_domain::Refund]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure Refund where
   id : Std.U64
@@ -303,7 +305,7 @@ structure Refund where
   operator : Std.U64
 
 /-- [payment_domain::Event]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure Event where
   id : Std.U64
@@ -311,7 +313,7 @@ structure Event where
   operator : Std.U64
 
 /-- [payment_domain::PspRef]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure PspRef where
   payment : Std.U64
@@ -319,14 +321,14 @@ structure PspRef where
   operator : Std.U64
 
 /-- [payment_domain::MerchantCounter]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure MerchantCounter where
   merchant : Std.U64
   next : Std.U64
 
 /-- [payment_domain::HistoryEntry]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure HistoryEntry where
   payment : Std.U64
@@ -348,83 +350,83 @@ structure HistoryEntry where
   pending_after : Std.U64
 
 /-- [payment_domain::Counter]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure Counter where
   next_id : Std.U64
 
 /-- [payment_domain::{payment_domain::Payment}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def Payment.TABLE : Std.U32 := 0#u32
 
 /-- [payment_domain::{payment_domain::Refund}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def Refund.TABLE : Std.U32 := 1#u32
 
 /-- [payment_domain::{payment_domain::Event}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def Event.TABLE : Std.U32 := 2#u32
 
 /-- [payment_domain::{payment_domain::PspRef}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def PspRef.TABLE : Std.U32 := 3#u32
 
 /-- [payment_domain::{payment_domain::Counter}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def Counter.TABLE : Std.U32 := 4#u32
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def MerchantCounter.TABLE : Std.U32 := 5#u32
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def HistoryEntry.TABLE : Std.U32 := 6#u32
 
 /-- [payment_domain::{payment_domain::Payment}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def Payment.KEY_LEN : Std.U32 := 1#u32
 
 /-- [payment_domain::{payment_domain::Refund}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def Refund.KEY_LEN : Std.U32 := 1#u32
 
 /-- [payment_domain::{payment_domain::Event}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def Event.KEY_LEN : Std.U32 := 1#u32
 
 /-- [payment_domain::{payment_domain::PspRef}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def PspRef.KEY_LEN : Std.U32 := 1#u32
 
 /-- [payment_domain::{payment_domain::Counter}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def Counter.KEY_LEN : Std.U32 := 0#u32
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def MerchantCounter.KEY_LEN : Std.U32 := 1#u32
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def HistoryEntry.KEY_LEN : Std.U32 := 2#u32
 
 /-- [payment_domain::{payment_domain::Payment}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def Payment.to_row
   (self : Payment) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
@@ -460,7 +462,7 @@ def Payment.to_row
   alloc.vec.Vec.push out13 v14
 
 /-- [payment_domain::{payment_domain::Refund}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def Refund.to_row
   (self : Refund) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
@@ -476,7 +478,7 @@ def Refund.to_row
   alloc.vec.Vec.push out3 v4
 
 /-- [payment_domain::{payment_domain::Event}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def Event.to_row (self : Event) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
   let v ← U64.Insts.H5i_app_sqlColumn.to_val self.id
@@ -487,7 +489,7 @@ def Event.to_row (self : Event) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
   alloc.vec.Vec.push out1 v2
 
 /-- [payment_domain::{payment_domain::PspRef}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def PspRef.to_row
   (self : PspRef) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
@@ -499,7 +501,7 @@ def PspRef.to_row
   alloc.vec.Vec.push out1 v2
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def MerchantCounter.to_row
   (self : MerchantCounter) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
@@ -509,7 +511,7 @@ def MerchantCounter.to_row
   alloc.vec.Vec.push out v1
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def HistoryEntry.to_row
   (self : HistoryEntry) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
@@ -549,7 +551,7 @@ def HistoryEntry.to_row
   alloc.vec.Vec.push out15 v16
 
 /-- [payment_domain::{payment_domain::Counter}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def Counter.to_row
   (self : Counter) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
@@ -557,7 +559,7 @@ def Counter.to_row
   alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Val) v
 
 /-- [payment_domain::{payment_domain::Counter}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def Counter.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option Counter) := do
@@ -575,7 +577,7 @@ def Counter.from_row
     | some x => ok (some { next_id := x })
 
 /-- [payment_domain::{payment_domain::Payment}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def Payment.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option Payment) := do
@@ -747,7 +749,7 @@ def Payment.from_row
                                     })
 
 /-- [payment_domain::{payment_domain::Refund}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def Refund.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option Refund) := do
@@ -809,7 +811,7 @@ def Refund.from_row
                 })
 
 /-- [payment_domain::{payment_domain::Event}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def Event.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option Event) := do
@@ -846,7 +848,7 @@ def Event.from_row
           ok (some { id := x, payment := x1, operator := x2 })
 
 /-- [payment_domain::{payment_domain::PspRef}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def PspRef.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option PspRef) := do
@@ -883,7 +885,7 @@ def PspRef.from_row
           ok (some { payment := x, reference := x1, operator := x2 })
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def MerchantCounter.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option MerchantCounter) := do
@@ -911,7 +913,7 @@ def MerchantCounter.from_row
         ok (some { merchant := x, next := x1 })
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def HistoryEntry.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option HistoryEntry) := do
@@ -1107,7 +1109,7 @@ def HistoryEntry.from_row
                                         })
 
 /-- [payment_domain::{payment_domain::Payment}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def Payment.from_rows_loop.body
@@ -1134,7 +1136,7 @@ def Payment.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_domain::{payment_domain::Payment}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def Payment.from_rows_loop
@@ -1147,7 +1149,7 @@ def Payment.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_domain::{payment_domain::Payment}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def Payment.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -1160,7 +1162,7 @@ def Payment.from_rows
   else ok none
 
 /-- [payment_domain::{payment_domain::Refund}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def Refund.from_rows_loop.body
@@ -1187,7 +1189,7 @@ def Refund.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_domain::{payment_domain::Refund}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def Refund.from_rows_loop
@@ -1200,7 +1202,7 @@ def Refund.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_domain::{payment_domain::Refund}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def Refund.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -1213,7 +1215,7 @@ def Refund.from_rows
   else ok none
 
 /-- [payment_domain::{payment_domain::Event}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def Event.from_rows_loop.body
@@ -1240,7 +1242,7 @@ def Event.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_domain::{payment_domain::Event}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def Event.from_rows_loop
@@ -1253,7 +1255,7 @@ def Event.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_domain::{payment_domain::Event}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def Event.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -1266,7 +1268,7 @@ def Event.from_rows
   else ok none
 
 /-- [payment_domain::{payment_domain::PspRef}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def PspRef.from_rows_loop.body
@@ -1293,7 +1295,7 @@ def PspRef.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_domain::{payment_domain::PspRef}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def PspRef.from_rows_loop
@@ -1306,7 +1308,7 @@ def PspRef.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_domain::{payment_domain::PspRef}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def PspRef.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -1319,7 +1321,7 @@ def PspRef.from_rows
   else ok none
 
 /-- [payment_domain::{payment_domain::Counter}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def Counter.from_rows_loop.body
@@ -1346,7 +1348,7 @@ def Counter.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_domain::{payment_domain::Counter}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def Counter.from_rows_loop
@@ -1359,7 +1361,7 @@ def Counter.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_domain::{payment_domain::Counter}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def Counter.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -1372,7 +1374,7 @@ def Counter.from_rows
   else ok none
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def MerchantCounter.from_rows_loop.body
@@ -1399,7 +1401,7 @@ def MerchantCounter.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def MerchantCounter.from_rows_loop
@@ -1413,7 +1415,7 @@ def MerchantCounter.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def MerchantCounter.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -1427,7 +1429,7 @@ def MerchantCounter.from_rows
   else ok none
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def HistoryEntry.from_rows_loop.body
@@ -1454,7 +1456,7 @@ def HistoryEntry.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def HistoryEntry.from_rows_loop
@@ -1467,7 +1469,7 @@ def HistoryEntry.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def HistoryEntry.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -1481,42 +1483,42 @@ def HistoryEntry.from_rows
   else ok none
 
 /-- [payment_domain::{payment_domain::Payment}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def Payment.sql_put (self : Payment) : Result h5i_app_sql.Write := do
   let v ← Payment.to_row self
   ok (h5i_app_sql.Write.Put Payment.TABLE Payment.KEY_LEN v)
 
 /-- [payment_domain::{payment_domain::Refund}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def Refund.sql_put (self : Refund) : Result h5i_app_sql.Write := do
   let v ← Refund.to_row self
   ok (h5i_app_sql.Write.Put Refund.TABLE Refund.KEY_LEN v)
 
 /-- [payment_domain::{payment_domain::Event}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def Event.sql_put (self : Event) : Result h5i_app_sql.Write := do
   let v ← Event.to_row self
   ok (h5i_app_sql.Write.Put Event.TABLE Event.KEY_LEN v)
 
 /-- [payment_domain::{payment_domain::PspRef}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def PspRef.sql_put (self : PspRef) : Result h5i_app_sql.Write := do
   let v ← PspRef.to_row self
   ok (h5i_app_sql.Write.Put PspRef.TABLE PspRef.KEY_LEN v)
 
 /-- [payment_domain::{payment_domain::Counter}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def Counter.sql_put (self : Counter) : Result h5i_app_sql.Write := do
   let v ← Counter.to_row self
   ok (h5i_app_sql.Write.Put Counter.TABLE Counter.KEY_LEN v)
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def MerchantCounter.sql_put
   (self : MerchantCounter) : Result h5i_app_sql.Write := do
@@ -1524,14 +1526,14 @@ def MerchantCounter.sql_put
   ok (h5i_app_sql.Write.Put MerchantCounter.TABLE MerchantCounter.KEY_LEN v)
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def HistoryEntry.sql_put (self : HistoryEntry) : Result h5i_app_sql.Write := do
   let v ← HistoryEntry.to_row self
   ok (h5i_app_sql.Write.Put HistoryEntry.TABLE HistoryEntry.KEY_LEN v)
 
 /-- [payment_domain::{payment_domain::Counter}::from_one]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 204:12-212:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 204:12-212:13
     Visibility: public -/
 def Counter.from_one
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -1552,7 +1554,7 @@ def Counter.from_one
     else ok none
 
 /-- [payment_domain::{payment_domain::Payment}::put]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop_body]
 def Payment.put_loop.body
@@ -1577,7 +1579,7 @@ def Payment.put_loop.body
        ok (done v1)
 
 /-- [payment_domain::{payment_domain::Payment}::put]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop]
 def Payment.put_loop
@@ -1589,7 +1591,7 @@ def Payment.put_loop
     i
 
 /-- [payment_domain::{payment_domain::Payment}::put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
     Visibility: public -/
 @[reducible]
 def Payment.put
@@ -1599,7 +1601,7 @@ def Payment.put
   Payment.put_loop v x 0#usize
 
 /-- [payment_domain::{payment_domain::Refund}::put]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop_body]
 def Refund.put_loop.body
@@ -1624,7 +1626,7 @@ def Refund.put_loop.body
        ok (done v1)
 
 /-- [payment_domain::{payment_domain::Refund}::put]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop]
 def Refund.put_loop
@@ -1636,7 +1638,7 @@ def Refund.put_loop
     i
 
 /-- [payment_domain::{payment_domain::Refund}::put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
     Visibility: public -/
 @[reducible]
 def Refund.put
@@ -1644,7 +1646,7 @@ def Refund.put
   Refund.put_loop v x 0#usize
 
 /-- [payment_domain::{payment_domain::Event}::put]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop_body]
 def Event.put_loop.body
@@ -1669,7 +1671,7 @@ def Event.put_loop.body
        ok (done v1)
 
 /-- [payment_domain::{payment_domain::Event}::put]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop]
 def Event.put_loop
@@ -1681,7 +1683,7 @@ def Event.put_loop
     i
 
 /-- [payment_domain::{payment_domain::Event}::put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
     Visibility: public -/
 @[reducible]
 def Event.put
@@ -1689,7 +1691,7 @@ def Event.put
   Event.put_loop v x 0#usize
 
 /-- [payment_domain::{payment_domain::PspRef}::put]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop_body]
 def PspRef.put_loop.body
@@ -1714,7 +1716,7 @@ def PspRef.put_loop.body
        ok (done v1)
 
 /-- [payment_domain::{payment_domain::PspRef}::put]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop]
 def PspRef.put_loop
@@ -1726,7 +1728,7 @@ def PspRef.put_loop
     i
 
 /-- [payment_domain::{payment_domain::PspRef}::put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
     Visibility: public -/
 @[reducible]
 def PspRef.put
@@ -1734,7 +1736,7 @@ def PspRef.put
   PspRef.put_loop v x 0#usize
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::put]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop_body]
 def MerchantCounter.put_loop.body
@@ -1760,7 +1762,7 @@ def MerchantCounter.put_loop.body
        ok (done v1)
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::put]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop]
 def MerchantCounter.put_loop
@@ -1772,7 +1774,7 @@ def MerchantCounter.put_loop
     i
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
     Visibility: public -/
 @[reducible]
 def MerchantCounter.put
@@ -1782,7 +1784,7 @@ def MerchantCounter.put
   MerchantCounter.put_loop v x 0#usize
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::put]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop_body]
 def HistoryEntry.put_loop.body
@@ -1812,7 +1814,7 @@ def HistoryEntry.put_loop.body
        ok (done v1)
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::put]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop]
 def HistoryEntry.put_loop
@@ -1824,7 +1826,7 @@ def HistoryEntry.put_loop
     i
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
     Visibility: public -/
 @[reducible]
 def HistoryEntry.put
@@ -1840,7 +1842,7 @@ def Payment.Insts.CoreCloneClone.clone (self : Payment) : Result Payment := do
   ok self
 
 /-- [payment_domain::{payment_domain::Payment}::del]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop_body]
 def Payment.del_loop.body
@@ -1866,7 +1868,7 @@ def Payment.del_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::Payment}::del]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop]
 def Payment.del_loop
@@ -1879,7 +1881,7 @@ def Payment.del_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::Payment}::del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
     Visibility: public -/
 @[reducible]
 def Payment.del
@@ -1895,7 +1897,7 @@ def Refund.Insts.CoreCloneClone.clone (self : Refund) : Result Refund := do
   ok self
 
 /-- [payment_domain::{payment_domain::Refund}::del]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop_body]
 def Refund.del_loop.body
@@ -1921,7 +1923,7 @@ def Refund.del_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::Refund}::del]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop]
 def Refund.del_loop
@@ -1934,7 +1936,7 @@ def Refund.del_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::Refund}::del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
     Visibility: public -/
 @[reducible]
 def Refund.del
@@ -1950,7 +1952,7 @@ def Event.Insts.CoreCloneClone.clone (self : Event) : Result Event := do
   ok self
 
 /-- [payment_domain::{payment_domain::Event}::del]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop_body]
 def Event.del_loop.body
@@ -1976,7 +1978,7 @@ def Event.del_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::Event}::del]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop]
 def Event.del_loop
@@ -1989,7 +1991,7 @@ def Event.del_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::Event}::del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
     Visibility: public -/
 @[reducible]
 def Event.del
@@ -2006,7 +2008,7 @@ def PspRef.Insts.CoreCloneClone.clone (self : PspRef) : Result PspRef := do
   ok { payment := i, reference := v, operator := i1 }
 
 /-- [payment_domain::{payment_domain::PspRef}::del]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop_body]
 def PspRef.del_loop.body
@@ -2032,7 +2034,7 @@ def PspRef.del_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::PspRef}::del]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop]
 def PspRef.del_loop
@@ -2045,7 +2047,7 @@ def PspRef.del_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::PspRef}::del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
     Visibility: public -/
 @[reducible]
 def PspRef.del
@@ -2062,7 +2064,7 @@ def MerchantCounter.Insts.CoreCloneClone.clone
   ok self
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::del]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop_body]
 def MerchantCounter.del_loop.body
@@ -2089,7 +2091,7 @@ def MerchantCounter.del_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::del]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop]
 def MerchantCounter.del_loop
@@ -2102,7 +2104,7 @@ def MerchantCounter.del_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
     Visibility: public -/
 @[reducible]
 def MerchantCounter.del
@@ -2120,7 +2122,7 @@ def HistoryEntry.Insts.CoreCloneClone.clone
   ok self
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::del]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop_body]
 def HistoryEntry.del_loop.body
@@ -2153,7 +2155,7 @@ def HistoryEntry.del_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::del]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop]
 def HistoryEntry.del_loop
@@ -2166,7 +2168,7 @@ def HistoryEntry.del_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
     Visibility: public -/
 @[reducible]
 def HistoryEntry.del
@@ -2176,7 +2178,7 @@ def HistoryEntry.del
   HistoryEntry.del_loop v payment n (alloc.vec.Vec.new HistoryEntry) 0#usize
 
 /-- [payment_domain::{payment_domain::Payment}::del_where]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop_body]
 def Payment.del_where_loop.body
@@ -2204,7 +2206,7 @@ def Payment.del_where_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::Payment}::del_where]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop]
 def Payment.del_where_loop
@@ -2217,7 +2219,7 @@ def Payment.del_where_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::Payment}::del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
     Visibility: public -/
 @[reducible]
 def Payment.del_where
@@ -2227,7 +2229,7 @@ def Payment.del_where
   Payment.del_where_loop v col val (alloc.vec.Vec.new Payment) 0#usize
 
 /-- [payment_domain::{payment_domain::Refund}::del_where]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop_body]
 def Refund.del_where_loop.body
@@ -2255,7 +2257,7 @@ def Refund.del_where_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::Refund}::del_where]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop]
 def Refund.del_where_loop
@@ -2268,7 +2270,7 @@ def Refund.del_where_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::Refund}::del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
     Visibility: public -/
 @[reducible]
 def Refund.del_where
@@ -2278,7 +2280,7 @@ def Refund.del_where
   Refund.del_where_loop v col val (alloc.vec.Vec.new Refund) 0#usize
 
 /-- [payment_domain::{payment_domain::Event}::del_where]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop_body]
 def Event.del_where_loop.body
@@ -2306,7 +2308,7 @@ def Event.del_where_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::Event}::del_where]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop]
 def Event.del_where_loop
@@ -2319,7 +2321,7 @@ def Event.del_where_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::Event}::del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
     Visibility: public -/
 @[reducible]
 def Event.del_where
@@ -2329,7 +2331,7 @@ def Event.del_where
   Event.del_where_loop v col val (alloc.vec.Vec.new Event) 0#usize
 
 /-- [payment_domain::{payment_domain::PspRef}::del_where]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop_body]
 def PspRef.del_where_loop.body
@@ -2357,7 +2359,7 @@ def PspRef.del_where_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::PspRef}::del_where]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop]
 def PspRef.del_where_loop
@@ -2370,7 +2372,7 @@ def PspRef.del_where_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::PspRef}::del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
     Visibility: public -/
 @[reducible]
 def PspRef.del_where
@@ -2380,7 +2382,7 @@ def PspRef.del_where
   PspRef.del_where_loop v col val (alloc.vec.Vec.new PspRef) 0#usize
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::del_where]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop_body]
 def MerchantCounter.del_where_loop.body
@@ -2409,7 +2411,7 @@ def MerchantCounter.del_where_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::del_where]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop]
 def MerchantCounter.del_where_loop
@@ -2422,7 +2424,7 @@ def MerchantCounter.del_where_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
     Visibility: public -/
 @[reducible]
 def MerchantCounter.del_where
@@ -2433,7 +2435,7 @@ def MerchantCounter.del_where
     0#usize
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::del_where]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop_body]
 def HistoryEntry.del_where_loop.body
@@ -2462,7 +2464,7 @@ def HistoryEntry.del_where_loop.body
   else ok (done out)
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::del_where]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop]
 def HistoryEntry.del_where_loop
@@ -2475,7 +2477,7 @@ def HistoryEntry.del_where_loop
     (out, i)
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
     Visibility: public -/
 @[reducible]
 def HistoryEntry.del_where
@@ -2486,7 +2488,7 @@ def HistoryEntry.del_where
     0#usize
 
 /-- [payment_domain::{payment_domain::Payment}::sql_del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
     Visibility: public -/
 def Payment.sql_del (id : Std.U64) : Result h5i_app_sql.Write := do
   let v ← U64.Insts.H5i_app_sqlColumn.to_val id
@@ -2494,7 +2496,7 @@ def Payment.sql_del (id : Std.U64) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.Del Payment.TABLE key)
 
 /-- [payment_domain::{payment_domain::Refund}::sql_del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
     Visibility: public -/
 def Refund.sql_del (id : Std.U64) : Result h5i_app_sql.Write := do
   let v ← U64.Insts.H5i_app_sqlColumn.to_val id
@@ -2502,7 +2504,7 @@ def Refund.sql_del (id : Std.U64) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.Del Refund.TABLE key)
 
 /-- [payment_domain::{payment_domain::Event}::sql_del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
     Visibility: public -/
 def Event.sql_del (id : Std.U64) : Result h5i_app_sql.Write := do
   let v ← U64.Insts.H5i_app_sqlColumn.to_val id
@@ -2510,7 +2512,7 @@ def Event.sql_del (id : Std.U64) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.Del Event.TABLE key)
 
 /-- [payment_domain::{payment_domain::PspRef}::sql_del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
     Visibility: public -/
 def PspRef.sql_del (payment : Std.U64) : Result h5i_app_sql.Write := do
   let v ← U64.Insts.H5i_app_sqlColumn.to_val payment
@@ -2518,7 +2520,7 @@ def PspRef.sql_del (payment : Std.U64) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.Del PspRef.TABLE key)
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::sql_del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
     Visibility: public -/
 def MerchantCounter.sql_del
   (merchant : Std.U64) : Result h5i_app_sql.Write := do
@@ -2527,7 +2529,7 @@ def MerchantCounter.sql_del
   ok (h5i_app_sql.Write.Del MerchantCounter.TABLE key)
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::sql_del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
     Visibility: public -/
 def HistoryEntry.sql_del
   (payment : Std.U64) (n : Std.U64) : Result h5i_app_sql.Write := do
@@ -2538,49 +2540,49 @@ def HistoryEntry.sql_del
   ok (h5i_app_sql.Write.Del HistoryEntry.TABLE key1)
 
 /-- [payment_domain::{payment_domain::Payment}::sql_del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
     Visibility: public -/
 def Payment.sql_del_where
   (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.DelWhere Payment.TABLE col val)
 
 /-- [payment_domain::{payment_domain::Refund}::sql_del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
     Visibility: public -/
 def Refund.sql_del_where
   (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.DelWhere Refund.TABLE col val)
 
 /-- [payment_domain::{payment_domain::Event}::sql_del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
     Visibility: public -/
 def Event.sql_del_where
   (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.DelWhere Event.TABLE col val)
 
 /-- [payment_domain::{payment_domain::PspRef}::sql_del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
     Visibility: public -/
 def PspRef.sql_del_where
   (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.DelWhere PspRef.TABLE col val)
 
 /-- [payment_domain::{payment_domain::MerchantCounter}::sql_del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
     Visibility: public -/
 def MerchantCounter.sql_del_where
   (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.DelWhere MerchantCounter.TABLE col val)
 
 /-- [payment_domain::{payment_domain::HistoryEntry}::sql_del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
     Visibility: public -/
 def HistoryEntry.sql_del_where
   (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.DelWhere HistoryEntry.TABLE col val)
 
 /-- [payment_domain::Snapshot]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 278:8-280:9
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 278:8-280:9
     Visibility: public -/
 structure Snapshot where
   counter : Counter
@@ -2592,7 +2594,7 @@ structure Snapshot where
   history : alloc.vec.Vec HistoryEntry
 
 /-- [payment_domain::Rows]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 284:8-286:9
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 284:8-286:9
     Visibility: public -/
 structure Rows where
   counter : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)
@@ -2604,7 +2606,7 @@ structure Rows where
   history : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)
 
 /-- [payment_domain::decode]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 289:8-297:9
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 289:8-297:9
     Visibility: public -/
 def decode (r : Rows) : Result (Option Snapshot) := do
   let o ← Counter.from_one r.counter
@@ -2647,7 +2649,7 @@ def decode (r : Rows) : Result (Option Snapshot) := do
                   })
 
 /-- [payment_domain::Write]
-    Source: 'crates/payment-domain/src/lib.rs', lines 272:0-280:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 277:0-285:1
     Visibility: public -/
 @[discriminant isize]
 inductive Write where
@@ -2660,7 +2662,7 @@ inductive Write where
 | PutHistory : HistoryEntry → Write
 
 /-- [payment_domain::apply_write]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1492:0-1502:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1504:0-1514:1 -/
 def apply_write (s : Snapshot) (w : Write) : Result Snapshot := do
   match w with
   | Write.PutPayment p =>
@@ -2689,7 +2691,7 @@ def Counter.Insts.CoreCloneClone.clone (self : Counter) : Result Counter := do
   ok self
 
 /-- [payment_domain::{impl core::clone::Clone for payment_domain::Write}::clone]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 271:9-271:14
+    Source: 'crates/payment-domain/src/lib.rs', lines 276:9-276:14
     Visibility: public -/
 def Write.Insts.CoreCloneClone.clone (self : Write) : Result Write := do
   match self with
@@ -2785,7 +2787,7 @@ def Snapshot.Insts.CoreCloneClone.clone
     }
 
 /-- [payment_domain::apply]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 306:12-309:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 306:12-309:13
     Visibility: public -/
 @[rust_loop_body]
 def apply_loop.body
@@ -2804,7 +2806,7 @@ def apply_loop.body
   else ok (done s)
 
 /-- [payment_domain::apply]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 306:12-309:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 306:12-309:13
     Visibility: public -/
 @[rust_loop]
 def apply_loop
@@ -2816,14 +2818,14 @@ def apply_loop
     (s, i)
 
 /-- [payment_domain::apply]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 303:8-311:9
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 303:8-311:9
     Visibility: public -/
 def apply (snap : Snapshot) (ws : alloc.vec.Vec Write) : Result Snapshot := do
   let s ← Snapshot.Insts.CoreCloneClone.clone snap
   apply_loop ws s 0#usize
 
 /-- [payment_domain::sql_write]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1505:0-1515:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1517:0-1527:1 -/
 def sql_write
   (w : Write) (out : alloc.vec.Vec h5i_app_sql.Write) :
   Result (alloc.vec.Vec h5i_app_sql.Write)
@@ -2849,7 +2851,7 @@ def sql_write
     alloc.vec.Vec.push out w1
 
 /-- [payment_domain::sql_writes]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 317:12-320:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 317:12-320:13
     Visibility: public -/
 @[rust_loop_body]
 def sql_writes_loop.body
@@ -2869,7 +2871,7 @@ def sql_writes_loop.body
   else ok (done out)
 
 /-- [payment_domain::sql_writes]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 317:12-320:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 317:12-320:13
     Visibility: public -/
 @[rust_loop]
 def sql_writes_loop
@@ -2882,7 +2884,7 @@ def sql_writes_loop
     (out, i)
 
 /-- [payment_domain::sql_writes]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 314:8-322:9
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 314:8-322:9
     Visibility: public -/
 @[reducible]
 def sql_writes
@@ -2979,8 +2981,13 @@ def operator_of (actor : Principal) : Result Std.U64 := do
     Visibility: public -/
 @[global_simps, irreducible] def MAX_PAGE : Std.U32 := 64#u32
 
+/-- [payment_domain::MAX_RANGE]
+    Source: 'crates/payment-domain/src/lib.rs', lines 211:0-211:32
+    Visibility: public -/
+@[global_simps, irreducible] def MAX_RANGE : Std.U32 := 4096#u32
+
 /-- [payment_domain::PspResult]
-    Source: 'crates/payment-domain/src/lib.rs', lines 210:0-217:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 215:0-222:1
     Visibility: public -/
 @[discriminant isize]
 inductive PspResult where
@@ -2992,7 +2999,7 @@ inductive PspResult where
 | RefundFailed : Std.U64 → PspResult
 
 /-- [payment_domain::Command]
-    Source: 'crates/payment-domain/src/lib.rs', lines 220:0-269:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 225:0-274:1
     Visibility: public -/
 @[discriminant isize]
 inductive Command where
@@ -3015,7 +3022,7 @@ inductive Command where
 | RefundRange : Std.U64 → Std.U32 → Command
 
 /-- [payment_domain::Reply]
-    Source: 'crates/payment-domain/src/lib.rs', lines 283:0-308:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 288:0-313:1
     Visibility: public -/
 @[discriminant isize]
 inductive Reply where
@@ -3043,7 +3050,7 @@ inductive Reply where
   Reply
 
 /-- [payment_domain::Error]
-    Source: 'crates/payment-domain/src/lib.rs', lines 311:0-327:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 316:0-333:1
     Visibility: public -/
 @[discriminant isize]
 inductive Error where
@@ -3059,18 +3066,18 @@ inductive Error where
 | BadPage : Error
 
 /-- [payment_domain::one]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 331:0-335:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 337:0-341:1 -/
 def one (a : Write) : Result (alloc.vec.Vec Write) := do
   alloc.vec.Vec.push (alloc.vec.Vec.new Write) a
 
 /-- [payment_domain::two]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 337:0-342:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 343:0-348:1 -/
 def two (a : Write) (b : Write) : Result (alloc.vec.Vec Write) := do
   let ws ← alloc.vec.Vec.push (alloc.vec.Vec.new Write) a
   alloc.vec.Vec.push ws b
 
 /-- [payment_domain::three]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 344:0-350:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 350:0-356:1 -/
 def three
   (a : Write) (b : Write) (c : Write) : Result (alloc.vec.Vec Write) := do
   let ws ← alloc.vec.Vec.push (alloc.vec.Vec.new Write) a
@@ -3078,7 +3085,7 @@ def three
   alloc.vec.Vec.push ws1 c
 
 /-- [payment_domain::merchant_next]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 355:4-362:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 361:4-368:1
     Visibility: public -/
 @[rust_loop_body]
 def merchant_next_loop.body
@@ -3098,7 +3105,7 @@ def merchant_next_loop.body
   else ok (done 0#u64)
 
 /-- [payment_domain::merchant_next]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 355:4-362:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 361:4-368:1
     Visibility: public -/
 @[rust_loop]
 def merchant_next_loop
@@ -3110,7 +3117,7 @@ def merchant_next_loop
     i
 
 /-- [payment_domain::merchant_next]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 353:0-362:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 359:0-368:1
     Visibility: public -/
 @[reducible]
 def merchant_next
@@ -3120,7 +3127,7 @@ def merchant_next
   merchant_next_loop cs merchant 0#usize
 
 /-- [payment_domain::page_end]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 366:0-373:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 372:0-379:1
     Visibility: public -/
 def page_end («from» : Std.U64) (limit : Std.U32) : Result Std.U64 := do
   let n ← lift (UScalar.cast .U64 limit)
@@ -3130,7 +3137,7 @@ def page_end («from» : Std.U64) (limit : Std.U32) : Result Std.U64 := do
   else «from» + n
 
 /-- [payment_domain::find_payment]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 377:4-384:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 383:4-390:1
     Visibility: public -/
 @[rust_loop_body]
 def find_payment_loop.body
@@ -3149,7 +3156,7 @@ def find_payment_loop.body
   else ok (done none)
 
 /-- [payment_domain::find_payment]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 377:4-384:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 383:4-390:1
     Visibility: public -/
 @[rust_loop]
 def find_payment_loop
@@ -3161,7 +3168,7 @@ def find_payment_loop
     i
 
 /-- [payment_domain::find_payment]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 375:0-384:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 381:0-390:1
     Visibility: public -/
 @[reducible]
 def find_payment
@@ -3169,7 +3176,7 @@ def find_payment
   find_payment_loop ps id 0#usize
 
 /-- [payment_domain::find_refund]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 388:4-395:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 394:4-401:1
     Visibility: public -/
 @[rust_loop_body]
 def find_refund_loop.body
@@ -3188,7 +3195,7 @@ def find_refund_loop.body
   else ok (done none)
 
 /-- [payment_domain::find_refund]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 388:4-395:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 394:4-401:1
     Visibility: public -/
 @[rust_loop]
 def find_refund_loop
@@ -3200,7 +3207,7 @@ def find_refund_loop
     i
 
 /-- [payment_domain::find_refund]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 386:0-395:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 392:0-401:1
     Visibility: public -/
 @[reducible]
 def find_refund
@@ -3208,7 +3215,7 @@ def find_refund
   find_refund_loop rs id 0#usize
 
 /-- [payment_domain::find_event]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 399:4-406:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 405:4-412:1
     Visibility: public -/
 @[rust_loop_body]
 def find_event_loop.body
@@ -3227,7 +3234,7 @@ def find_event_loop.body
   else ok (done none)
 
 /-- [payment_domain::find_event]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 399:4-406:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 405:4-412:1
     Visibility: public -/
 @[rust_loop]
 def find_event_loop
@@ -3239,7 +3246,7 @@ def find_event_loop
     i
 
 /-- [payment_domain::find_event]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 397:0-406:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 403:0-412:1
     Visibility: public -/
 @[reducible]
 def find_event
@@ -3247,7 +3254,7 @@ def find_event
   find_event_loop es id 0#usize
 
 /-- [payment_domain::may_manage]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 409:0-411:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 415:0-417:1
     Visibility: public -/
 def may_manage (actor : Principal) (p : Payment) : Result Bool := do
   let b ← is_operator actor
@@ -3257,7 +3264,7 @@ def may_manage (actor : Principal) (p : Payment) : Result Bool := do
        ok (p.merchant = i)
 
 /-- [payment_domain::with_status]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 415:0-433:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 421:0-439:1 -/
 def with_status
   (p : Payment) (status : Std.U32) (authorized : Std.U64) (captured : Std.U64)
   (op : Std.U64) :
@@ -3268,7 +3275,7 @@ def with_status
     }
 
 /-- [payment_domain::with_refunds]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 436:0-454:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 442:0-460:1 -/
 def with_refunds
   (p : Payment) (refunded : Std.U64) (refund_pending : Std.U64) (op : Std.U64)
   :
@@ -3277,7 +3284,7 @@ def with_refunds
   ok { p with refunded, refund_pending, operator := op, ledger_done := false }
 
 /-- [payment_domain::create]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 456:0-489:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 462:0-495:1 -/
 def create
   (actor : Principal) (s : Snapshot) (amount : Std.U64) (currency : Std.U32)
   (manual_capture : Bool) :
@@ -3320,7 +3327,7 @@ def create
         ok (core.result.Result.Ok (v, Reply.Created s.counter.next_id))
 
 /-- [payment_domain::begin_authorize]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 491:0-523:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 497:0-529:1 -/
 def begin_authorize
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3362,7 +3369,7 @@ def begin_authorize
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::cancel]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 525:0-542:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 531:0-548:1 -/
 def cancel
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3388,7 +3395,7 @@ def cancel
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::request_refund]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 544:0-577:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 550:0-583:1 -/
 def request_refund
   (actor : Principal) (s : Snapshot) (id : Std.U64) (amount : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3440,7 +3447,7 @@ def request_refund
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::record_authorized]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 579:0-591:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 585:0-597:1 -/
 def record_authorized
   (p : Payment) (amount : Std.U64) (op : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3463,7 +3470,7 @@ def record_authorized
     else ok (core.result.Result.Err Error.InvalidTransition)
 
 /-- [payment_domain::record_declined]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 593:0-601:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 599:0-607:1 -/
 def record_declined
   (p : Payment) (op : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3479,7 +3486,7 @@ def record_declined
     else ok (core.result.Result.Err Error.InvalidTransition)
 
 /-- [payment_domain::record_captured]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 603:0-622:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 609:0-628:1 -/
 def record_captured
   (p : Payment) (amount : Std.U64) (op : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3517,7 +3524,7 @@ def record_captured
       else ok (core.result.Result.Err Error.InvalidTransition)
 
 /-- [payment_domain::record_canceled]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 624:0-632:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 630:0-638:1 -/
 def record_canceled
   (p : Payment) (op : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3546,7 +3553,7 @@ def record_canceled
         else ok (core.result.Result.Err Error.InvalidTransition)
 
 /-- [payment_domain::record_refund]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 634:0-663:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 640:0-669:1 -/
 def record_refund
   (s : Snapshot) (p : Payment) (refund : Std.U64) (succeeded : Bool)
   (op : Std.U64) :
@@ -3602,7 +3609,7 @@ def record_refund
           else ok (core.result.Result.Err Error.InvalidTransition)
 
 /-- [payment_domain::record]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 666:0-682:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 672:0-688:1
     Visibility: public -/
 def record
   (actor : Principal) (s : Snapshot) (id : Std.U64) (result : PspResult) :
@@ -3626,7 +3633,7 @@ def record
   else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_domain::append]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 686:4-689:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 692:4-695:5 -/
 @[rust_loop_body]
 def append_loop.body
   (more : alloc.vec.Vec Write) (ws : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -3645,7 +3652,7 @@ def append_loop.body
   else ok (done ws)
 
 /-- [payment_domain::append]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 686:4-689:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 692:4-695:5 -/
 @[rust_loop]
 def append_loop
   (ws : alloc.vec.Vec Write) (more : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -3656,7 +3663,7 @@ def append_loop
     (ws, i)
 
 /-- [payment_domain::append]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 684:0-690:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 690:0-696:1 -/
 @[reducible]
 def append
   (ws : alloc.vec.Vec Write) (more : alloc.vec.Vec Write) :
@@ -3665,7 +3672,7 @@ def append
   append_loop ws more 0#usize
 
 /-- [payment_domain::event]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 694:0-714:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 700:0-720:1
     Visibility: public -/
 def event
   (actor : Principal) (s : Snapshot) (event1 : Std.U64) (id : Std.U64)
@@ -3708,7 +3715,7 @@ def event
   else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_domain::get]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 716:0-727:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 722:0-733:1 -/
 def get
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3723,7 +3730,7 @@ def get
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::get_refund]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 729:0-743:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 735:0-749:1 -/
 def get_refund
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3742,7 +3749,7 @@ def get_refund
       else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::find_ref]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 747:4-754:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 753:4-760:1
     Visibility: public -/
 @[rust_loop_body]
 def find_ref_loop.body
@@ -3762,7 +3769,7 @@ def find_ref_loop.body
   else ok (done none)
 
 /-- [payment_domain::find_ref]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 747:4-754:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 753:4-760:1
     Visibility: public -/
 @[rust_loop]
 def find_ref_loop
@@ -3774,7 +3781,7 @@ def find_ref_loop
     i
 
 /-- [payment_domain::find_ref]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 745:0-754:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 751:0-760:1
     Visibility: public -/
 @[reducible]
 def find_ref
@@ -3784,7 +3791,7 @@ def find_ref
   find_ref_loop rs payment 0#usize
 
 /-- [payment_domain::same_bytes]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 761:4-768:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 767:4-774:1 -/
 @[rust_loop_body]
 def same_bytes_loop.body
   (a : alloc.vec.Vec Std.U8) (b : alloc.vec.Vec Std.U8) (i : Std.Usize) :
@@ -3804,7 +3811,7 @@ def same_bytes_loop.body
   else ok (done true)
 
 /-- [payment_domain::same_bytes]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 761:4-768:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 767:4-774:1 -/
 @[rust_loop]
 def same_bytes_loop
   (a : alloc.vec.Vec Std.U8) (b : alloc.vec.Vec Std.U8) (i : Std.Usize) :
@@ -3815,7 +3822,7 @@ def same_bytes_loop
     i
 
 /-- [payment_domain::same_bytes]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 756:0-768:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 762:0-774:1 -/
 def same_bytes
   (a : alloc.vec.Vec Std.U8) (b : alloc.vec.Vec Std.U8) : Result Bool := do
   let i := alloc.vec.Vec.len a
@@ -3825,7 +3832,7 @@ def same_bytes
   else same_bytes_loop a b 0#usize
 
 /-- [payment_domain::attach_ref]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 770:0-787:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 776:0-793:1 -/
 def attach_ref
   (actor : Principal) (s : Snapshot) (payment : Std.U64)
   (reference : alloc.vec.Vec Std.U8) :
@@ -3855,7 +3862,7 @@ def attach_ref
   else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_domain::get_ref]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 789:0-803:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 795:0-809:1 -/
 def get_ref
   (actor : Principal) (s : Snapshot) (payment : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3876,7 +3883,7 @@ def get_ref
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::refunds_for]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 809:4-814:5
+    Source: 'crates/payment-domain/src/lib.rs', lines 815:4-820:5
     Visibility: public -/
 @[rust_loop_body]
 def refunds_for_loop.body
@@ -3899,7 +3906,7 @@ def refunds_for_loop.body
   else ok (done out)
 
 /-- [payment_domain::refunds_for]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 809:4-814:5
+    Source: 'crates/payment-domain/src/lib.rs', lines 815:4-820:5
     Visibility: public -/
 @[rust_loop]
 def refunds_for_loop
@@ -3912,7 +3919,7 @@ def refunds_for_loop
     (out, i)
 
 /-- [payment_domain::refunds_for]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 806:0-816:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 812:0-822:1
     Visibility: public -/
 @[reducible]
 def refunds_for
@@ -3922,7 +3929,7 @@ def refunds_for
   refunds_for_loop rs payment (alloc.vec.Vec.new Refund) 0#usize
 
 /-- [payment_domain::refunds_of]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 818:0-829:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 824:0-835:1 -/
 def refunds_of
   (actor : Principal) (s : Snapshot) (payment : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3939,7 +3946,7 @@ def refunds_of
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::view]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 831:0-846:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 837:0-852:1 -/
 def view
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3962,7 +3969,7 @@ def view
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_domain::same_refund]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 849:0-851:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 855:0-857:1
     Visibility: public -/
 def same_refund (a : Refund) (b : Refund) : Result Bool := do
   if a.id = b.id
@@ -3975,7 +3982,7 @@ def same_refund (a : Refund) (b : Refund) : Result Bool := do
   else ok false
 
 /-- [payment_domain::has_same]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 854:0-859:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 860:0-865:1 -/
 def has_same (ys : alloc.vec.Vec Refund) (x : Refund) : Result Bool := do
   let o ← find_refund ys x.id
   match o with
@@ -3983,7 +3990,7 @@ def has_same (ys : alloc.vec.Vec Refund) (x : Refund) : Result Bool := do
   | some y => same_refund x y
 
 /-- [payment_domain::covers]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 865:4-870:5
+    Source: 'crates/payment-domain/src/lib.rs', lines 871:4-876:5
     Visibility: public -/
 @[rust_loop_body]
 def covers_loop.body
@@ -4005,7 +4012,7 @@ def covers_loop.body
   else ok (done all)
 
 /-- [payment_domain::covers]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 865:4-870:5
+    Source: 'crates/payment-domain/src/lib.rs', lines 871:4-876:5
     Visibility: public -/
 @[rust_loop]
 def covers_loop
@@ -4018,7 +4025,7 @@ def covers_loop
     (all, i)
 
 /-- [payment_domain::covers]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 862:0-872:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 868:0-878:1
     Visibility: public -/
 @[reducible]
 def covers
@@ -4026,12 +4033,12 @@ def covers
   covers_loop xs ys true 0#usize
 
 /-- [payment_domain::with_ledger_done]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 875:0-893:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 881:0-899:1 -/
 def with_ledger_done (p : Payment) (op : Std.U64) : Result Payment := do
   ok { p with operator := op, ledger_done := true }
 
 /-- [payment_domain::mark_posted]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 895:0-916:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 901:0-922:1 -/
 def mark_posted
   (actor : Principal) (s : Snapshot) (id : Std.U64) (captured : Std.U64)
   (seen : alloc.vec.Vec Refund) :
@@ -4133,7 +4140,7 @@ def mark_posted
   else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_domain::merchant_range]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-929:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-935:5 -/
 @[rust_loop_body]
 def merchant_range_loop.body
   (s : Snapshot) (merchant : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -4161,7 +4168,7 @@ def merchant_range_loop.body
   else ok (done out)
 
 /-- [payment_domain::merchant_range]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-929:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-935:5 -/
 @[rust_loop]
 def merchant_range_loop
   (s : Snapshot) (merchant : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -4174,7 +4181,7 @@ def merchant_range_loop
     (out, i)
 
 /-- [payment_domain::merchant_range]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 920:0-931:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 926:0-937:1 -/
 @[reducible]
 def merchant_range
   (s : Snapshot) (merchant : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -4185,7 +4192,7 @@ def merchant_range
     0#usize
 
 /-- [payment_domain::list]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 933:0-943:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 939:0-949:1 -/
 def list
   (actor : Principal) (s : Snapshot) (merchant : Std.U64) («from» : Std.U64)
   (limit : Std.U32) :
@@ -4223,7 +4230,7 @@ def list
             next))
 
 /-- [payment_domain::history_range]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-956:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-962:5 -/
 @[rust_loop_body]
 def history_range_loop.body
   (s : Snapshot) (payment : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -4251,7 +4258,7 @@ def history_range_loop.body
   else ok (done out)
 
 /-- [payment_domain::history_range]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-956:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-962:5 -/
 @[rust_loop]
 def history_range_loop
   (s : Snapshot) (payment : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -4264,7 +4271,7 @@ def history_range_loop
     (out, i)
 
 /-- [payment_domain::history_range]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 947:0-958:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 953:0-964:1 -/
 @[reducible]
 def history_range
   (s : Snapshot) (payment : Std.U64) («from» : Std.U64) («end» : Std.U64) :
@@ -4274,7 +4281,7 @@ def history_range
     HistoryEntry) 0#usize
 
 /-- [payment_domain::history_page]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 960:0-975:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 966:0-981:1 -/
 def history_page
   (actor : Principal) (s : Snapshot) (payment : Std.U64) («from» : Std.U64)
   (limit : Std.U32) :
@@ -4304,7 +4311,7 @@ def history_page
       else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_domain::payment_ids]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-987:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-993:5 -/
 @[rust_loop_body]
 def payment_ids_loop.body
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -4329,7 +4336,7 @@ def payment_ids_loop.body
   else ok (done out)
 
 /-- [payment_domain::payment_ids]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-987:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-993:5 -/
 @[rust_loop]
 def payment_ids_loop
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -4341,7 +4348,7 @@ def payment_ids_loop
     (out, i)
 
 /-- [payment_domain::payment_ids]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 978:0-989:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 984:0-995:1 -/
 @[reducible]
 def payment_ids
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64) :
@@ -4350,7 +4357,7 @@ def payment_ids
   payment_ids_loop s «from» «end» (alloc.vec.Vec.new Payment) 0#usize
 
 /-- [payment_domain::refund_ids]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-1001:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-1007:5 -/
 @[rust_loop_body]
 def refund_ids_loop.body
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -4375,7 +4382,7 @@ def refund_ids_loop.body
   else ok (done out)
 
 /-- [payment_domain::refund_ids]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-1001:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1:0-1007:5 -/
 @[rust_loop]
 def refund_ids_loop
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -4387,7 +4394,7 @@ def refund_ids_loop
     (out, i)
 
 /-- [payment_domain::refund_ids]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 992:0-1003:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 998:0-1009:1 -/
 @[reducible]
 def refund_ids
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64) :
@@ -4396,7 +4403,7 @@ def refund_ids
   refund_ids_loop s «from» «end» (alloc.vec.Vec.new Refund) 0#usize
 
 /-- [payment_domain::parents_of]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1009:4-1015:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1015:4-1021:5 -/
 @[rust_loop_body]
 def parents_of_loop.body
   (s : Snapshot) (rs : alloc.vec.Vec Refund) (out : alloc.vec.Vec Payment)
@@ -4419,7 +4426,7 @@ def parents_of_loop.body
   else ok (done out)
 
 /-- [payment_domain::parents_of]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1009:4-1015:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1015:4-1021:5 -/
 @[rust_loop]
 def parents_of_loop
   (s : Snapshot) (rs : alloc.vec.Vec Refund) (out : alloc.vec.Vec Payment)
@@ -4431,7 +4438,7 @@ def parents_of_loop
     (out, i)
 
 /-- [payment_domain::parents_of]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1006:0-1017:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1012:0-1023:1 -/
 @[reducible]
 def parents_of
   (s : Snapshot) (rs : alloc.vec.Vec Refund) :
@@ -4440,7 +4447,7 @@ def parents_of
   parents_of_loop s rs (alloc.vec.Vec.new Payment) 0#usize
 
 /-- [payment_domain::range_page]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1019:0-1029:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1025:0-1035:1 -/
 def range_page
   (actor : Principal) (s : Snapshot) («from» : Std.U64) (limit : Std.U32) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -4448,7 +4455,7 @@ def range_page
   if limit = 0#u32
   then ok (core.result.Result.Err Error.BadPage)
   else
-    if limit > MAX_PAGE
+    if limit > MAX_RANGE
     then ok (core.result.Result.Err Error.BadPage)
     else
       let b ← is_operator actor
@@ -4465,7 +4472,7 @@ def range_page
       else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_domain::refund_range_page]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1031:0-1043:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1037:0-1049:1 -/
 def refund_range_page
   (actor : Principal) (s : Snapshot) («from» : Std.U64) (limit : Std.U32) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -4473,7 +4480,7 @@ def refund_range_page
   if limit = 0#u32
   then ok (core.result.Result.Err Error.BadPage)
   else
-    if limit > MAX_PAGE
+    if limit > MAX_RANGE
     then ok (core.result.Result.Err Error.BadPage)
     else
       let b ← is_operator actor
@@ -4491,7 +4498,7 @@ def refund_range_page
       else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_domain::decide_command]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1047:0-1067:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 1053:0-1073:1
     Visibility: public -/
 def decide_command
   (actor : Principal) (s : Snapshot) (cmd : Command) :
@@ -4523,87 +4530,87 @@ def decide_command
     refund_range_page actor s «from» limit
 
 /-- [payment_domain::CMD_CREATE]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1072:0-1072:30
+    Source: 'crates/payment-domain/src/lib.rs', lines 1078:0-1078:30
     Visibility: public -/
 @[global_simps, irreducible] def CMD_CREATE : Std.U32 := 1#u32
 
 /-- [payment_domain::CMD_BEGIN_AUTHORIZE]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1073:0-1073:39
+    Source: 'crates/payment-domain/src/lib.rs', lines 1079:0-1079:39
     Visibility: public -/
 @[global_simps, irreducible] def CMD_BEGIN_AUTHORIZE : Std.U32 := 2#u32
 
 /-- [payment_domain::CMD_CANCEL]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1074:0-1074:30
+    Source: 'crates/payment-domain/src/lib.rs', lines 1080:0-1080:30
     Visibility: public -/
 @[global_simps, irreducible] def CMD_CANCEL : Std.U32 := 3#u32
 
 /-- [payment_domain::CMD_REQUEST_REFUND]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1075:0-1075:38
+    Source: 'crates/payment-domain/src/lib.rs', lines 1081:0-1081:38
     Visibility: public -/
 @[global_simps, irreducible] def CMD_REQUEST_REFUND : Std.U32 := 4#u32
 
 /-- [payment_domain::CMD_RECORD]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1076:0-1076:30
+    Source: 'crates/payment-domain/src/lib.rs', lines 1082:0-1082:30
     Visibility: public -/
 @[global_simps, irreducible] def CMD_RECORD : Std.U32 := 5#u32
 
 /-- [payment_domain::CMD_EVENT]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1077:0-1077:29
+    Source: 'crates/payment-domain/src/lib.rs', lines 1083:0-1083:29
     Visibility: public -/
 @[global_simps, irreducible] def CMD_EVENT : Std.U32 := 6#u32
 
 /-- [payment_domain::CMD_ATTACH_REF]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1078:0-1078:34
+    Source: 'crates/payment-domain/src/lib.rs', lines 1084:0-1084:34
     Visibility: public -/
 @[global_simps, irreducible] def CMD_ATTACH_REF : Std.U32 := 7#u32
 
 /-- [payment_domain::CMD_MARK_POSTED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1079:0-1079:35
+    Source: 'crates/payment-domain/src/lib.rs', lines 1085:0-1085:35
     Visibility: public -/
 @[global_simps, irreducible] def CMD_MARK_POSTED : Std.U32 := 8#u32
 
 /-- [payment_domain::RES_NONE]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1081:0-1081:28
+    Source: 'crates/payment-domain/src/lib.rs', lines 1087:0-1087:28
     Visibility: public -/
 @[global_simps, irreducible] def RES_NONE : Std.U32 := 0#u32
 
 /-- [payment_domain::RES_AUTHORIZED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1082:0-1082:34
+    Source: 'crates/payment-domain/src/lib.rs', lines 1088:0-1088:34
     Visibility: public -/
 @[global_simps, irreducible] def RES_AUTHORIZED : Std.U32 := 1#u32
 
 /-- [payment_domain::RES_DECLINED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1083:0-1083:32
+    Source: 'crates/payment-domain/src/lib.rs', lines 1089:0-1089:32
     Visibility: public -/
 @[global_simps, irreducible] def RES_DECLINED : Std.U32 := 2#u32
 
 /-- [payment_domain::RES_CAPTURED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1084:0-1084:32
+    Source: 'crates/payment-domain/src/lib.rs', lines 1090:0-1090:32
     Visibility: public -/
 @[global_simps, irreducible] def RES_CAPTURED : Std.U32 := 3#u32
 
 /-- [payment_domain::RES_CANCELED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1085:0-1085:32
+    Source: 'crates/payment-domain/src/lib.rs', lines 1091:0-1091:32
     Visibility: public -/
 @[global_simps, irreducible] def RES_CANCELED : Std.U32 := 4#u32
 
 /-- [payment_domain::RES_REFUND_SUCCEEDED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1086:0-1086:40
+    Source: 'crates/payment-domain/src/lib.rs', lines 1092:0-1092:40
     Visibility: public -/
 @[global_simps, irreducible] def RES_REFUND_SUCCEEDED : Std.U32 := 5#u32
 
 /-- [payment_domain::RES_REFUND_FAILED]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1087:0-1087:37
+    Source: 'crates/payment-domain/src/lib.rs', lines 1093:0-1093:37
     Visibility: public -/
 @[global_simps, irreducible] def RES_REFUND_FAILED : Std.U32 := 6#u32
 
 /-- [payment_domain::NO_STATUS]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1089:0-1089:31
+    Source: 'crates/payment-domain/src/lib.rs', lines 1095:0-1095:31
     Visibility: public -/
 @[global_simps, irreducible] def NO_STATUS : Std.U32 := 255#u32
 
 /-- [payment_domain::result_code]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1092:0-1101:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1098:0-1107:1 -/
 def result_code (r : PspResult) : Result (Std.U32 × Std.U64) := do
   match r with
   | PspResult.Authorized _ => ok (RES_AUTHORIZED, 0#u64)
@@ -4614,7 +4621,7 @@ def result_code (r : PspResult) : Result (Std.U32 × Std.U64) := do
   | PspResult.RefundFailed refund => ok (RES_REFUND_FAILED, refund)
 
 /-- [payment_domain::what_of]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1105:0-1123:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1111:0-1129:1 -/
 def what_of
   (s : Snapshot) (cmd : Command) :
   Result (Std.U32 × Std.U32 × Std.U64 × Std.U64)
@@ -4645,7 +4652,7 @@ def what_of
   | Command.RefundRange _ _ => ok (0#u32, RES_NONE, 0#u64, 0#u64)
 
 /-- [payment_domain::subject]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1127:0-1138:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1133:0-1144:1 -/
 def subject (cmd : Command) : Result (Option Std.U64) := do
   match cmd with
   | Command.Create _ _ _ => ok none
@@ -4667,7 +4674,7 @@ def subject (cmd : Command) : Result (Option Std.U64) := do
   | Command.RefundRange _ _ => ok none
 
 /-- [payment_domain::actor_id]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1142:0-1147:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 1148:0-1153:1
     Visibility: public -/
 def actor_id (actor : Principal) : Result Std.U64 := do
   match actor.actor with
@@ -4675,7 +4682,7 @@ def actor_id (actor : Principal) : Result Std.U64 := do
   | Actor.Operator o => ok o
 
 /-- [payment_domain::last_payment]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1153:4-1159:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1159:4-1165:5 -/
 @[rust_loop_body]
 def last_payment_loop.body
   (ws : alloc.vec.Vec Write) (out : Option Payment) (i : Std.Usize) :
@@ -4700,7 +4707,7 @@ def last_payment_loop.body
   else ok (done out)
 
 /-- [payment_domain::last_payment]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1153:4-1159:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1159:4-1165:5 -/
 @[rust_loop]
 def last_payment_loop
   (ws : alloc.vec.Vec Write) (out : Option Payment) (i : Std.Usize) :
@@ -4711,13 +4718,13 @@ def last_payment_loop
     (out, i)
 
 /-- [payment_domain::last_payment]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1150:0-1161:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1156:0-1167:1 -/
 @[reducible]
 def last_payment (ws : alloc.vec.Vec Write) : Result (Option Payment) := do
   last_payment_loop ws none 0#usize
 
 /-- [payment_domain::others]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1167:4-1174:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1173:4-1180:5 -/
 @[rust_loop_body]
 def others_loop.body
   (ws : alloc.vec.Vec Write) (out : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -4758,7 +4765,7 @@ def others_loop.body
   else ok (done out)
 
 /-- [payment_domain::others]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1167:4-1174:5 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1173:4-1180:5 -/
 @[rust_loop]
 def others_loop
   (ws : alloc.vec.Vec Write) (out : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -4769,13 +4776,13 @@ def others_loop
     (out, i)
 
 /-- [payment_domain::others]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1164:0-1176:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1170:0-1182:1 -/
 @[reducible]
 def others (ws : alloc.vec.Vec Write) : Result (alloc.vec.Vec Write) := do
   others_loop ws (alloc.vec.Vec.new Write) 0#usize
 
 /-- [payment_domain::keeps_mark]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1179:0-1184:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1185:0-1190:1 -/
 def keeps_mark (cmd : Command) : Result Bool := do
   match cmd with
   | Command.Create _ _ _ => ok false
@@ -4797,7 +4804,7 @@ def keeps_mark (cmd : Command) : Result Bool := do
   | Command.RefundRange _ _ => ok false
 
 /-- [payment_domain::changed]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1188:0-1206:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1194:0-1212:1 -/
 def changed
   (p : Payment) (op : Std.U64) (done1 : Bool) (changes : Std.U64) :
   Result Payment
@@ -4805,7 +4812,7 @@ def changed
   ok { p with operator := op, ledger_done := done1, changes }
 
 /-- [payment_domain::logged]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1214:0-1277:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1220:0-1283:1 -/
 def logged
   (actor : Principal) (s : Snapshot) (cmd : Command) (ws : alloc.vec.Vec Write)
   (reply : Reply) :
@@ -4907,7 +4914,7 @@ def logged
           ok (core.result.Result.Ok (out2, reply))
 
 /-- [payment_domain::transition]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1282:0-1293:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 1288:0-1299:1
     Visibility: public -/
 def transition
   (actor : Principal) (s : Snapshot) (cmd : Command) :
@@ -4924,153 +4931,139 @@ def transition
   | core.result.Result.Err _ => ok r
 
 /-- [payment_domain::T_PAYMENTS]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1298:0-1298:30
+    Source: 'crates/payment-domain/src/lib.rs', lines 1304:0-1304:30
     Visibility: public -/
 @[global_simps, irreducible] def T_PAYMENTS : Std.U32 := 0#u32
 
 /-- [payment_domain::T_REFUNDS]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1299:0-1299:29
+    Source: 'crates/payment-domain/src/lib.rs', lines 1305:0-1305:29
     Visibility: public -/
 @[global_simps, irreducible] def T_REFUNDS : Std.U32 := 1#u32
 
 /-- [payment_domain::T_EVENTS]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1300:0-1300:28
+    Source: 'crates/payment-domain/src/lib.rs', lines 1306:0-1306:28
     Visibility: public -/
 @[global_simps, irreducible] def T_EVENTS : Std.U32 := 2#u32
 
 /-- [payment_domain::T_REFS]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1301:0-1301:26
+    Source: 'crates/payment-domain/src/lib.rs', lines 1307:0-1307:26
     Visibility: public -/
 @[global_simps, irreducible] def T_REFS : Std.U32 := 3#u32
 
 /-- [payment_domain::T_COUNTER]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1302:0-1302:29
+    Source: 'crates/payment-domain/src/lib.rs', lines 1308:0-1308:29
     Visibility: public -/
 @[global_simps, irreducible] def T_COUNTER : Std.U32 := 4#u32
 
 /-- [payment_domain::T_MERCHANTS]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1303:0-1303:31
+    Source: 'crates/payment-domain/src/lib.rs', lines 1309:0-1309:31
     Visibility: public -/
 @[global_simps, irreducible] def T_MERCHANTS : Std.U32 := 5#u32
 
 /-- [payment_domain::T_HISTORY]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1304:0-1304:29
+    Source: 'crates/payment-domain/src/lib.rs', lines 1310:0-1310:29
     Visibility: public -/
 @[global_simps, irreducible] def T_HISTORY : Std.U32 := 6#u32
 
 /-- [payment_domain::PAYMENT_ID]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1306:0-1306:30
+    Source: 'crates/payment-domain/src/lib.rs', lines 1312:0-1312:30
     Visibility: public -/
 @[global_simps, irreducible] def PAYMENT_ID : Std.U32 := 0#u32
 
 /-- [payment_domain::PAYMENT_MERCHANT]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1307:0-1307:36
+    Source: 'crates/payment-domain/src/lib.rs', lines 1313:0-1313:36
     Visibility: public -/
 @[global_simps, irreducible] def PAYMENT_MERCHANT : Std.U32 := 1#u32
 
 /-- [payment_domain::PAYMENT_SEQ]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1308:0-1308:32
+    Source: 'crates/payment-domain/src/lib.rs', lines 1314:0-1314:32
     Visibility: public -/
 @[global_simps, irreducible] def PAYMENT_SEQ : Std.U32 := 13#u32
 
 /-- [payment_domain::MERCHANT_KEY]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1309:0-1309:32
+    Source: 'crates/payment-domain/src/lib.rs', lines 1315:0-1315:32
     Visibility: public -/
 @[global_simps, irreducible] def MERCHANT_KEY : Std.U32 := 0#u32
 
 /-- [payment_domain::REFUND_ID]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1310:0-1310:29
+    Source: 'crates/payment-domain/src/lib.rs', lines 1316:0-1316:29
     Visibility: public -/
 @[global_simps, irreducible] def REFUND_ID : Std.U32 := 0#u32
 
 /-- [payment_domain::REFUND_PAYMENT]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1311:0-1311:34
+    Source: 'crates/payment-domain/src/lib.rs', lines 1317:0-1317:34
     Visibility: public -/
 @[global_simps, irreducible] def REFUND_PAYMENT : Std.U32 := 1#u32
 
 /-- [payment_domain::EVENT_ID]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1312:0-1312:28
+    Source: 'crates/payment-domain/src/lib.rs', lines 1318:0-1318:28
     Visibility: public -/
 @[global_simps, irreducible] def EVENT_ID : Std.U32 := 0#u32
 
 /-- [payment_domain::REF_PAYMENT]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1313:0-1313:31
+    Source: 'crates/payment-domain/src/lib.rs', lines 1319:0-1319:31
     Visibility: public -/
 @[global_simps, irreducible] def REF_PAYMENT : Std.U32 := 0#u32
 
 /-- [payment_domain::HISTORY_PAYMENT]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1314:0-1314:35
+    Source: 'crates/payment-domain/src/lib.rs', lines 1320:0-1320:35
     Visibility: public -/
 @[global_simps, irreducible] def HISTORY_PAYMENT : Std.U32 := 0#u32
 
 /-- [payment_domain::HISTORY_N]
-    Source: 'crates/payment-domain/src/lib.rs', lines 1315:0-1315:29
+    Source: 'crates/payment-domain/src/lib.rs', lines 1321:0-1321:29
     Visibility: public -/
 @[global_simps, irreducible] def HISTORY_N : Std.U32 := 1#u32
 
 /-- [payment_domain::v_int]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1317:0-1319:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1323:0-1325:1 -/
 def v_int (x : Std.U64) : Result h5i_app_sql.Val := do
   U64.Insts.H5i_app_sqlColumn.to_val x
 
 /-- [payment_domain::p_eq]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1321:0-1323:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1327:0-1329:1 -/
 def p_eq (col : Std.U32) (v : h5i_app_sql.Val) : Result h5i_app_sql.Pred := do
   ok (h5i_app_sql.Pred.Eq col v)
 
 /-- [payment_domain::p_or]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1325:0-1327:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1331:0-1333:1 -/
 def p_or
   (a : h5i_app_sql.Pred) (b : h5i_app_sql.Pred) : Result h5i_app_sql.Pred := do
   ok (h5i_app_sql.Pred.Or a b)
 
-/-- [payment_domain::seq_range]: loop body 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1333:4-1336:5 -/
-@[rust_loop_body]
-def seq_range_loop.body
-  (col : Std.U32) («end» : Std.U64) (p : h5i_app_sql.Pred) (x : Std.U64) :
-  Result (ControlFlow (h5i_app_sql.Pred × Std.U64) h5i_app_sql.Pred)
-  := do
-  if x < «end»
-  then
-    let v ← v_int x
-    let p1 ← p_eq col v
-    let p2 ← p_or p p1
-    let x1 ← x + 1#u64
-    ok (cont (p2, x1))
-  else ok (done p)
-
-/-- [payment_domain::seq_range]: loop 0:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1333:4-1336:5 -/
-@[rust_loop]
-def seq_range_loop
-  (col : Std.U32) («end» : Std.U64) (p : h5i_app_sql.Pred) (x : Std.U64) :
-  Result h5i_app_sql.Pred
-  := do
-  loop
-    (fun (p1, x1) => seq_range_loop.body col «end» p1 x1)
-    (p, x)
+/-- [payment_domain::SIGN]
+    Source: 'crates/payment-domain/src/lib.rs', lines 1337:0-1337:44
+    Visibility: public -/
+@[global_simps, irreducible] def SIGN : Std.U64 := 9223372036854775808#u64
 
 /-- [payment_domain::seq_range]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1330:0-1338:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1342:0-1350:1 -/
 def seq_range
   (col : Std.U32) («from» : Std.U64) («end» : Std.U64) :
   Result h5i_app_sql.Pred
   := do
   let v ← v_int «from»
-  let p ← p_eq col v
-  let x ← «from» + 1#u64
-  seq_range_loop col «end» p x
+  let v1 ← v_int «end»
+  if «from» < SIGN
+  then
+    if «end» >= SIGN
+    then p_or (h5i_app_sql.Pred.Ge col v) (h5i_app_sql.Pred.Lt col v1)
+    else
+      ok (h5i_app_sql.Pred.And (h5i_app_sql.Pred.Ge col v) (h5i_app_sql.Pred.Lt
+        col v1))
+  else
+    ok (h5i_app_sql.Pred.And (h5i_app_sql.Pred.Ge col v) (h5i_app_sql.Pred.Lt
+      col v1))
 
 /-- [payment_domain::rd_where]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1340:0-1342:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1352:0-1354:1 -/
 def rd_where
   (table : Std.U32) (pred : h5i_app_sql.Pred) : Result h5i_app_sql.Read := do
   let w ← h5i_app_sql.whole
   ok { table, pred, window := w }
 
 /-- [payment_domain::result_reads]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1345:0-1351:1 -/
+    Source: 'crates/payment-domain/src/lib.rs', lines 1357:0-1363:1 -/
 def result_reads
   (result : PspResult) (out : alloc.vec.Vec h5i_app_sql.Read) :
   Result (alloc.vec.Vec h5i_app_sql.Read)
@@ -5092,7 +5085,7 @@ def result_reads
     alloc.vec.Vec.push out r
 
 /-- [payment_domain::read_only]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1358:0-1371:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 1370:0-1383:1
     Visibility: public -/
 def read_only (cmd : Command) : Result Bool := do
   match cmd with
@@ -5115,7 +5108,7 @@ def read_only (cmd : Command) : Result Bool := do
   | Command.RefundRange _ _ => ok true
 
 /-- [payment_domain::reads]:
-    Source: 'crates/payment-domain/src/lib.rs', lines 1377:0-1489:1
+    Source: 'crates/payment-domain/src/lib.rs', lines 1389:0-1501:1
     Visibility: public -/
 def reads
   (actor : Principal) (cmd : Command) :
@@ -5309,7 +5302,7 @@ def reads
   | Command.Range «from» limit =>
     if limit != 0#u32
     then
-      if limit <= MAX_PAGE
+      if limit <= MAX_RANGE
       then
         let b ← is_operator actor
         if b
@@ -5332,7 +5325,7 @@ def reads
   | Command.RefundRange «from» limit =>
     if limit != 0#u32
     then
-      if limit <= MAX_PAGE
+      if limit <= MAX_RANGE
       then
         let b ← is_operator actor
         if b

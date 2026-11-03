@@ -20,7 +20,7 @@ set_option maxRecDepth 2048
 namespace payment_ledger
 
 /-- [h5i_app_sql::Val]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 8:0-8:12
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 8:0-8:12
     Name pattern: [h5i_app_sql::Val]
     Visibility: public -/
 @[discriminant isize, rust_type "h5i_app_sql::Val"]
@@ -32,7 +32,7 @@ inductive h5i_app_sql.Val where
 | Null : h5i_app_sql.Val
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for u64}::to_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 25:4-25:27
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 25:4-25:27
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u64>}::to_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u64>}::to_val"]
@@ -42,7 +42,7 @@ def U64.Insts.H5i_app_sqlColumn.to_val
   ok (h5i_app_sql.Val.Int i)
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for u64}::from_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 28:4-28:39
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 28:4-28:39
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u64>}::from_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u64>}::from_val"]
@@ -58,7 +58,7 @@ def U64.Insts.H5i_app_sqlColumn.from_val
   | h5i_app_sql.Val.Null => ok none
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for u32}::to_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 37:4-37:27
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 37:4-37:27
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u32>}::to_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u32>}::to_val"]
@@ -68,7 +68,7 @@ def U32.Insts.H5i_app_sqlColumn.to_val
   ok (h5i_app_sql.Val.Int i)
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for u32}::from_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 40:4-40:39
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 40:4-40:39
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<u32>}::from_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<u32>}::from_val"]
@@ -90,7 +90,7 @@ def U32.Insts.H5i_app_sqlColumn.from_val
   | h5i_app_sql.Val.Null => ok none
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for bool}::to_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 55:4-55:27
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 55:4-55:27
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<bool>}::to_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<bool>}::to_val"]
@@ -99,7 +99,7 @@ def Bool.Insts.H5i_app_sqlColumn.to_val
   ok (h5i_app_sql.Val.Bool self)
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Column for bool}::from_val]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 58:4-58:40
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 58:4-58:40
     Name pattern: [h5i_app_sql::{h5i_app_sql::Column<bool>}::from_val]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Column<bool>}::from_val"]
@@ -113,7 +113,7 @@ def Bool.Insts.H5i_app_sqlColumn.from_val
   | h5i_app_sql.Val.Null => ok none
 
 /-- [h5i_app_sql::{impl h5i_app_sql::Zero for u64}::zero]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 104:4-104:20
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 104:4-104:20
     Name pattern: [h5i_app_sql::{h5i_app_sql::Zero<u64>}::zero]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::{h5i_app_sql::Zero<u64>}::zero"]
@@ -121,7 +121,7 @@ def U64.Insts.H5i_app_sqlZero.zero : Result Std.U64 := do
   ok 0#u64
 
 /-- [h5i_app_sql::val_eq]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 134:0-134:39
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 134:0-134:39
     Name pattern: [h5i_app_sql::val_eq]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::val_eq"]
@@ -167,7 +167,7 @@ def h5i_app_sql.val_eq
     | h5i_app_sql.Val.Null => ok true
 
 /-- [h5i_app_sql::has_col]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 160:0-160:59
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 160:0-160:59
     Name pattern: [h5i_app_sql::has_col]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::has_col"]
@@ -187,7 +187,7 @@ def h5i_app_sql.has_col
   else ok false
 
 /-- [h5i_app_sql::Write]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 171:0-171:14
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 171:0-171:14
     Name pattern: [h5i_app_sql::Write]
     Visibility: public -/
 @[discriminant isize, rust_type "h5i_app_sql::Write"]
@@ -201,7 +201,7 @@ inductive h5i_app_sql.Write where
 | DelWhere : Std.U32 → Std.U32 → h5i_app_sql.Val → h5i_app_sql.Write
 
 /-- [h5i_app_sql::Window]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 237:0-237:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 237:0-237:17
     Name pattern: [h5i_app_sql::Window]
     Visibility: public -/
 @[rust_type "h5i_app_sql::Window"]
@@ -211,7 +211,7 @@ structure h5i_app_sql.Window where
   limit : Option Std.U64
 
 /-- [h5i_app_sql::whole]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 244:0-244:24
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 244:0-244:24
     Name pattern: [h5i_app_sql::whole]
     Visibility: public -/
 @[rust_fun "h5i_app_sql::whole"]
@@ -219,13 +219,15 @@ def h5i_app_sql.whole : Result h5i_app_sql.Window := do
   ok { desc := false, offset := 0#u64, limit := none }
 
 /-- [h5i_app_sql::Pred]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 250:0-250:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 250:0-250:13
     Name pattern: [h5i_app_sql::Pred]
     Visibility: public -/
 @[discriminant isize, rust_type "h5i_app_sql::Pred"]
 inductive h5i_app_sql.Pred where
 | All : h5i_app_sql.Pred
 | Eq : Std.U32 → h5i_app_sql.Val → h5i_app_sql.Pred
+| Ge : Std.U32 → h5i_app_sql.Val → h5i_app_sql.Pred
+| Lt : Std.U32 → h5i_app_sql.Val → h5i_app_sql.Pred
 | In :
   Std.U32 →
   Std.U32 →
@@ -237,7 +239,7 @@ inductive h5i_app_sql.Pred where
 | Or : h5i_app_sql.Pred → h5i_app_sql.Pred → h5i_app_sql.Pred
 
 /-- [h5i_app_sql::Read]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-sql/src/lib.rs', lines 265:0-265:15
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-sql/src/lib.rs', lines 271:0-271:15
     Name pattern: [h5i_app_sql::Read]
     Visibility: public -/
 @[rust_type "h5i_app_sql::Read"]
@@ -247,7 +249,7 @@ structure h5i_app_sql.Read where
   window : h5i_app_sql.Window
 
 /-- [payment_ledger::Account]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure Account where
   id : Std.U64
@@ -262,7 +264,7 @@ structure Account where
   changes : Std.U64
 
 /-- [payment_ledger::Transfer]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure Transfer where
   id : Std.U64
@@ -274,14 +276,14 @@ structure Transfer where
   operator : Std.U64
 
 /-- [payment_ledger::OwnerCounter]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure OwnerCounter where
   owner : Std.U64
   next : Std.U64
 
 /-- [payment_ledger::HistoryEntry]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure HistoryEntry where
   account : Std.U64
@@ -298,63 +300,63 @@ structure HistoryEntry where
   credits_after : Std.U64
 
 /-- [payment_ledger::Ledger]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 95:12-98:13
     Visibility: public -/
 structure Ledger where
   next_account : Std.U64
 
 /-- [payment_ledger::{payment_ledger::Account}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def Account.TABLE : Std.U32 := 0#u32
 
 /-- [payment_ledger::{payment_ledger::Transfer}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def Transfer.TABLE : Std.U32 := 1#u32
 
 /-- [payment_ledger::{payment_ledger::Ledger}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def Ledger.TABLE : Std.U32 := 2#u32
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def OwnerCounter.TABLE : Std.U32 := 3#u32
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::TABLE]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 135:12-135:60
     Visibility: public -/
 @[global_simps, irreducible] def HistoryEntry.TABLE : Std.U32 := 4#u32
 
 /-- [payment_ledger::{payment_ledger::Account}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def Account.KEY_LEN : Std.U32 := 1#u32
 
 /-- [payment_ledger::{payment_ledger::Transfer}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def Transfer.KEY_LEN : Std.U32 := 1#u32
 
 /-- [payment_ledger::{payment_ledger::Ledger}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def Ledger.KEY_LEN : Std.U32 := 0#u32
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def OwnerCounter.KEY_LEN : Std.U32 := 1#u32
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::KEY_LEN]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 136:12-136:62
     Visibility: public -/
 @[global_simps, irreducible] def HistoryEntry.KEY_LEN : Std.U32 := 2#u32
 
 /-- [payment_ledger::{payment_ledger::Account}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def Account.to_row
   (self : Account) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
@@ -380,7 +382,7 @@ def Account.to_row
   alloc.vec.Vec.push out8 v9
 
 /-- [payment_ledger::{payment_ledger::Transfer}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def Transfer.to_row
   (self : Transfer) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
@@ -400,7 +402,7 @@ def Transfer.to_row
   alloc.vec.Vec.push out5 v6
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def OwnerCounter.to_row
   (self : OwnerCounter) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
@@ -410,7 +412,7 @@ def OwnerCounter.to_row
   alloc.vec.Vec.push out v1
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def HistoryEntry.to_row
   (self : HistoryEntry) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
@@ -440,7 +442,7 @@ def HistoryEntry.to_row
   alloc.vec.Vec.push out10 v11
 
 /-- [payment_ledger::{payment_ledger::Ledger}::to_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 138:12-143:13
     Visibility: public -/
 def Ledger.to_row
   (self : Ledger) : Result (alloc.vec.Vec h5i_app_sql.Val) := do
@@ -448,7 +450,7 @@ def Ledger.to_row
   alloc.vec.Vec.push (alloc.vec.Vec.new h5i_app_sql.Val) v
 
 /-- [payment_ledger::{payment_ledger::Ledger}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def Ledger.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option Ledger) := do
@@ -466,7 +468,7 @@ def Ledger.from_row
     | some x => ok (some { next_account := x })
 
 /-- [payment_ledger::{payment_ledger::Account}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def Account.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option Account) := do
@@ -580,7 +582,7 @@ def Account.from_row
                           })
 
 /-- [payment_ledger::{payment_ledger::Transfer}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def Transfer.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option Transfer) := do
@@ -662,7 +664,7 @@ def Transfer.from_row
                     })
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def OwnerCounter.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option OwnerCounter) := do
@@ -689,7 +691,7 @@ def OwnerCounter.from_row
                    ok (some { owner := x, next := x1 })
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::from_row]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 146:12-167:13
     Visibility: public -/
 def HistoryEntry.from_row
   (row : alloc.vec.Vec h5i_app_sql.Val) : Result (Option HistoryEntry) := do
@@ -825,7 +827,7 @@ def HistoryEntry.from_row
                               })
 
 /-- [payment_ledger::{payment_ledger::Account}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def Account.from_rows_loop.body
@@ -852,7 +854,7 @@ def Account.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_ledger::{payment_ledger::Account}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def Account.from_rows_loop
@@ -865,7 +867,7 @@ def Account.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_ledger::{payment_ledger::Account}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def Account.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -878,7 +880,7 @@ def Account.from_rows
   else ok none
 
 /-- [payment_ledger::{payment_ledger::Transfer}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def Transfer.from_rows_loop.body
@@ -905,7 +907,7 @@ def Transfer.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_ledger::{payment_ledger::Transfer}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def Transfer.from_rows_loop
@@ -918,7 +920,7 @@ def Transfer.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_ledger::{payment_ledger::Transfer}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def Transfer.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -931,7 +933,7 @@ def Transfer.from_rows
   else ok none
 
 /-- [payment_ledger::{payment_ledger::Ledger}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def Ledger.from_rows_loop.body
@@ -958,7 +960,7 @@ def Ledger.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_ledger::{payment_ledger::Ledger}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def Ledger.from_rows_loop
@@ -971,7 +973,7 @@ def Ledger.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_ledger::{payment_ledger::Ledger}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def Ledger.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -984,7 +986,7 @@ def Ledger.from_rows
   else ok none
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def OwnerCounter.from_rows_loop.body
@@ -1011,7 +1013,7 @@ def OwnerCounter.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def OwnerCounter.from_rows_loop
@@ -1024,7 +1026,7 @@ def OwnerCounter.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def OwnerCounter.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -1038,7 +1040,7 @@ def OwnerCounter.from_rows
   else ok none
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::from_rows]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop_body]
 def HistoryEntry.from_rows_loop.body
@@ -1065,7 +1067,7 @@ def HistoryEntry.from_rows_loop.body
   else ok (done (out, ok1))
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::from_rows]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 174:16-180:17
     Visibility: public -/
 @[rust_loop]
 def HistoryEntry.from_rows_loop
@@ -1078,7 +1080,7 @@ def HistoryEntry.from_rows_loop
     (out, ok1, i)
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::from_rows]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 170:12-186:13
     Visibility: public -/
 def HistoryEntry.from_rows
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -1092,42 +1094,42 @@ def HistoryEntry.from_rows
   else ok none
 
 /-- [payment_ledger::{payment_ledger::Account}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def Account.sql_put (self : Account) : Result h5i_app_sql.Write := do
   let v ← Account.to_row self
   ok (h5i_app_sql.Write.Put Account.TABLE Account.KEY_LEN v)
 
 /-- [payment_ledger::{payment_ledger::Transfer}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def Transfer.sql_put (self : Transfer) : Result h5i_app_sql.Write := do
   let v ← Transfer.to_row self
   ok (h5i_app_sql.Write.Put Transfer.TABLE Transfer.KEY_LEN v)
 
 /-- [payment_ledger::{payment_ledger::Ledger}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def Ledger.sql_put (self : Ledger) : Result h5i_app_sql.Write := do
   let v ← Ledger.to_row self
   ok (h5i_app_sql.Write.Put Ledger.TABLE Ledger.KEY_LEN v)
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def OwnerCounter.sql_put (self : OwnerCounter) : Result h5i_app_sql.Write := do
   let v ← OwnerCounter.to_row self
   ok (h5i_app_sql.Write.Put OwnerCounter.TABLE OwnerCounter.KEY_LEN v)
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::sql_put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 189:12-191:13
     Visibility: public -/
 def HistoryEntry.sql_put (self : HistoryEntry) : Result h5i_app_sql.Write := do
   let v ← HistoryEntry.to_row self
   ok (h5i_app_sql.Write.Put HistoryEntry.TABLE HistoryEntry.KEY_LEN v)
 
 /-- [payment_ledger::{payment_ledger::Ledger}::from_one]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 204:12-212:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 204:12-212:13
     Visibility: public -/
 def Ledger.from_one
   (rows : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)) :
@@ -1149,7 +1151,7 @@ def Ledger.from_one
     else ok none
 
 /-- [payment_ledger::{payment_ledger::Account}::put]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop_body]
 def Account.put_loop.body
@@ -1174,7 +1176,7 @@ def Account.put_loop.body
        ok (done v1)
 
 /-- [payment_ledger::{payment_ledger::Account}::put]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop]
 def Account.put_loop
@@ -1186,7 +1188,7 @@ def Account.put_loop
     i
 
 /-- [payment_ledger::{payment_ledger::Account}::put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
     Visibility: public -/
 @[reducible]
 def Account.put
@@ -1196,7 +1198,7 @@ def Account.put
   Account.put_loop v x 0#usize
 
 /-- [payment_ledger::{payment_ledger::Transfer}::put]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop_body]
 def Transfer.put_loop.body
@@ -1221,7 +1223,7 @@ def Transfer.put_loop.body
        ok (done v1)
 
 /-- [payment_ledger::{payment_ledger::Transfer}::put]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop]
 def Transfer.put_loop
@@ -1233,7 +1235,7 @@ def Transfer.put_loop
     i
 
 /-- [payment_ledger::{payment_ledger::Transfer}::put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
     Visibility: public -/
 @[reducible]
 def Transfer.put
@@ -1243,7 +1245,7 @@ def Transfer.put
   Transfer.put_loop v x 0#usize
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::put]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop_body]
 def OwnerCounter.put_loop.body
@@ -1269,7 +1271,7 @@ def OwnerCounter.put_loop.body
        ok (done v1)
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::put]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop]
 def OwnerCounter.put_loop
@@ -1281,7 +1283,7 @@ def OwnerCounter.put_loop
     i
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
     Visibility: public -/
 @[reducible]
 def OwnerCounter.put
@@ -1291,7 +1293,7 @@ def OwnerCounter.put
   OwnerCounter.put_loop v x 0#usize
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::put]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop_body]
 def HistoryEntry.put_loop.body
@@ -1321,7 +1323,7 @@ def HistoryEntry.put_loop.body
        ok (done v1)
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::put]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 220:16-228:13
     Visibility: public -/
 @[rust_loop]
 def HistoryEntry.put_loop
@@ -1333,7 +1335,7 @@ def HistoryEntry.put_loop
     i
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::put]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 218:12-228:13
     Visibility: public -/
 @[reducible]
 def HistoryEntry.put
@@ -1343,13 +1345,13 @@ def HistoryEntry.put
   HistoryEntry.put_loop v x 0#usize
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::Account}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 104:13-104:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 108:13-108:18
     Visibility: public -/
 def Account.Insts.CoreCloneClone.clone (self : Account) : Result Account := do
   ok self
 
 /-- [payment_ledger::{payment_ledger::Account}::del]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop_body]
 def Account.del_loop.body
@@ -1375,7 +1377,7 @@ def Account.del_loop.body
   else ok (done out)
 
 /-- [payment_ledger::{payment_ledger::Account}::del]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop]
 def Account.del_loop
@@ -1388,7 +1390,7 @@ def Account.del_loop
     (out, i)
 
 /-- [payment_ledger::{payment_ledger::Account}::del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
     Visibility: public -/
 @[reducible]
 def Account.del
@@ -1398,14 +1400,14 @@ def Account.del
   Account.del_loop v id (alloc.vec.Vec.new Account) 0#usize
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::Transfer}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 124:13-124:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 128:13-128:18
     Visibility: public -/
 def Transfer.Insts.CoreCloneClone.clone
   (self : Transfer) : Result Transfer := do
   ok self
 
 /-- [payment_ledger::{payment_ledger::Transfer}::del]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop_body]
 def Transfer.del_loop.body
@@ -1431,7 +1433,7 @@ def Transfer.del_loop.body
   else ok (done out)
 
 /-- [payment_ledger::{payment_ledger::Transfer}::del]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop]
 def Transfer.del_loop
@@ -1444,7 +1446,7 @@ def Transfer.del_loop
     (out, i)
 
 /-- [payment_ledger::{payment_ledger::Transfer}::del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
     Visibility: public -/
 @[reducible]
 def Transfer.del
@@ -1454,14 +1456,14 @@ def Transfer.del
   Transfer.del_loop v id (alloc.vec.Vec.new Transfer) 0#usize
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::OwnerCounter}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 143:13-143:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 147:13-147:18
     Visibility: public -/
 def OwnerCounter.Insts.CoreCloneClone.clone
   (self : OwnerCounter) : Result OwnerCounter := do
   ok self
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::del]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop_body]
 def OwnerCounter.del_loop.body
@@ -1488,7 +1490,7 @@ def OwnerCounter.del_loop.body
   else ok (done out)
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::del]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop]
 def OwnerCounter.del_loop
@@ -1501,7 +1503,7 @@ def OwnerCounter.del_loop
     (out, i)
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
     Visibility: public -/
 @[reducible]
 def OwnerCounter.del
@@ -1511,14 +1513,14 @@ def OwnerCounter.del
   OwnerCounter.del_loop v owner (alloc.vec.Vec.new OwnerCounter) 0#usize
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::HistoryEntry}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 155:13-155:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 159:13-159:18
     Visibility: public -/
 def HistoryEntry.Insts.CoreCloneClone.clone
   (self : HistoryEntry) : Result HistoryEntry := do
   ok self
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::del]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop_body]
 def HistoryEntry.del_loop.body
@@ -1551,7 +1553,7 @@ def HistoryEntry.del_loop.body
   else ok (done out)
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::del]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 234:16-239:17
     Visibility: public -/
 @[rust_loop]
 def HistoryEntry.del_loop
@@ -1564,7 +1566,7 @@ def HistoryEntry.del_loop
     (out, i)
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 231:12-241:13
     Visibility: public -/
 @[reducible]
 def HistoryEntry.del
@@ -1574,7 +1576,7 @@ def HistoryEntry.del
   HistoryEntry.del_loop v account n (alloc.vec.Vec.new HistoryEntry) 0#usize
 
 /-- [payment_ledger::{payment_ledger::Account}::del_where]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop_body]
 def Account.del_where_loop.body
@@ -1602,7 +1604,7 @@ def Account.del_where_loop.body
   else ok (done out)
 
 /-- [payment_ledger::{payment_ledger::Account}::del_where]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop]
 def Account.del_where_loop
@@ -1615,7 +1617,7 @@ def Account.del_where_loop
     (out, i)
 
 /-- [payment_ledger::{payment_ledger::Account}::del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
     Visibility: public -/
 @[reducible]
 def Account.del_where
@@ -1625,7 +1627,7 @@ def Account.del_where
   Account.del_where_loop v col val (alloc.vec.Vec.new Account) 0#usize
 
 /-- [payment_ledger::{payment_ledger::Transfer}::del_where]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop_body]
 def Transfer.del_where_loop.body
@@ -1653,7 +1655,7 @@ def Transfer.del_where_loop.body
   else ok (done out)
 
 /-- [payment_ledger::{payment_ledger::Transfer}::del_where]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop]
 def Transfer.del_where_loop
@@ -1666,7 +1668,7 @@ def Transfer.del_where_loop
     (out, i)
 
 /-- [payment_ledger::{payment_ledger::Transfer}::del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
     Visibility: public -/
 @[reducible]
 def Transfer.del_where
@@ -1676,7 +1678,7 @@ def Transfer.del_where
   Transfer.del_where_loop v col val (alloc.vec.Vec.new Transfer) 0#usize
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::del_where]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop_body]
 def OwnerCounter.del_where_loop.body
@@ -1705,7 +1707,7 @@ def OwnerCounter.del_where_loop.body
   else ok (done out)
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::del_where]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop]
 def OwnerCounter.del_where_loop
@@ -1718,7 +1720,7 @@ def OwnerCounter.del_where_loop
     (out, i)
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
     Visibility: public -/
 @[reducible]
 def OwnerCounter.del_where
@@ -1729,7 +1731,7 @@ def OwnerCounter.del_where
     0#usize
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::del_where]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop_body]
 def HistoryEntry.del_where_loop.body
@@ -1758,7 +1760,7 @@ def HistoryEntry.del_where_loop.body
   else ok (done out)
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::del_where]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 247:16-252:17
     Visibility: public -/
 @[rust_loop]
 def HistoryEntry.del_where_loop
@@ -1771,7 +1773,7 @@ def HistoryEntry.del_where_loop
     (out, i)
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 244:12-254:13
     Visibility: public -/
 @[reducible]
 def HistoryEntry.del_where
@@ -1782,7 +1784,7 @@ def HistoryEntry.del_where
     0#usize
 
 /-- [payment_ledger::{payment_ledger::Account}::sql_del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
     Visibility: public -/
 def Account.sql_del (id : Std.U64) : Result h5i_app_sql.Write := do
   let v ← U64.Insts.H5i_app_sqlColumn.to_val id
@@ -1790,7 +1792,7 @@ def Account.sql_del (id : Std.U64) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.Del Account.TABLE key)
 
 /-- [payment_ledger::{payment_ledger::Transfer}::sql_del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
     Visibility: public -/
 def Transfer.sql_del (id : Std.U64) : Result h5i_app_sql.Write := do
   let v ← U64.Insts.H5i_app_sqlColumn.to_val id
@@ -1798,7 +1800,7 @@ def Transfer.sql_del (id : Std.U64) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.Del Transfer.TABLE key)
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::sql_del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
     Visibility: public -/
 def OwnerCounter.sql_del (owner : Std.U64) : Result h5i_app_sql.Write := do
   let v ← U64.Insts.H5i_app_sqlColumn.to_val owner
@@ -1806,7 +1808,7 @@ def OwnerCounter.sql_del (owner : Std.U64) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.Del OwnerCounter.TABLE key)
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::sql_del]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 257:12-261:13
     Visibility: public -/
 def HistoryEntry.sql_del
   (account : Std.U64) (n : Std.U64) : Result h5i_app_sql.Write := do
@@ -1817,35 +1819,35 @@ def HistoryEntry.sql_del
   ok (h5i_app_sql.Write.Del HistoryEntry.TABLE key1)
 
 /-- [payment_ledger::{payment_ledger::Account}::sql_del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
     Visibility: public -/
 def Account.sql_del_where
   (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.DelWhere Account.TABLE col val)
 
 /-- [payment_ledger::{payment_ledger::Transfer}::sql_del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
     Visibility: public -/
 def Transfer.sql_del_where
   (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.DelWhere Transfer.TABLE col val)
 
 /-- [payment_ledger::{payment_ledger::OwnerCounter}::sql_del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
     Visibility: public -/
 def OwnerCounter.sql_del_where
   (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.DelWhere OwnerCounter.TABLE col val)
 
 /-- [payment_ledger::{payment_ledger::HistoryEntry}::sql_del_where]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 264:12-266:13
     Visibility: public -/
 def HistoryEntry.sql_del_where
   (col : Std.U32) (val : h5i_app_sql.Val) : Result h5i_app_sql.Write := do
   ok (h5i_app_sql.Write.DelWhere HistoryEntry.TABLE col val)
 
 /-- [payment_ledger::Snapshot]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 278:8-280:9
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 278:8-280:9
     Visibility: public -/
 structure Snapshot where
   ledger : Ledger
@@ -1855,7 +1857,7 @@ structure Snapshot where
   history : alloc.vec.Vec HistoryEntry
 
 /-- [payment_ledger::Rows]
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 284:8-286:9
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 284:8-286:9
     Visibility: public -/
 structure Rows where
   ledger : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)
@@ -1865,7 +1867,7 @@ structure Rows where
   history : alloc.vec.Vec (alloc.vec.Vec h5i_app_sql.Val)
 
 /-- [payment_ledger::decode]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 289:8-297:9
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 289:8-297:9
     Visibility: public -/
 def decode (r : Rows) : Result (Option Snapshot) := do
   let o ← Ledger.from_one r.ledger
@@ -1898,7 +1900,7 @@ def decode (r : Rows) : Result (Option Snapshot) := do
               })
 
 /-- [payment_ledger::Write]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 223:0-229:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 228:0-234:1
     Visibility: public -/
 @[discriminant isize]
 inductive Write where
@@ -1909,7 +1911,7 @@ inductive Write where
 | PutHistory : HistoryEntry → Write
 
 /-- [payment_ledger::apply_write]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 907:0-915:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 918:0-926:1 -/
 def apply_write (s : Snapshot) (w : Write) : Result Snapshot := do
   match w with
   | Write.PutAccount a =>
@@ -1927,47 +1929,47 @@ def apply_write (s : Snapshot) (w : Write) : Result Snapshot := do
     ok { s with history := v }
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::Write}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 222:9-222:14
+    Source: 'crates/payment-ledger/src/lib.rs', lines 227:9-227:14
     Visibility: public -/
 def Write.Insts.CoreCloneClone.clone (self : Write) : Result Write := do
   ok self
 
 /-- Trait implementation: [payment_ledger::{impl core::clone::Clone for payment_ledger::HistoryEntry}]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 155:13-155:18 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 159:13-159:18 -/
 @[reducible]
 def HistoryEntry.Insts.CoreCloneClone : core.clone.Clone HistoryEntry := {
   clone := HistoryEntry.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [payment_ledger::{impl core::clone::Clone for payment_ledger::OwnerCounter}]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 143:13-143:18 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 147:13-147:18 -/
 @[reducible]
 def OwnerCounter.Insts.CoreCloneClone : core.clone.Clone OwnerCounter := {
   clone := OwnerCounter.Insts.CoreCloneClone.clone
 }
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::Ledger}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 136:13-136:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 140:13-140:18
     Visibility: public -/
 def Ledger.Insts.CoreCloneClone.clone (self : Ledger) : Result Ledger := do
   ok self
 
 /-- Trait implementation: [payment_ledger::{impl core::clone::Clone for payment_ledger::Transfer}]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 124:13-124:18 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 128:13-128:18 -/
 @[reducible]
 def Transfer.Insts.CoreCloneClone : core.clone.Clone Transfer := {
   clone := Transfer.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [payment_ledger::{impl core::clone::Clone for payment_ledger::Account}]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 104:13-104:18 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 108:13-108:18 -/
 @[reducible]
 def Account.Insts.CoreCloneClone : core.clone.Clone Account := {
   clone := Account.Insts.CoreCloneClone.clone
 }
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::Snapshot}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 93:13-93:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 97:13-97:18
     Visibility: public -/
 def Snapshot.Insts.CoreCloneClone.clone
   (self : Snapshot) : Result Snapshot := do
@@ -1984,7 +1986,7 @@ def Snapshot.Insts.CoreCloneClone.clone
     }
 
 /-- [payment_ledger::apply]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 306:12-309:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 306:12-309:13
     Visibility: public -/
 @[rust_loop_body]
 def apply_loop.body
@@ -2003,7 +2005,7 @@ def apply_loop.body
   else ok (done s)
 
 /-- [payment_ledger::apply]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 306:12-309:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 306:12-309:13
     Visibility: public -/
 @[rust_loop]
 def apply_loop
@@ -2015,14 +2017,14 @@ def apply_loop
     (s, i)
 
 /-- [payment_ledger::apply]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 303:8-311:9
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 303:8-311:9
     Visibility: public -/
 def apply (snap : Snapshot) (ws : alloc.vec.Vec Write) : Result Snapshot := do
   let s ← Snapshot.Insts.CoreCloneClone.clone snap
   apply_loop ws s 0#usize
 
 /-- [payment_ledger::sql_write]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 918:0-926:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 929:0-937:1 -/
 def sql_write
   (w : Write) (out : alloc.vec.Vec h5i_app_sql.Write) :
   Result (alloc.vec.Vec h5i_app_sql.Write)
@@ -2044,7 +2046,7 @@ def sql_write
     alloc.vec.Vec.push out w1
 
 /-- [payment_ledger::sql_writes]: loop body 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 317:12-320:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 317:12-320:13
     Visibility: public -/
 @[rust_loop_body]
 def sql_writes_loop.body
@@ -2064,7 +2066,7 @@ def sql_writes_loop.body
   else ok (done out)
 
 /-- [payment_ledger::sql_writes]: loop 0:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 317:12-320:13
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 317:12-320:13
     Visibility: public -/
 @[rust_loop]
 def sql_writes_loop
@@ -2077,7 +2079,7 @@ def sql_writes_loop
     (out, i)
 
 /-- [payment_ledger::sql_writes]:
-    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a45b6e3/crates/h5i-app-schema/src/lib.rs', lines 314:8-322:9
+    Source: '/cargo/git/checkouts/h5i-65ea82406b9a50c7/a98bcbd/crates/h5i-app-schema/src/lib.rs', lines 314:8-322:9
     Visibility: public -/
 @[reducible]
 def sql_writes
@@ -2142,18 +2144,23 @@ def actor_id (actor : Principal) : Result Std.U64 := do
     Visibility: public -/
 @[global_simps, irreducible] def MAX_PAGE : Std.U32 := 64#u32
 
+/-- [payment_ledger::MAX_RANGE]
+    Source: 'crates/payment-ledger/src/lib.rs', lines 91:0-91:32
+    Visibility: public -/
+@[global_simps, irreducible] def MAX_RANGE : Std.U32 := 4096#u32
+
 /-- [payment_ledger::CMD_OPEN]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 172:0-172:28
+    Source: 'crates/payment-ledger/src/lib.rs', lines 176:0-176:28
     Visibility: public -/
 @[global_simps, irreducible] def CMD_OPEN : Std.U32 := 1#u32
 
 /-- [payment_ledger::CMD_POST]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 174:0-174:28
+    Source: 'crates/payment-ledger/src/lib.rs', lines 178:0-178:28
     Visibility: public -/
 @[global_simps, irreducible] def CMD_POST : Std.U32 := 2#u32
 
 /-- [payment_ledger::TransferReq]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 182:0-188:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 186:0-192:1
     Visibility: public -/
 structure TransferReq where
   id : Std.U64
@@ -2163,7 +2170,7 @@ structure TransferReq where
   code : Std.U32
 
 /-- [payment_ledger::Command]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 191:0-220:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 195:0-225:1
     Visibility: public -/
 @[discriminant isize]
 inductive Command where
@@ -2178,7 +2185,7 @@ inductive Command where
 | TransferRange : Std.U64 → Std.U32 → Command
 
 /-- [payment_ledger::Reply]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 232:0-249:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 237:0-254:1
     Visibility: public -/
 @[discriminant isize]
 inductive Reply where
@@ -2192,7 +2199,7 @@ inductive Reply where
 | History : alloc.vec.Vec HistoryEntry → Option Std.U64 → Reply
 
 /-- [payment_ledger::Error]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 252:0-273:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 257:0-278:1
     Visibility: public -/
 @[discriminant isize]
 inductive Error where
@@ -2212,7 +2219,7 @@ inductive Error where
 | BadPage : Error
 
 /-- [payment_ledger::four]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 277:0-284:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 282:0-289:1 -/
 def four
   (a : Write) (b : Write) (c : Write) (d : Write) :
   Result (alloc.vec.Vec Write)
@@ -2223,7 +2230,7 @@ def four
   alloc.vec.Vec.push ws2 d
 
 /-- [payment_ledger::five]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 286:0-294:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 291:0-299:1 -/
 def five
   (a : Write) (b : Write) (c : Write) (d : Write) (e : Write) :
   Result (alloc.vec.Vec Write)
@@ -2235,7 +2242,7 @@ def five
   alloc.vec.Vec.push ws3 e
 
 /-- [payment_ledger::entry]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 298:0-313:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 303:0-318:1 -/
 def entry
   (actor : Principal) (command : Std.U32) (transfer1 : Std.U64)
   (code : Std.U32) (n : Std.U64) (before : Account) (after : Account) :
@@ -2260,7 +2267,7 @@ def entry
     }
 
 /-- [payment_ledger::find_account]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 317:4-324:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 322:4-329:1
     Visibility: public -/
 @[rust_loop_body]
 def find_account_loop.body
@@ -2280,7 +2287,7 @@ def find_account_loop.body
   else ok (done none)
 
 /-- [payment_ledger::find_account]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 317:4-324:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 322:4-329:1
     Visibility: public -/
 @[rust_loop]
 def find_account_loop
@@ -2292,7 +2299,7 @@ def find_account_loop
     i
 
 /-- [payment_ledger::find_account]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 315:0-324:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 320:0-329:1
     Visibility: public -/
 @[reducible]
 def find_account
@@ -2302,7 +2309,7 @@ def find_account
   find_account_loop accounts id 0#usize
 
 /-- [payment_ledger::find_transfer]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 328:4-335:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 333:4-340:1
     Visibility: public -/
 @[rust_loop_body]
 def find_transfer_loop.body
@@ -2322,7 +2329,7 @@ def find_transfer_loop.body
   else ok (done none)
 
 /-- [payment_ledger::find_transfer]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 328:4-335:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 333:4-340:1
     Visibility: public -/
 @[rust_loop]
 def find_transfer_loop
@@ -2334,7 +2341,7 @@ def find_transfer_loop
     i
 
 /-- [payment_ledger::find_transfer]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 326:0-335:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 331:0-340:1
     Visibility: public -/
 @[reducible]
 def find_transfer
@@ -2344,7 +2351,7 @@ def find_transfer
   find_transfer_loop transfers id 0#usize
 
 /-- [payment_ledger::owner_next]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 340:4-347:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 345:4-352:1
     Visibility: public -/
 @[rust_loop_body]
 def owner_next_loop.body
@@ -2364,7 +2371,7 @@ def owner_next_loop.body
   else ok (done 0#u64)
 
 /-- [payment_ledger::owner_next]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 340:4-347:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 345:4-352:1
     Visibility: public -/
 @[rust_loop]
 def owner_next_loop
@@ -2376,7 +2383,7 @@ def owner_next_loop
     i
 
 /-- [payment_ledger::owner_next]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 338:0-347:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 343:0-352:1
     Visibility: public -/
 @[reducible]
 def owner_next
@@ -2384,7 +2391,7 @@ def owner_next
   owner_next_loop cs owner 0#usize
 
 /-- [payment_ledger::page_end]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 351:0-358:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 356:0-363:1
     Visibility: public -/
 def page_end («from» : Std.U64) (limit : Std.U32) : Result Std.U64 := do
   let n ← lift (UScalar.cast .U64 limit)
@@ -2394,7 +2401,7 @@ def page_end («from» : Std.U64) (limit : Std.U32) : Result Std.U64 := do
   else «from» + n
 
 /-- [payment_ledger::same_transfer]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 361:0-363:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 366:0-368:1
     Visibility: public -/
 def same_transfer (old : Transfer) (t : TransferReq) : Result Bool := do
   if old.debit = t.debit
@@ -2407,7 +2414,7 @@ def same_transfer (old : Transfer) (t : TransferReq) : Result Bool := do
   else ok false
 
 /-- [payment_ledger::may_debit]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 366:0-368:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 371:0-373:1
     Visibility: public -/
 def may_debit (actor : Principal) (a : Account) : Result Bool := do
   let b ← is_operator actor
@@ -2417,7 +2424,7 @@ def may_debit (actor : Principal) (a : Account) : Result Bool := do
        ok (a.owner = i)
 
 /-- [payment_ledger::open]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 370:0-401:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 375:0-406:1 -/
 def «open»
   (actor : Principal) (s : Snapshot) (owner : Std.U64) (currency : Std.U32)
   (code : Std.U32) (no_overdraft : Bool) (no_overcredit : Bool) :
@@ -2651,7 +2658,7 @@ def «open»
             ok (core.result.Result.Ok (v, Reply.Created s.ledger.next_account))
 
 /-- [payment_ledger::post]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 444:0-503:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 449:0-508:1 -/
 def post
   (actor : Principal) (s : Snapshot) (t : TransferReq) (a : Account)
   (b : Account) (op : Std.U64) :
@@ -2787,7 +2794,7 @@ def post
                 ok (core.result.Result.Ok (v, Reply.Posted t.id))
 
 /-- [payment_ledger::transfer]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 407:0-439:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 412:0-444:1
     Visibility: public -/
 def transfer
   (actor : Principal) (s : Snapshot) (t : TransferReq) :
@@ -2827,7 +2834,7 @@ def transfer
           else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::append]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 507:4-510:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 512:4-515:5 -/
 @[rust_loop_body]
 def append_loop.body
   (more : alloc.vec.Vec Write) (ws : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -2845,7 +2852,7 @@ def append_loop.body
   else ok (done ws)
 
 /-- [payment_ledger::append]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 507:4-510:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 512:4-515:5 -/
 @[rust_loop]
 def append_loop
   (ws : alloc.vec.Vec Write) (more : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -2856,7 +2863,7 @@ def append_loop
     (ws, i)
 
 /-- [payment_ledger::append]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 505:0-511:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 510:0-516:1 -/
 @[reducible]
 def append
   (ws : alloc.vec.Vec Write) (more : alloc.vec.Vec Write) :
@@ -2865,7 +2872,7 @@ def append
   append_loop ws more 0#usize
 
 /-- [payment_ledger::batch]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 524:4-535:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 529:4-540:1
     Visibility: public -/
 @[rust_loop_body]
 def batch_loop.body
@@ -2895,7 +2902,7 @@ def batch_loop.body
     ok (done (core.result.Result.Ok (ws, Reply.Batch i3)))
 
 /-- [payment_ledger::batch]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 524:4-535:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 529:4-540:1
     Visibility: public -/
 @[rust_loop]
 def batch_loop
@@ -2908,7 +2915,7 @@ def batch_loop
     (cur, ws, i)
 
 /-- [payment_ledger::batch]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 514:0-535:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 519:0-540:1
     Visibility: public -/
 def batch
   (actor : Principal) (s : Snapshot) (ts : alloc.vec.Vec TransferReq) :
@@ -2926,7 +2933,7 @@ def batch
       batch_loop actor ts cur (alloc.vec.Vec.new Write) 0#usize
 
 /-- [payment_ledger::read_account]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 537:0-549:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 542:0-554:1 -/
 def read_account
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -2941,7 +2948,7 @@ def read_account
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_ledger::owner_range]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-562:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-567:5 -/
 @[rust_loop_body]
 def owner_range_loop.body
   (s : Snapshot) (owner : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -2969,7 +2976,7 @@ def owner_range_loop.body
   else ok (done out)
 
 /-- [payment_ledger::owner_range]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-562:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-567:5 -/
 @[rust_loop]
 def owner_range_loop
   (s : Snapshot) (owner : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -2981,7 +2988,7 @@ def owner_range_loop
     (out, i)
 
 /-- [payment_ledger::owner_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 553:0-564:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 558:0-569:1 -/
 @[reducible]
 def owner_range
   (s : Snapshot) (owner : Std.U64) («from» : Std.U64) («end» : Std.U64) :
@@ -2990,7 +2997,7 @@ def owner_range
   owner_range_loop s owner «from» «end» (alloc.vec.Vec.new Account) 0#usize
 
 /-- [payment_ledger::accounts_page]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 566:0-576:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 571:0-581:1 -/
 def accounts_page
   (actor : Principal) (s : Snapshot) (owner : Std.U64) («from» : Std.U64)
   (limit : Std.U32) :
@@ -3028,7 +3035,7 @@ def accounts_page
             next))
 
 /-- [payment_ledger::history_range]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-589:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-594:5 -/
 @[rust_loop_body]
 def history_range_loop.body
   (s : Snapshot) (account : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -3056,7 +3063,7 @@ def history_range_loop.body
   else ok (done out)
 
 /-- [payment_ledger::history_range]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-589:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-594:5 -/
 @[rust_loop]
 def history_range_loop
   (s : Snapshot) (account : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -3069,7 +3076,7 @@ def history_range_loop
     (out, i)
 
 /-- [payment_ledger::history_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 580:0-591:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 585:0-596:1 -/
 @[reducible]
 def history_range
   (s : Snapshot) (account : Std.U64) («from» : Std.U64) («end» : Std.U64) :
@@ -3079,7 +3086,7 @@ def history_range
     HistoryEntry) 0#usize
 
 /-- [payment_ledger::history_page]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 593:0-608:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 598:0-613:1 -/
 def history_page
   (actor : Principal) (s : Snapshot) (account : Std.U64) («from» : Std.U64)
   (limit : Std.U32) :
@@ -3109,7 +3116,7 @@ def history_page
       else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::transfers_of]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 614:4-620:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 619:4-625:5 -/
 @[rust_loop_body]
 def transfers_of_loop.body
   (s : Snapshot) (entries : alloc.vec.Vec HistoryEntry)
@@ -3133,7 +3140,7 @@ def transfers_of_loop.body
   else ok (done out)
 
 /-- [payment_ledger::transfers_of]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 614:4-620:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 619:4-625:5 -/
 @[rust_loop]
 def transfers_of_loop
   (s : Snapshot) (entries : alloc.vec.Vec HistoryEntry)
@@ -3145,7 +3152,7 @@ def transfers_of_loop
     (out, i)
 
 /-- [payment_ledger::transfers_of]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 611:0-622:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 616:0-627:1 -/
 @[reducible]
 def transfers_of
   (s : Snapshot) (entries : alloc.vec.Vec HistoryEntry) :
@@ -3154,7 +3161,7 @@ def transfers_of
   transfers_of_loop s entries (alloc.vec.Vec.new Transfer) 0#usize
 
 /-- [payment_ledger::journal_page]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 624:0-640:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 629:0-645:1 -/
 def journal_page
   (actor : Principal) (s : Snapshot) (account : Std.U64) («from» : Std.U64)
   (limit : Std.U32) :
@@ -3185,7 +3192,7 @@ def journal_page
       else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::id_range]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-652:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-657:5 -/
 @[rust_loop_body]
 def id_range_loop.body
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -3210,7 +3217,7 @@ def id_range_loop.body
   else ok (done out)
 
 /-- [payment_ledger::id_range]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-652:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-657:5 -/
 @[rust_loop]
 def id_range_loop
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -3222,7 +3229,7 @@ def id_range_loop
     (out, i)
 
 /-- [payment_ledger::id_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 643:0-654:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 648:0-659:1 -/
 @[reducible]
 def id_range
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64) :
@@ -3231,7 +3238,7 @@ def id_range
   id_range_loop s «from» «end» (alloc.vec.Vec.new Account) 0#usize
 
 /-- [payment_ledger::account_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 656:0-666:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 661:0-671:1 -/
 def account_range
   (actor : Principal) (s : Snapshot) («from» : Std.U64) (limit : Std.U32) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3256,7 +3263,7 @@ def account_range
       else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::transfer_ids]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-678:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-683:5 -/
 @[rust_loop_body]
 def transfer_ids_loop.body
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -3281,7 +3288,7 @@ def transfer_ids_loop.body
   else ok (done out)
 
 /-- [payment_ledger::transfer_ids]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-678:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-683:5 -/
 @[rust_loop]
 def transfer_ids_loop
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -3293,7 +3300,7 @@ def transfer_ids_loop
     (out, i)
 
 /-- [payment_ledger::transfer_ids]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 669:0-680:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 674:0-685:1 -/
 @[reducible]
 def transfer_ids
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64) :
@@ -3302,7 +3309,7 @@ def transfer_ids
   transfer_ids_loop s «from» «end» (alloc.vec.Vec.new Transfer) 0#usize
 
 /-- [payment_ledger::transfer_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 682:0-691:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 687:0-696:1 -/
 def transfer_range
   (actor : Principal) (s : Snapshot) («from» : Std.U64) (limit : Std.U32) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3310,7 +3317,7 @@ def transfer_range
   if limit = 0#u32
   then ok (core.result.Result.Err Error.BadPage)
   else
-    if limit > MAX_PAGE
+    if limit > MAX_RANGE
     then ok (core.result.Result.Err Error.BadPage)
     else
       let b ← is_operator actor
@@ -3323,7 +3330,7 @@ def transfer_range
       else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::transition]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 696:0-710:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 701:0-715:1
     Visibility: public -/
 def transition
   (actor : Principal) (s : Snapshot) (cmd : Command) :
@@ -3346,95 +3353,95 @@ def transition
     transfer_range actor s «from» limit
 
 /-- [payment_ledger::T_ACCOUNTS]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 715:0-715:30
+    Source: 'crates/payment-ledger/src/lib.rs', lines 720:0-720:30
     Visibility: public -/
 @[global_simps, irreducible] def T_ACCOUNTS : Std.U32 := 0#u32
 
 /-- [payment_ledger::T_TRANSFERS]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 716:0-716:31
+    Source: 'crates/payment-ledger/src/lib.rs', lines 721:0-721:31
     Visibility: public -/
 @[global_simps, irreducible] def T_TRANSFERS : Std.U32 := 1#u32
 
 /-- [payment_ledger::T_LEDGER]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 717:0-717:28
+    Source: 'crates/payment-ledger/src/lib.rs', lines 722:0-722:28
     Visibility: public -/
 @[global_simps, irreducible] def T_LEDGER : Std.U32 := 2#u32
 
 /-- [payment_ledger::T_OWNERS]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 718:0-718:28
+    Source: 'crates/payment-ledger/src/lib.rs', lines 723:0-723:28
     Visibility: public -/
 @[global_simps, irreducible] def T_OWNERS : Std.U32 := 3#u32
 
 /-- [payment_ledger::T_HISTORY]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 719:0-719:29
+    Source: 'crates/payment-ledger/src/lib.rs', lines 724:0-724:29
     Visibility: public -/
 @[global_simps, irreducible] def T_HISTORY : Std.U32 := 4#u32
 
 /-- [payment_ledger::ACCOUNT_ID]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 721:0-721:30
+    Source: 'crates/payment-ledger/src/lib.rs', lines 726:0-726:30
     Visibility: public -/
 @[global_simps, irreducible] def ACCOUNT_ID : Std.U32 := 0#u32
 
 /-- [payment_ledger::ACCOUNT_OWNER]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 722:0-722:33
+    Source: 'crates/payment-ledger/src/lib.rs', lines 727:0-727:33
     Visibility: public -/
 @[global_simps, irreducible] def ACCOUNT_OWNER : Std.U32 := 1#u32
 
 /-- [payment_ledger::ACCOUNT_SEQ]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 723:0-723:31
+    Source: 'crates/payment-ledger/src/lib.rs', lines 728:0-728:31
     Visibility: public -/
 @[global_simps, irreducible] def ACCOUNT_SEQ : Std.U32 := 8#u32
 
 /-- [payment_ledger::TRANSFER_ID]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 724:0-724:31
+    Source: 'crates/payment-ledger/src/lib.rs', lines 729:0-729:31
     Visibility: public -/
 @[global_simps, irreducible] def TRANSFER_ID : Std.U32 := 0#u32
 
 /-- [payment_ledger::OWNER_KEY]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 725:0-725:29
+    Source: 'crates/payment-ledger/src/lib.rs', lines 730:0-730:29
     Visibility: public -/
 @[global_simps, irreducible] def OWNER_KEY : Std.U32 := 0#u32
 
 /-- [payment_ledger::HISTORY_ACCOUNT]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 726:0-726:35
+    Source: 'crates/payment-ledger/src/lib.rs', lines 731:0-731:35
     Visibility: public -/
 @[global_simps, irreducible] def HISTORY_ACCOUNT : Std.U32 := 0#u32
 
 /-- [payment_ledger::HISTORY_N]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 727:0-727:29
+    Source: 'crates/payment-ledger/src/lib.rs', lines 732:0-732:29
     Visibility: public -/
 @[global_simps, irreducible] def HISTORY_N : Std.U32 := 1#u32
 
 /-- [payment_ledger::HISTORY_TRANSFER]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 728:0-728:36
+    Source: 'crates/payment-ledger/src/lib.rs', lines 733:0-733:36
     Visibility: public -/
 @[global_simps, irreducible] def HISTORY_TRANSFER : Std.U32 := 6#u32
 
 /-- [payment_ledger::v_int]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 733:0-735:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 738:0-740:1 -/
 def v_int (x : Std.U64) : Result h5i_app_sql.Val := do
   U64.Insts.H5i_app_sqlColumn.to_val x
 
 /-- [payment_ledger::p_eq]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 737:0-739:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 742:0-744:1 -/
 def p_eq (col : Std.U32) (v : h5i_app_sql.Val) : Result h5i_app_sql.Pred := do
   ok (h5i_app_sql.Pred.Eq col v)
 
 /-- [payment_ledger::p_or]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 741:0-743:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 746:0-748:1 -/
 def p_or
   (a : h5i_app_sql.Pred) (b : h5i_app_sql.Pred) : Result h5i_app_sql.Pred := do
   ok (h5i_app_sql.Pred.Or a b)
 
 /-- [payment_ledger::rd_where]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 745:0-747:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 750:0-752:1 -/
 def rd_where
   (table : Std.U32) (pred : h5i_app_sql.Pred) : Result h5i_app_sql.Read := do
   let w ← h5i_app_sql.whole
   ok { table, pred, window := w }
 
 /-- [payment_ledger::accounts_of]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 750:0-752:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 755:0-757:1 -/
 def accounts_of (t : TransferReq) : Result h5i_app_sql.Pred := do
   let v ← v_int t.debit
   let p ← p_eq ACCOUNT_ID v
@@ -3442,46 +3449,32 @@ def accounts_of (t : TransferReq) : Result h5i_app_sql.Pred := do
   let p1 ← p_eq ACCOUNT_ID v1
   p_or p p1
 
-/-- [payment_ledger::seq_range]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 758:4-761:5 -/
-@[rust_loop_body]
-def seq_range_loop.body
-  (col : Std.U32) («end» : Std.U64) (p : h5i_app_sql.Pred) (x : Std.U64) :
-  Result (ControlFlow (h5i_app_sql.Pred × Std.U64) h5i_app_sql.Pred)
-  := do
-  if x < «end»
-  then
-    let v ← v_int x
-    let p1 ← p_eq col v
-    let p2 ← p_or p p1
-    let x1 ← x + 1#u64
-    ok (cont (p2, x1))
-  else ok (done p)
-
-/-- [payment_ledger::seq_range]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 758:4-761:5 -/
-@[rust_loop]
-def seq_range_loop
-  (col : Std.U32) («end» : Std.U64) (p : h5i_app_sql.Pred) (x : Std.U64) :
-  Result h5i_app_sql.Pred
-  := do
-  loop
-    (fun (p1, x1) => seq_range_loop.body col «end» p1 x1)
-    (p, x)
+/-- [payment_ledger::SIGN]
+    Source: 'crates/payment-ledger/src/lib.rs', lines 761:0-761:44
+    Visibility: public -/
+@[global_simps, irreducible] def SIGN : Std.U64 := 9223372036854775808#u64
 
 /-- [payment_ledger::seq_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 755:0-763:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 766:0-774:1 -/
 def seq_range
   (col : Std.U32) («from» : Std.U64) («end» : Std.U64) :
   Result h5i_app_sql.Pred
   := do
   let v ← v_int «from»
-  let p ← p_eq col v
-  let x ← «from» + 1#u64
-  seq_range_loop col «end» p x
+  let v1 ← v_int «end»
+  if «from» < SIGN
+  then
+    if «end» >= SIGN
+    then p_or (h5i_app_sql.Pred.Ge col v) (h5i_app_sql.Pred.Lt col v1)
+    else
+      ok (h5i_app_sql.Pred.And (h5i_app_sql.Pred.Ge col v) (h5i_app_sql.Pred.Lt
+        col v1))
+  else
+    ok (h5i_app_sql.Pred.And (h5i_app_sql.Pred.Ge col v) (h5i_app_sql.Pred.Lt
+      col v1))
 
 /-- [payment_ledger::entry_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 766:0-768:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 777:0-779:1 -/
 def entry_range
   (account : Std.U64) («from» : Std.U64) («end» : Std.U64) :
   Result h5i_app_sql.Pred
@@ -3492,7 +3485,7 @@ def entry_range
   ok (h5i_app_sql.Pred.And p p1)
 
 /-- [payment_ledger::batch_reads]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 775:4-779:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 786:4-790:5 -/
 @[rust_loop_body]
 def batch_reads_loop.body
   (ts : alloc.vec.Vec TransferReq) (accts : h5i_app_sql.Pred)
@@ -3516,7 +3509,7 @@ def batch_reads_loop.body
   else ok (done (accts, trs))
 
 /-- [payment_ledger::batch_reads]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 775:4-779:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 786:4-790:5 -/
 @[rust_loop]
 def batch_reads_loop
   (ts : alloc.vec.Vec TransferReq) (accts : h5i_app_sql.Pred)
@@ -3528,7 +3521,7 @@ def batch_reads_loop
     (accts, trs, i)
 
 /-- [payment_ledger::batch_reads]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 771:0-784:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 782:0-795:1 -/
 def batch_reads
   (ts : alloc.vec.Vec TransferReq) :
   Result (alloc.vec.Vec h5i_app_sql.Read)
@@ -3546,7 +3539,7 @@ def batch_reads
   alloc.vec.Vec.push out r1
 
 /-- [payment_ledger::read_only]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 791:0-801:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 802:0-812:1
     Visibility: public -/
 def read_only (cmd : Command) : Result Bool := do
   match cmd with
@@ -3561,7 +3554,7 @@ def read_only (cmd : Command) : Result Bool := do
   | Command.TransferRange _ _ => ok true
 
 /-- [payment_ledger::reads]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 808:0-904:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 819:0-915:1
     Visibility: public -/
 def reads
   (actor : Principal) (cmd : Command) :
@@ -3725,7 +3718,7 @@ def reads
   | Command.TransferRange «from» limit =>
     if limit != 0#u32
     then
-      if limit <= MAX_PAGE
+      if limit <= MAX_RANGE
       then
         let b ← is_operator actor
         if b

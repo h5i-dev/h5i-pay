@@ -381,6 +381,29 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
     }
     let (st, audit) = api.get("/v1/ledger/audit", &api.op).await;
     assert_eq!((st, audit["ok"].as_bool()), (200, Some(true)), "{audit}");
+    // The paged audit (G4: every account's journal, page by page), twice
+    // more for timing; and pages of 64: a merchant's payments (`List`) and
+    // account 0's journal (`Transfers`), 20 pages each (H2).
+    let mut audit_ms = Vec::new();
+    for _ in 0..2 {
+        let t = Instant::now();
+        let (st, _) = api.get("/v1/ledger/audit", &api.op).await;
+        assert_eq!(st, 200);
+        audit_ms.push(t.elapsed().as_secs_f64() * 1e3);
+    }
+    eprintln!("{label}: paged audit {:.0} ms", audit_ms[audit_ms.len() - 1]);
+    let (mut list_ms, mut journal_ms) = (Vec::new(), Vec::new());
+    for k in 0..20u64 {
+        let t = Instant::now();
+        let (st, r) = api.post("/v1/payments/rpc", &api.merchant, json!({"cmd": "list", "from": k * 64, "limit": 64})).await;
+        assert_eq!(st, 200, "{r}");
+        list_ms.push(t.elapsed().as_secs_f64() * 1e3);
+        let t = Instant::now();
+        let (st, r) = api.post("/v1/ledger", &api.op, json!({"cmd": "transfers", "account": 0, "from": k * 64, "limit": 64})).await;
+        assert_eq!(st, 200, "{r}");
+        journal_ms.push(t.elapsed().as_secs_f64() * 1e3);
+    }
+    eprintln!("{label}: list page p50 {:.2} ms, journal page p50 {:.2} ms", stats(list_ms.clone())["p50_ms"], stats(journal_ms.clone())["p50_ms"]);
 
     // How many updates of `payments` during the run were HOT (no index
     // entries; G5).
@@ -399,6 +422,7 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
         "concurrent": concurrent,
         "recovery_passes": passes,
         "reconcile": stats(recon), "reconcile_exceptions": exceptions,
+        "audit": stats(audit_ms), "list_page": stats(list_ms), "journal_page": stats(journal_ms),
         "reconcile_sweep": stats(sweep), "reconcile_sweep_periods": sweep_periods,
         "reconcile_sweep_exceptions": {"psp": sweep_exceptions.0, "ledger": sweep_exceptions.1},
         "payments_updates": hot,

@@ -472,21 +472,41 @@ theorem find_filter_kept {α : Type} (l : List α) (keep P : α → Bool) (h : �
     (l.filter keep).find? P = l.find? P :=
   find?_slice l P keep (fun x _ hp => h x hp)
 
-theorem foldl_rangeStep_holds (c : Nat) (tabs : H5iAppLib.Sql.Tables Val) (row : List Val) (l : List Nat) (p : Pred Val) :
-    (l.foldl (rangeStep c) p).holds tabs row = (p.holds tabs row || l.any (fun z => decide (row[c]? = some (int z)))) := by
-  induction l generalizing p with
-  | nil => simp
-  | cons z zs ih => simp [List.foldl_cons, ih, rangeStep, Pred.holds, Bool.or_assoc]
+/-- `Val.Int` is the integer its bits are, read as signed. -/
+theorem intOf_Int (i : I64) : H5iAppLib.Query.IntOf.intOf (h5i_app_sql.Val.Int i) = some i.val := rfl
 
-theorem rangeA_holds_of (c f e y : Nat) (hfy : f ≤ y) (hye : y < e) {tabs : H5iAppLib.Sql.Tables Val} {row : List Val}
+/-- The `BIGINT` a `u64` column holds: its bits, read as signed. -/
+theorem intOf_int (n : Nat) (h : n < 2 ^ 64) :
+    H5iAppLib.Query.IntOf.intOf (int n) = some (if n < signN then (n : Int) else (n : Int) - 2 ^ 64) := by
+  unfold int
+  rw [intOf_Int]
+  simp only [IScalar.val, Option.some.injEq]
+  have h64 : IScalarTy.I64.numBits = 64 := rfl
+  rw [h64, BitVec.toInt_eq_toNat_cond, BitVec.toNat_ofNat, Nat.mod_eq_of_lt h]
+  simp only [signN]
+  split <;> split <;> omega
+
+/-- A row whose column `c` holds a number of the range satisfies the range. -/
+theorem rangeA_holds_of (c f e y : Nat) (hfy : f ≤ y) (hye : y < e) (he : e ≤ U64.max)
+    {tabs : H5iAppLib.Sql.Tables Val} {row : List Val}
     (hrow : row[c]? = some (int y)) : (rangeA c f e).holds tabs row = true := by
+  have hmax : U64.max = 2 ^ 64 - 1 := by simp [U64.max, U64.numBits]
+  have hy := intOf_int y (by omega)
+  have hf := intOf_int f (by omega)
+  have hE := intOf_int e (by omega)
   unfold rangeA
-  rw [foldl_rangeStep_holds]
-  rcases Nat.eq_or_lt_of_le hfy with rfl | hlt
-  · simp [Pred.holds, hrow]
-  · simp only [Bool.or_eq_true, List.any_eq_true]
-    right
-    exact ⟨y, List.mem_range'_1.2 ⟨by omega, by omega⟩, by simp [hrow]⟩
+  split
+  · rename_i hc
+    simp only [Pred.holds, hrow, Option.bind_some, hy, hf, hE, Bool.or_eq_true, decide_eq_true_eq]
+    by_cases hys : y < signN
+    · left; simp only [hys, if_true, show f < signN by omega]; omega
+    · right; simp only [hys, if_false, show ¬ e < signN by omega]; omega
+  · rename_i hc
+    simp only [Pred.holds, hrow, Option.bind_some, hy, hf, hE, Bool.and_eq_true, decide_eq_true_eq]
+    by_cases hfs : f < signN
+    · have : e < signN := by omega
+      simp only [hfs, this, show y < signN by omega, if_true]; omega
+    · simp only [hfs, show ¬ y < signN by omega, show ¬ e < signN by omega, if_false]; omega
 
 /-- A read of table `t` by `q` (no window) keeps every row a lookup by `P` can return. -/
 theorem pick_find {α : Type} (plan : List (Read Val)) (tabs : H5iAppLib.Sql.Tables Val) (t : Nat)
@@ -613,7 +633,7 @@ theorem frame0 (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snaps
           obtain ⟨⟨h1, h2⟩, h3⟩ := hx
           simp only [Pred.holds, Bool.and_eq_true]
           refine ⟨by simp [eqU, Pred.holds, Payment.row, h1], ?_⟩
-          apply rangeA_holds_of 13 f.val e.val x.seq.val (by scalar_tac) (by scalar_tac)
+          apply rangeA_holds_of 13 f.val e.val x.seq.val (by scalar_tac) (by scalar_tac) (by scalar_tac)
           simp [Payment.row]
         · simp only [hfe, if_false]
           have : s.payments.val.filter (rangeP m f e) = [] := by
@@ -699,7 +719,7 @@ theorem frame0 (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snaps
           obtain ⟨⟨h1, h2⟩, h3⟩ := hx
           simp only [Pred.holds, Bool.and_eq_true]
           refine ⟨by simp [eqU, Pred.holds, HistoryEntry.row, h1], ?_⟩
-          apply rangeA_holds_of 1 f.val e.val x.n.val (by scalar_tac) (by scalar_tac)
+          apply rangeA_holds_of 1 f.val e.val x.n.val (by scalar_tac) (by scalar_tac) (by scalar_tac)
           simp [HistoryEntry.row]
         · simp only [hfe, if_false]
           have : s.history.val.filter (hrangeP p f e) = [] := by
@@ -734,7 +754,7 @@ theorem frame0 (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snaps
           apply filter_slice
           intro x _ hx
           simp only [pidP, Bool.and_eq_true, decide_eq_true_eq] at hx
-          apply rangeA_holds_of 0 f.val e.val x.id.val (by scalar_tac) (by scalar_tac)
+          apply rangeA_holds_of 0 f.val e.val x.id.val (by scalar_tac) (by scalar_tac) (by scalar_tac)
           simp [Payment.row]
         · simp only [hfe, if_false]
           have : s.payments.val.filter (pidP f e) = [] := by
@@ -747,9 +767,9 @@ theorem frame0 (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snaps
       by_cases h0 : l = 0#u32
       · simp [h0]
       have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
-      by_cases hm : l > MAX_PAGE
+      by_cases hm : l > MAX_RANGE
       · simp [h0, hm]
-      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hm' : l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
       simp [h0, hm, hna, is_operator_eq]
   | RefundRange f l =>
@@ -763,7 +783,7 @@ theorem frame0 (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snaps
           (rangeA 0 f.val e.val).holds (Snapshot.enc s) (Refund.row x) = true := by
         intro x hx
         simp only [ridP, Bool.and_eq_true, decide_eq_true_eq] at hx
-        apply rangeA_holds_of 0 f.val e.val x.id.val (by scalar_tac) (by scalar_tac)
+        apply rangeA_holds_of 0 f.val e.val x.id.val (by scalar_tac) (by scalar_tac) (by scalar_tac)
         simp [Refund.row]
       apply refund_range_page_congr a s _ f l e he
       · apply counter_load; unfold refundPageA; split <;> simp
@@ -798,9 +818,9 @@ theorem frame0 (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snaps
       by_cases h0 : l = 0#u32
       · simp [h0]
       have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
-      by_cases hm : l > MAX_PAGE
+      by_cases hm : l > MAX_RANGE
       · simp [h0, hm]
-      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hm' : l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
       simp [h0, hm, hna, is_operator_eq]
 

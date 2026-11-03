@@ -9,7 +9,7 @@ after a disconnect. Newest entries first within each milestone.
 |---|---|---|
 | Rust | 1.99.1 | workspace edition 2024 |
 | h5i CLI | 0.5.2, `~/.local/bin/h5i` | built from `/root/h5i-upstream` with `H5I_SKIP_WEB_BUILD=1` (no Node on the host, so the `h5i ui` web bundle is not embedded) |
-| h5i-app | git rev `a45b6e3` of h5i branch `app/range-reads` (H1; H2 moves it) | h5i-app 0.5.2 (main `02ccdde4ccfc`, published to crates.io) plus the H commits, not merged or released; every h5i-app crate, `h5i-app-gpu`, `-gpu-backend-nvvm` and the `h5i_app_lib` Lean library from that one commit. Earlier: crates.io 0.1.4 + tag `v0.5.2` (M1–M5), git rev `a19667c`, crates.io 0.5.2 (until G). The h5i CLI is still the tag-v0.5.2 build |
+| h5i-app | git rev `a98bcbd` of h5i branch `app/range-compare` (H2) | h5i main `b1c7886` (which has H1, PR #773 squash-merged as `ae87ef7`, on h5i-app 0.5.2) plus the H2 commit; not merged yet. Every h5i-app crate, `h5i-app-gpu`, `-gpu-backend-nvvm` and the `h5i_app_lib` Lean library from that one commit. Earlier: crates.io 0.1.4 + tag `v0.5.2` (M1–M5), git rev `a19667c`, crates.io 0.5.2 (until G), `a45b6e3` (H1). The h5i CLI is still the tag-v0.5.2 build |
 | Charon / Aeneas | 4bd5a29f6e97 / b86120db3183 at `/opt/aeneas/{charon,aeneas}/bin` | built with `nix build github:AeneasVerif/aeneas/<rev>` (Determinate Nix installer); `h5i app doctor` is green when both are on `PATH` |
 | Lean | leanprover/lean4:v4.31.0 via elan (`~/.elan/bin`) | Mathlib cache from `lake exe cache get` |
 | PostgreSQL | 17 in docker (`scripts/dev-db.sh`, port 55432) | |
@@ -178,6 +178,79 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### After H: full checks and the B4 end-to-end re-run
+
+- Checks on the H2 commit: `cargo test --workspace` 105 passed; clippy
+  plain, `mock-psp` and CUDA clean; GPU differential 6/6 and
+  `build-device.sh --check`; `cargo deny check` ok; `h5i app extract
+  --check` and `lint` ok for all three kernels; gates ledger 375 theorems
+  in 15 modules, payments 450 in 10, reconcile 69 in 3 (standard axioms
+  only); mutants ledger 21/21, payments 23/23, reconcile 6/6 (with H2's
+  new `range_plan_ignores_wrap` in both kernels).
+- B4 re-run, G (`74225cd`), H1 (`ca8bbca`) and H2 interleaved at
+  1k/10k/100k with 8 and 32 clients: `docs/benchmarks.md` "After H".
+  Throughput 172–190 / 180–182 payments/s (G 140–151 / 141–142); the whole
+  tenant's reconciliation 14 / 72 / 530 ms (G 252 / 1251 / 9618; pre-G one
+  call 13 / 62 / 509); one call 15–27 ms; a 64-row page 1.4–1.7 ms; the
+  paged audit 78 / 405 / 4559 ms (G 376 / 8482 / 7578). Retries 5–42 per
+  run, about 1% of transactions (H1's `Create` pivots).
+
+### H2: range comparisons in h5i-app reads; pages and periods as range reads
+
+- Upstream (h5i): `Pred::Ge` / `Pred::Lt` (an integer column `>=` / `<` an
+  integer, signed 64-bit order, false for `NULL` and non-integers) in
+  `h5i_app_sql` and its reference `eval`; `compile_read` renders them only
+  for `Int` columns and `Int` values; `H5iAppLib.Query` has `Pred.ge`,
+  `Pred.lt`, the class `IntOf` and `holds_ge` / `holds_lt`; the generated
+  `Schema.lean` gives `intOfVal`. Differential tests: `QueryCases.lean`
+  re-blessed (121 range predicates among 200 checked reads) and
+  `reads_test` against PostgreSQL (6400 reads, both SQL modes, all agree).
+  h5i's checks: `scripts/app/ci-rust-tests.sh` (72 test binaries, no
+  skips, on a database of its own), `h5i-app-xtask extract --check --all`
+  (12 up to date, the examples' `Schema.lean` regenerated) and `check --all`
+  (13 projects, gates on the standard axioms), `cargo app lint`, `cargo
+  deny check bans`.
+- Where it lives: branch `app/range-compare` of h5i, commit `a98bcbd`, one
+  commit on main `b1c7886` (pushed over SSH, PR not opened yet). I first
+  pushed it as `3f13a0f` to `app/range-reads` after that branch's PR
+  (#773, H1) had been squash-merged as `ae87ef7`; that commit is not on
+  main and nothing uses it. H1's own pin (`ca8bbca` → `a45b6e3`) was on
+  that merged branch too; `a98bcbd` descends from main, which has H1.
+- h5i-pay: every id or sequence range `[from, end)` is one range read
+  (`seq_range` in both kernels): `col >= from AND col < end`, or `col >=
+  from OR col < end` when it crosses 2^63. h5i-app stores a `u64` as its
+  bits, so ids from 2^63 up (every system transfer) are negative
+  `BIGINT`s; the `OR` is the two signed halves of the `u64` range. Used by
+  `List`, `Accounts`, `History`, the `Transfers` journal (its history
+  entries, and the transfers they name through `IN`), `AccountRange`,
+  `Range`, `RefundRange` and `TransferRange`.
+- `Range`, `RefundRange` (payments) and `TransferRange` (ledger) take up
+  to `MAX_RANGE` = 4096 ids (64 before), so a reconciliation period
+  (`MAX_PERIOD`, asserted equal) is one read per table: one `Range`, one
+  `RefundRange`, two `TransferRange`s. The export reads 4096-id pages.
+  User-facing pages stay at `MAX_PAGE` = 64.
+- Proofs: in both `Plan.lean`, `rangeA` is the new read and
+  `seq_range_spec` pins the extracted `seq_range` to it (the loop proofs
+  are gone), `readsA` has 4096 for the range commands, `reads_abs` is
+  re-proven. In both `Frame.lean`, `intOf_int` (a `u64` column's `BIGINT`)
+  and `rangeA_holds_of` (every row with a `u64` in the range satisfies the
+  read, wrap included, for every `from < end ≤ u64::MAX`) replace the OR
+  lemmas; `Frame.frame` and `load_for_sound` are re-proven unchanged in
+  statement. `Period.join_period` and the reconcile kernel are untouched.
+  Gates: ledger 375 theorems in 15 modules, payments 450 in 10, reconcile
+  69 in 3.
+- Tests: `tests/integration/sign_ranges.rs` posts transfers with ids 5,
+  2^63 − 2 … 2^63 + 1 and `u64::MAX − 1`, and creates payments with ids
+  2^63 − 2 … 2^63 + 1 (counter set by SQL), and checks `TransferRange` and
+  `Range` against PostgreSQL across 2^63, ending at it, inside the high
+  half and up to `u64::MAX`; with the wrap dropped it fails (checked by
+  hand). Mutants: `page_plan_skips_one` now moves the range's lower bound,
+  and the new `range_plan_ignores_wrap` (no `OR` across 2^63) in both
+  kernels.
+- Not proven: that a range read returns no row outside the range (the
+  frame theorem only needs every row inside it).
+- Measured: "After H" above and `docs/benchmarks.md`.
+
 ### H1: the database clock and the history row without extra round trips
 
 - The bisect after G put the whole 19–23% throughput drop at G1. G1 costs
@@ -188,16 +261,15 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
     awaited each statement before sending the next, so a write set of n
     statements cost n round trips.
 - Fixed upstream in h5i-app-pg, on h5i branch `app/range-reads` (from
-  main `02ccdde`, pushed to `git@github.com:h5i-dev/h5i.git`, not merged
-  or released): `92a2fbf` prepares the clock statement once per
+  main `02ccdde`; since merged into h5i main as `ae87ef7`, PR #773): `92a2fbf` prepares the clock statement once per
   connection and pipelines it with the attempt's first statement (the
   idempotency lookup or the load); `a45b6e3` prepares a transaction's
   writes, then sends them all before awaiting any, in plan order. The
   history's `at` is the same value as before: `transaction_timestamp()` is
   fixed for the transaction. Nothing in the kernels or proofs changed.
-- h5i-pay now takes every h5i-app crate, `h5i-app-gpu`, its nvvm backend
-  and the three `h5i_app_lib` Lake requires from `a45b6e3` by git rev
-  (crates.io 0.5.2 before). The re-extraction changed only the `Source:`
+- h5i-pay took every h5i-app crate, `h5i-app-gpu`, its nvvm backend and
+  the three `h5i_app_lib` Lake requires from `a45b6e3` by git rev
+  (crates.io 0.5.2 before; H2 moves the pin to a commit on top of main). The re-extraction changed only the `Source:`
   comments in `proofs/*/generated/`. CI's `H5I_REV` follows.
 - Measured at 10k (`e2e_seed_10000`), 8 / 32 clients, three interleaved
   rounds per series, medians (raw:

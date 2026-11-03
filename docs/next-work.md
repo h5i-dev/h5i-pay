@@ -275,7 +275,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    `at` must stay the transaction's own clock, monotonic per tenant as
    before; keep G1's proofs. Measure G1's two costs separately (clock vs
    history row) and report both.
-2. [ ] **Range comparisons in h5i-app reads.** h5i-app's read predicates
+2. [x] **Range comparisons in h5i-app reads.** h5i-app's read predicates
    have no range comparison, so a page is an `OR` of 64 keys and a G6
    period (≤ 4096 ids) costs 64 `Range` + 64 `RefundRange` + 128
    `TransferRange` kernel transactions (290–420 ms per call; whole tenant

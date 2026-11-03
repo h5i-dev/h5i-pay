@@ -121,8 +121,15 @@ new = "        Command::MarkPosted { payment, .. } => {\n            out.push(rd
 # F3: a page plan that skips a sequence number.
 [[mutant]]
 name = "page_plan_skips_one"
-old = "    let mut x = from + 1;"
-new = "    let mut x = from + 2;"
+old = "    let ge = h5i_app_sql::Pred::Ge { col, val: v_int(from) };"
+new = "    let ge = h5i_app_sql::Pred::Ge { col, val: v_int(from + 1) };"
+
+# H2: a range that crosses 2^63 read as one BIGINT interval (empty: the
+# ids from 2^63 up are negative).
+[[mutant]]
+name = "range_plan_ignores_wrap"
+old = "    if from < SIGN && end >= SIGN {"
+new = "    if false {"
 
 # F3: a merchant listing another merchant's payments.
 [[mutant]]

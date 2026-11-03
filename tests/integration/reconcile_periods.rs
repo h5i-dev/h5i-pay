@@ -77,8 +77,8 @@ async fn a_period_equals_the_whole_tenant_run_restricted_to_it() {
         }
     };
 
-    // About 150 ids (payments and refunds share the counter), so periods
-    // span several 64-id pages.
+    // About 150 ids (payments and refunds share the counter), so the
+    // periods below cut through payments and refunds alike.
     let mut rng = Rng(0x5eed_1234_abcd_0001);
     let mut captured = Vec::new();
     for i in 0..110u64 {

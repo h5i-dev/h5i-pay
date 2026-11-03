@@ -24,12 +24,12 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Read-only commands (G4) | `payment_ledger.ReadOnly.sound` | the extracted `read_only` and `transition`: every command `read_only` names writes nothing when accepted, for every actor and state (h5i-app's `H5iAppLib.ReadOnly.Sound`), so the engine may run it `SERIALIZABLE READ ONLY DEFERRABLE` |
 | Read plans | `payment_ledger.Plan.reads_abs`, `payment_ledger.Frame.frame`, `load_for_sound`; `payment_domain.Plan.reads_abs`, `payment_domain.Frame.frame`, `load_for_sound`; `*.Schema.decode_load` (generated) | the extracted `reads` of each kernel (`Store::load_for` runs it) and the extracted `transition`: on what each command's plan loads, `transition` gives its whole-tenant result |
 
-Gate results (h5i-app 0.5.2, after G1): `h5i app check
-crates/payment-ledger` — 317 theorems in 14 modules; `h5i app check
-crates/payment-domain` — 405 theorems in 9 modules; `h5i app check
-crates/payment-reconcile` — 64 in 2; all on the three standard axioms
-only. (After F: 257, 293 and 64; with the first read plans: 227 and 228;
-before them: 145 and 122.)
+Gate results (after H2, h5i `a98bcbd`): `h5i app check
+crates/payment-ledger` — 375 theorems in 15 modules; `h5i app check
+crates/payment-domain` — 450 theorems in 10 modules; `h5i app check
+crates/payment-reconcile` — 69 in 3; all on the three standard axioms
+only. (After G: 376, 451, 69; after G1: 317, 405, 64; after F: 257, 293
+and 64; with the first read plans: 227 and 228; before them: 145 and 122.)
 
 Ledger `currency` and `code`, and payment `currency` and `status`, are
 `u32` columns. They are stored as `BIGINT` like `u64` columns; on load,
@@ -113,6 +113,21 @@ committed history is such a sequence.
    `payments_load_for_matches_the_whole_tenant`) runs `transition` on the
    rows PostgreSQL returns for each plan and on the whole tenant, for 400 and
    500 random commands, and compares the results.
+   Since H2 an id or sequence range `[from, end)` is a range read
+   (`seq_range`): `col >= from AND col < end`, or `col >= from OR col < end`
+   when it crosses 2^63. h5i-app stores a `u64` as its 64 bits, so ids from
+   2^63 up (every system transfer) are negative `BIGINT`s, and `Query.Pred.ge`
+   / `.lt` compare in that signed order (`IntOf`, `intOfVal`). Proven in each
+   kernel's `Frame.lean`: `intOf_int` (a `u64` column's `BIGINT` is `n` below
+   2^63 and `n − 2^64` above) and `rangeA_holds_of` (every row whose column
+   holds a `u64` in `[from, end)` satisfies the read, for every `from < end ≤
+   u64::MAX`, the wrap included), which is all `Frame.frame` uses;
+   `Plan.seq_range_spec` pins the extracted `seq_range` to that read. That
+   the read returns no row outside the range is not proven (nothing relies
+   on it). `tests/integration/sign_ranges.rs` runs `TransferRange` and
+   `Range` against PostgreSQL on ids on both sides of 2^63 and up to
+   `u64::MAX`; the mutant `range_plan_ignores_wrap` (no `OR` for a range
+   across 2^63) is caught by the gate.
 5. **The shell.** JSON decoding, HMAC token checking (`h5i-app-http`), the
    orchestrator in `payment-api` and the PSP connectors are trusted. The
    kernel's theorems hold for every command, so a decoding bug can do no more
@@ -167,7 +182,7 @@ committed history is such a sequence.
    `transaction_timestamp()` in microseconds (`payment_storage::engines_with`
    sets it); the kernel only copies it. Since H1 h5i-app-pg sends that
    `SELECT` in the same flight as the load and sends a transaction's writes
-   pipelined, in plan order (h5i branch `app/range-reads`); trusted with the
+   pipelined, in plan order (h5i PR #773, main `ae87ef7`); trusted with the
    rest of the engine: `transaction_timestamp()` is fixed for the
    transaction whatever statement runs first, and PostgreSQL runs a
    connection's pipelined statements in the order they were sent. It is not monotone across
@@ -260,10 +275,11 @@ committed history is such a sequence.
   ledger journal (`Transfers`) is one page of at most 64 history entries
   of one account, and `AccountRange` one page of at most 64 account ids;
   the audit, `find_work` and `reconcile_inputs` read the ledger through
-  them. Since G6 the payment kernel's `Range` and `RefundRange` (one page
-  of at most 64 ids of payments, or of refunds with their payments) and the ledger's
-  `TransferRange` (at most 64 transfer ids) serve reconciliation and the
-  export, one period of at most 4096 ids per `POST /v1/reconcile`.
+  them. Since G6 the payment kernel's `Range` and `RefundRange` (ids of
+  payments, or of refunds with their payments) and the ledger's
+  `TransferRange` serve reconciliation and the export, one period of at
+  most 4096 ids per `POST /v1/reconcile`; since H2 each reads its ids as one
+  range (`MAX_RANGE` = 4096 ids), so a period is one read per table.
   Whole-tenant snapshots remain only in `Orchestrator::find_work`
   (`POST /v1/recover` for one tenant, an operator's repair call; the
   scheduled recovery reads only unfinished payments), in
