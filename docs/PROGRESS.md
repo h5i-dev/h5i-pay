@@ -9,7 +9,7 @@ after a disconnect. Newest entries first within each milestone.
 |---|---|---|
 | Rust | 1.99.1 | workspace edition 2024 |
 | h5i CLI | 0.5.2, `~/.local/bin/h5i` | built from `/root/h5i-upstream` with `H5I_SKIP_WEB_BUILD=1` (no Node on the host, so the `h5i ui` web bundle is not embedded) |
-| h5i-app | git rev `a98bcbd` of h5i branch `app/range-compare` (H2) | h5i main `b1c7886` (which has H1, PR #773 squash-merged as `ae87ef7`, on h5i-app 0.5.2) plus the H2 commit; not merged yet. Every h5i-app crate, `h5i-app-gpu`, `-gpu-backend-nvvm` and the `h5i_app_lib` Lean library from that one commit. Earlier: crates.io 0.1.4 + tag `v0.5.2` (M1–M5), git rev `a19667c`, crates.io 0.5.2 (until G), `a45b6e3` (H1). The h5i CLI is still the tag-v0.5.2 build |
+| h5i-app | git rev `7b91863` of h5i main (I0) | H2 (PR #775, `app/range-compare` squash-merged) on top of H1 (PR #773, `ae87ef7`) and h5i-app 0.5.2. Every h5i-app crate, `h5i-app-gpu`, `-gpu-backend-nvvm` and the `h5i_app_lib` Lean library from that one commit. Earlier: crates.io 0.1.4 + tag `v0.5.2` (M1–M5), git rev `a19667c`, crates.io 0.5.2 (until G), `a45b6e3` (H1), `a98bcbd` (branch `app/range-compare`, H2). The h5i CLI is still the tag-v0.5.2 build |
 | Charon / Aeneas | 4bd5a29f6e97 / b86120db3183 at `/opt/aeneas/{charon,aeneas}/bin` | built with `nix build github:AeneasVerif/aeneas/<rev>` (Determinate Nix installer); `h5i app doctor` is green when both are on `PATH` |
 | Lean | leanprover/lean4:v4.31.0 via elan (`~/.elan/bin`) | Mathlib cache from `lake exe cache get` |
 | PostgreSQL | 17 in docker (`scripts/dev-db.sh`, port 55432) | |
@@ -177,6 +177,22 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 - README updated with the full layout and commands.
 
 ## After M5 (newest first)
+
+### I0: pinned to h5i main `7b91863`
+
+- h5i PR #775 squash-merged `app/range-compare` into main as `7b91863`;
+  its tree is the same as `a98bcbd`'s (`git diff a98bcbd 7b91863` is
+  empty). Every h5i-app crate (Cargo.toml, `crates/payment-gpu`), the
+  `h5i_app_lib` Lake rev and the three `lake-manifest.json`, and CI's
+  `H5I_REV` now name `7b91863`; `cargo update -p h5i-app` moved only the
+  h5i-app packages in Cargo.lock.
+- Re-extracted: the generated Lean changed only in the source paths of
+  its comments (the cargo checkout directory).
+- Checks: `cargo test --workspace` (105 pass), clippy plain, `mock-psp`
+  and CUDA, the GPU differential test (6), `build-device.sh --check`,
+  `cargo deny check`; `h5i app extract --check`, `lint`, `check` (375 /
+  450 / 69 theorems in 15 / 10 / 3 modules) and `mutate` (21/21, 23/23,
+  6/6 caught) for the three kernels.
 
 ### After H: full checks and the B4 end-to-end re-run
 

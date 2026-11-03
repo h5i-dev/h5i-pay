@@ -607,7 +607,7 @@ checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 [[package]]
 name = "h5i-app"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 dependencies = [
  "h5i-app-core",
  "h5i-app-http",
@@ -622,7 +622,7 @@ dependencies = [
 [[package]]
 name = "h5i-app-core"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 dependencies = [
  "h5i-app-std",
 ]
@@ -630,12 +630,12 @@ dependencies = [
 [[package]]
 name = "h5i-app-gpu"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 
 [[package]]
 name = "h5i-app-gpu-backend-nvvm"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 dependencies = [
  "cust",
  "h5i-app-gpu",
@@ -644,7 +644,7 @@ dependencies = [
 [[package]]
 name = "h5i-app-http"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 dependencies = [
  "axum",
  "h5i-app-core",
@@ -659,12 +659,12 @@ dependencies = [
 [[package]]
 name = "h5i-app-json"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 
 [[package]]
 name = "h5i-app-pg"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 dependencies = [
  "bytes",
  "deadpool-postgres",
@@ -684,7 +684,7 @@ dependencies = [
 [[package]]
 name = "h5i-app-pgsql"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 dependencies = [
  "h5i-app-sql",
 ]
@@ -692,22 +692,22 @@ dependencies = [
 [[package]]
 name = "h5i-app-schema"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 
 [[package]]
 name = "h5i-app-sql"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 
 [[package]]
 name = "h5i-app-std"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 
 [[package]]
 name = "h5i-app-token"
 version = "0.5.2"
-source = "git+https://github.com/h5i-dev/h5i?rev=a98bcbdfe7a8dac618d0016424adf0f3ced3b772#a98bcbdfe7a8dac618d0016424adf0f3ced3b772"
+source = "git+https://github.com/h5i-dev/h5i?rev=7b91863063707d16c339b029d6d5543b89642de8#7b91863063707d16c339b029d6d5543b89642de8"
 
 [[package]]
 name = "h5i-pay-benchmarks"

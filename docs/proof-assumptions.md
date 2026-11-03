@@ -24,7 +24,7 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Read-only commands (G4) | `payment_ledger.ReadOnly.sound` | the extracted `read_only` and `transition`: every command `read_only` names writes nothing when accepted, for every actor and state (h5i-app's `H5iAppLib.ReadOnly.Sound`), so the engine may run it `SERIALIZABLE READ ONLY DEFERRABLE` |
 | Read plans | `payment_ledger.Plan.reads_abs`, `payment_ledger.Frame.frame`, `load_for_sound`; `payment_domain.Plan.reads_abs`, `payment_domain.Frame.frame`, `load_for_sound`; `*.Schema.decode_load` (generated) | the extracted `reads` of each kernel (`Store::load_for` runs it) and the extracted `transition`: on what each command's plan loads, `transition` gives its whole-tenant result |
 
-Gate results (after H2, h5i `a98bcbd`): `h5i app check
+Gate results (after I0, h5i main `7b91863`): `h5i app check
 crates/payment-ledger` — 375 theorems in 15 modules; `h5i app check
 crates/payment-domain` — 450 theorems in 10 modules; `h5i app check
 crates/payment-reconcile` — 69 in 3; all on the three standard axioms

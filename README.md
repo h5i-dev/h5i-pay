@@ -48,12 +48,10 @@ test keys). It never handles raw card numbers.
 Every h5i-app crate (`h5i-app`, `-core`, `-pg`, `-http`, `-json`, `-schema`,
 `-sql`, `-gpu`, `-gpu-backend-nvvm`) and the Lean library `h5i_app_lib` in
 `proofs/*/lakefile.lean` come from one commit of <https://github.com/h5i-dev/h5i>
-by git rev: branch `app/range-compare` (range comparisons in reads, H2 of
-`docs/next-work.md`), one commit on h5i main `b1c7886`. Main already has
-H1 (the database clock and the writes pipelined, PR #773) on top of
-h5i-app 0.5.2 (`02ccdde`, on crates.io). The branch is not merged yet; once
-it is, pin the main commit, and once h5i-app is released with it, go back
-to a crates.io version. Keep the Cargo revs, the Lake revs and CI's
+by git rev: h5i main `7b91863`, which has range comparisons in reads
+(PR #775) and the database clock and the writes pipelined (PR #773) on
+top of h5i-app 0.5.2 (`02ccdde`, on crates.io). Once h5i-app is released
+with them, go back to a crates.io version. Keep the Cargo revs, the Lake revs and CI's
 `H5I_REV` in step.
 
 ## Build, test, prove

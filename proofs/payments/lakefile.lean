@@ -7,9 +7,9 @@ require aeneas from git
   "https://github.com/AeneasVerif/aeneas" @ "b86120db3183b0107eb5f2637b11c424cd06ef1c" / "backends/lean"
 
 -- h5i-app's lemmas and tactics for extracted kernels, from the h5i commit every
--- h5i-app crate comes from (Cargo.toml: branch `app/range-compare`, H2).
+-- h5i-app crate comes from (Cargo.toml: h5i main, PR #775).
 require h5i_app_lib from git
-  "https://github.com/h5i-dev/h5i" @ "a98bcbdfe7a8dac618d0016424adf0f3ced3b772" / "crates/h5i-app-core/proofs"
+  "https://github.com/h5i-dev/h5i" @ "7b91863063707d16c339b029d6d5543b89642de8" / "crates/h5i-app-core/proofs"
 
 package h5i_pay_payments_proofs
 

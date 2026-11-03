@@ -298,3 +298,60 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
 After H: re-run all checks and the B4 end-to-end benchmarks interleaved
 with `74225cd`, update `docs/benchmarks.md` and PROGRESS.md, and report
 what was proven, measured and left open.
+
+## I. After the range PR, and a readable README
+
+Same ground rules. Tick each off here and in PROGRESS.md as it lands.
+
+0. [x] **Pin to h5i main.** h5i PR #775 squash-merged `app/range-compare`
+   into main as `7b91863` (`a98bcbd` is not an ancestor of main). Pin every
+   h5i-app crate and `h5i_app_lib` to `7b91863` (same rev everywhere,
+   lake-manifest updated) and re-run the checks; nothing else should change.
+1. [ ] **`Create` retries.** Since H1 the remaining serialization retries
+   (about 5–42 per run, ~1% of transactions) are `Create` aborts in
+   PostgreSQL's log. Find the conflicting reads/writes (new payments share
+   the tail page of the primary key and the per-merchant sequence; check
+   the read plan of `Create`, the sequence/counter rows, `open_payments`
+   triggers, idempotency rows), and remove them without losing
+   throughput (e.g. narrower `Create` plan, per-merchant advisory lock,
+   id allocation that does not read a shared counter). Measure retries and
+   throughput at 10k/100k with 8 and 32 clients, interleaved with `d71881b`.
+2. [ ] **Larger pages for the paged audit.** At 100k the paged audit reads
+   about 3,400 journal pages of 64 (4.6 s). Let the audit (and other
+   internal readers: export, reconcile, recovery) use larger range pages
+   (e.g. up to 4096) while the HTTP page limit stays bounded; plans and
+   frame theorems as before. Re-measure the audit at 1k/10k/100k.
+3. [ ] **`find_work` without a whole-tenant load.** `POST /v1/recover`'s
+   `find_work` still loads the whole tenant's payments. Read only the
+   unfinished work (the `open_payments` / `payments_refunding` sets and
+   range reads), keep it at least as thorough as now (it also catches a
+   ledger restored from an older backup: keep that check, by range pages),
+   prove or test that it finds exactly what the whole-tenant version
+   found (differential test on random states), and measure at 10k/100k.
+4. [ ] **README in the style of h5i-ai-gateway.** Rewrite `README.md`
+   after <https://github.com/h5i-dev/h5i-ai-gateway/blob/main/README.md>:
+   - one short opening paragraph: what h5i-pay is, that the money-moving
+     decisions are a pure Rust kernel extracted to Lean 4 and proven on
+     h5i-app, and what is ordinary Rust around it;
+   - then short sections, each a few sentences and one code block at
+     most: **Run** (local, PostgreSQL in Docker, Mock PSP),
+     **Deploy** (AWS via Terraform, one paragraph, link to
+     `infra/README.md`), **Use** (create a payment, capture, refund with
+     curl and a token), **How it decides** (the kernel commands of a
+     payment and the ledger postings, SERIALIZABLE, idempotency; link to
+     design docs), **Verification** (the commands: cargo test, h5i app
+     check/mutate/lint, what is proven in two or three sentences, what is
+     trusted; link to `docs/proof-assumptions.md`), **GPU batch** (one
+     paragraph, link to `docs/benchmarks.md` and `docs/gpu-toolchain.md`),
+     **Performance** (one small table of the current end-to-end numbers
+     with the hardware and date; link to `docs/benchmarks.md`), **Code**
+     (one line per crate/dir), **License**;
+   - plain sentences, no long bullet walls, no history of milestones (that
+     stays in `docs/PROGRESS.md`), no internal plan items; every number
+     must come from `docs/benchmarks.md`; every command must work as
+     written (run them).
+   Move anything removed from the README that is still needed into the
+   right doc and link it.
+
+After I: re-run all checks and the B4 end-to-end benchmarks interleaved
+with `d71881b`, update `docs/benchmarks.md` and PROGRESS.md, and report.
