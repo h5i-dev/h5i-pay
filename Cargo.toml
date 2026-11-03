@@ -21,20 +21,20 @@ publish = false
 repository = "https://github.com/h5i-dev/h5i-pay"
 
 [workspace.dependencies]
-# h5i-app 0.5.2 from crates.io, pinned exactly (includes #769, Lean lemmas
-# for u32 schema columns, and #770, h5i-app-pg `tls`). It was published from
-# github.com/h5i-dev/h5i commit 02ccdde (main, "bump h5i-app to 0.5.2"),
-# which is NOT the git tag v0.5.2 (that tag is the h5i CLI release and has
-# h5i-app 0.1.4). h5i-app-gpu and its backends are not on crates.io: they
-# come from that same commit, as does `h5i_app_lib` in proofs/*/lakefile.lean.
-h5i-app = { version = "=0.5.2" }
-h5i-app-core = { version = "=0.5.2" }
-h5i-app-pg = { version = "=0.5.2" }
-h5i-app-http = { version = "=0.5.2" }
-h5i-app-json = { version = "=0.5.2" }
-h5i-app-schema = { version = "=0.5.2" }
-h5i-app-sql = { version = "=0.5.2" }
-h5i-app-gpu = { git = "https://github.com/h5i-dev/h5i", rev = "02ccdde4ccfc849f09f764ff7d02a31aa7ac9306" }
+# Every h5i-app crate, and `h5i_app_lib` in proofs/*/lakefile.lean, from one
+# commit of github.com/h5i-dev/h5i: branch `app/range-reads` (H1, H2), not
+# yet merged or released. It is h5i-app 0.5.2 (main 02ccdde, published to
+# crates.io) plus the clock read and the writes pipelined (H1) and range
+# comparisons in reads (H2). Until it is released, h5i-pay depends on that
+# branch's commit by git rev.
+h5i-app = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
+h5i-app-core = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
+h5i-app-pg = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
+h5i-app-http = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
+h5i-app-json = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
+h5i-app-schema = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
+h5i-app-sql = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
+h5i-app-gpu = { git = "https://github.com/h5i-dev/h5i", rev = "a45b6e3327522b83302f1d975ecf542b3855d00c" }
 
 payment-ledger = { path = "crates/payment-ledger" }
 payment-domain = { path = "crates/payment-domain" }

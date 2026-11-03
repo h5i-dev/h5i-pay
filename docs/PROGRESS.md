@@ -9,7 +9,7 @@ after a disconnect. Newest entries first within each milestone.
 |---|---|---|
 | Rust | 1.99.1 | workspace edition 2024 |
 | h5i CLI | 0.5.2, `~/.local/bin/h5i` | built from `/root/h5i-upstream` with `H5I_SKIP_WEB_BUILD=1` (no Node on the host, so the `h5i ui` web bundle is not embedded) |
-| h5i-app | 0.5.2 from crates.io, pinned `=0.5.2` | published from h5i commit `02ccdde4ccfc` (#771; includes #769 and #770). `h5i-app-gpu`, `-gpu-backend-nvvm` and the `h5i_app_lib` Lean library come from git at that commit (not on crates.io). Earlier: crates.io 0.1.4 + tag `v0.5.2` (M1–M5), then git rev `a19667c`. The h5i CLI is still the tag-v0.5.2 build |
+| h5i-app | git rev `a45b6e3` of h5i branch `app/range-reads` (H1; H2 moves it) | h5i-app 0.5.2 (main `02ccdde4ccfc`, published to crates.io) plus the H commits, not merged or released; every h5i-app crate, `h5i-app-gpu`, `-gpu-backend-nvvm` and the `h5i_app_lib` Lean library from that one commit. Earlier: crates.io 0.1.4 + tag `v0.5.2` (M1–M5), git rev `a19667c`, crates.io 0.5.2 (until G). The h5i CLI is still the tag-v0.5.2 build |
 | Charon / Aeneas | 4bd5a29f6e97 / b86120db3183 at `/opt/aeneas/{charon,aeneas}/bin` | built with `nix build github:AeneasVerif/aeneas/<rev>` (Determinate Nix installer); `h5i app doctor` is green when both are on `PATH` |
 | Lean | leanprover/lean4:v4.31.0 via elan (`~/.elan/bin`) | Mathlib cache from `lake exe cache get` |
 | PostgreSQL | 17 in docker (`scripts/dev-db.sh`, port 55432) | |
@@ -177,6 +177,70 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 - README updated with the full layout and commands.
 
 ## After M5 (newest first)
+
+### H1: the database clock and the history row without extra round trips
+
+- The bisect after G put the whole 19–23% throughput drop at G1. G1 costs
+  two things per kernel transaction, and both were round trips:
+  - `Clock::Database` ran `SELECT transaction_timestamp()` unprepared
+    before the load: a Parse round trip, then the query.
+  - every change writes a history row, and h5i-app-pg's `store_writes`
+    awaited each statement before sending the next, so a write set of n
+    statements cost n round trips.
+- Fixed upstream in h5i-app-pg, on h5i branch `app/range-reads` (from
+  main `02ccdde`, pushed to `git@github.com:h5i-dev/h5i.git`, not merged
+  or released): `92a2fbf` prepares the clock statement once per
+  connection and pipelines it with the attempt's first statement (the
+  idempotency lookup or the load); `a45b6e3` prepares a transaction's
+  writes, then sends them all before awaiting any, in plan order. The
+  history's `at` is the same value as before: `transaction_timestamp()` is
+  fixed for the transaction. Nothing in the kernels or proofs changed.
+- h5i-pay now takes every h5i-app crate, `h5i-app-gpu`, its nvvm backend
+  and the three `h5i_app_lib` Lake requires from `a45b6e3` by git rev
+  (crates.io 0.5.2 before). The re-extraction changed only the `Source:`
+  comments in `proofs/*/generated/`. CI's `H5I_REV` follows.
+- Measured at 10k (`e2e_seed_10000`), 8 / 32 clients, three interleaved
+  rounds per series, medians (raw:
+  `benchmarks/results/e2e-H1-clock-g5.xlarge.json`; `docs/benchmarks.md`
+  "H1"). Experimental builds, not committed: `Clock::System` (no clock
+  statement at all) and, on top, no history rows written (its audit then
+  fails, so only its throughput is usable):
+
+  | build | 8 clients | 32 clients |
+  |---|---:|---:|
+  | pre-G `f889488` | 183–184 | 179–182 |
+  | G `74225cd` | 141–145 | 139–142 |
+  | clock pipelined, writes sequential (`92a2fbf`) | 155–157 | 154–158 |
+  | … and `Clock::System` | 162 | 160 |
+  | … and no history rows | 177 | 179 |
+  | clock and writes pipelined (`a45b6e3`, this commit) | 170–171 | 177–180 |
+  | … and `Clock::System` | 175 | 184 |
+  | … and no history rows | 183 | 197 |
+
+  - The clock, with sequential writes: its round trip was worth 12–15
+    payments/s (8–11%; removed), the statement itself 2–5 (2–3%; still
+    there, pipelined).
+  - The history row: 15–19 payments/s (9–12%) with sequential writes, 8–13
+    (4–7%; the INSERT's server time) with pipelined writes.
+  - Payment create p50 23.4 → 19.4 ms (pre-G 18.7), view 1.09 → 0.78 ms
+    (pre-G 0.72), recovery pass fixing 5 payments 77 → 62 ms (pre-G 55).
+  - Retries rose: 5–31 per run (8 and 32 clients) against 0–13 for G. They
+    are `Create` aborted as a pivot on the `payments` insert (PostgreSQL's
+    log), about 1% of the transactions; G5 had removed them by making
+    `MarkPosted` HOT, and the shorter transactions bring the overlap back.
+    Not fixed.
+  - The empty recovery pass is unchanged (9.8–10 ms, pre-G 6.5).
+- Checks: `cargo test --workspace` 103 passed; clippy plain, `mock-psp`
+  and CUDA clean; GPU differential 6/6 and `build-device.sh --check`;
+  `cargo deny check` ok; `h5i app extract --check` and `lint` ok for all
+  three; gates unchanged (ledger 376 theorems in 15 modules, payments 451
+  in 10, reconcile 69 in 3); mutants ledger 20/20,
+  payments 22/22, reconcile 6/6. Upstream: `scripts/app/ci-rust-tests.sh` passed (72 test
+  binaries, no skips; run on a database of its own: the `ledger` example
+  shares its schema name with h5i-pay's), `cargo app lint` and
+  `cargo deny check bans` ok; booking's new
+  `database_clock_is_the_transactions` checks that each commit records
+  PostgreSQL's clock.
 
 ### After G: full checks and the B4 end-to-end re-run
 

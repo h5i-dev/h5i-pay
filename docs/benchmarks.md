@@ -179,6 +179,47 @@ What changed, and what it cost:
   id < b`) would make a period one read per table; that is a change to
   h5i-app's query language and its Lean semantics, not done.
 
+### H1: the clock and the history row (h5i `a45b6e3`)
+
+G1's two costs measured apart at 10k (`e2e_seed_10000`), every build
+interleaved with the others, order rotating, three rounds per series,
+`E2E_CLIENTS=8,32`, medians [range] (raw:
+`benchmarks/results/e2e-H1-clock-g5.xlarge.json`). Load average 2–4.
+"seq" is h5i `92a2fbf` (the clock pipelined with the load, writes still
+one round trip each); "pipelined" is `a45b6e3` (the writes pipelined too),
+the H1 commit. `Clock::System` and "no history" are experimental builds
+(not committed) that drop the clock statement and then also the history
+INSERTs; without history the audit fails, so only throughput is used.
+
+| build | 8 clients, payments/s | 32 clients, payments/s | create p50 ms | view p50 ms |
+|---|---:|---:|---:|---:|
+| pre-G `f889488` | 184.3 [181–199], 183.4 [178–187] | 181.7 [181–184], 178.9 [177–179] | 18.6–18.8 | 0.72 |
+| G `74225cd` | 144.5 [144–145], 141.3 [137–144], 142.5 [142–143] | 142.4 [141–143], 138.8 [137–143], 139.6 [139–141] | 23.1–23.5 | 1.09–1.10 |
+| seq | 156.5 [155–159], 154.6 [150–155] | 157.6 [156–158], 153.9 [152–155] | 18.5–20.9 | 0.78–0.79 |
+| seq, `Clock::System` | 161.7 [156–163] | 159.7 [160–160] | 20.6 | 0.72 |
+| seq, `Clock::System`, no history | 176.9 [177–178] | 179.0 [178–180] | – | – |
+| pipelined | 170.0 [168–173], 171.1 [159–173] | 176.5 [176–179], 180.3 [179–182] | 19.1–19.4 | 0.78 |
+| pipelined, `Clock::System` | 174.8 [173–178] | 183.7 [184–188] | 19.2 | 0.73 |
+| pipelined, `Clock::System`, no history | 182.6 [173–186] | 196.5 [193–197] | – | – |
+
+(Several values in a cell: one per series that ran the build.)
+
+- **The clock**: its round trip (a Parse, then the query) was worth 12–15
+  payments/s (8–11%); H1 removed it. The statement itself, now prepared
+  and pipelined, still costs 2–5 payments/s (2–3%) and 0.05–0.06 ms of the
+  view.
+- **The history row**: with one round trip per write it cost 15–19
+  payments/s (9–12%); with pipelined writes, 8–13 (4–7%), the INSERT's
+  time in the server.
+- **Together** H1 brings G from 139–145 to 170–180 payments/s, 1–7%
+  under pre-G (8 clients 170–171 vs 183–184, 32 clients 177–180 vs
+  179–182). Create p50 19.1–19.4 ms (pre-G 18.7), refund 19.3–19.4 (19.3),
+  a recovery pass fixing 5 payments 61–64 ms (G 76–80, pre-G 55).
+- **Retries** went up again: 5–31 per run against 0–13 for G. PostgreSQL's
+  log names `Create`, aborted as a pivot on its `payments` insert; about 1%
+  of the transactions. Shorter transactions overlap more. Not fixed.
+- The empty recovery pass did not move (9.8–10.0 ms; pre-G 6.5).
+
 ### The batch worker, with its files
 
 `h5i-pay-batch reconcile` on CSV files in the page cache (local disk, not

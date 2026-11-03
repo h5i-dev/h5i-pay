@@ -165,7 +165,12 @@ committed history is such a sequence.
    transaction's clock. The engine stamps it before every attempt
    (`Kernel::stamp`) from `Clock::Database`, PostgreSQL's
    `transaction_timestamp()` in microseconds (`payment_storage::engines_with`
-   sets it); the kernel only copies it. It is not monotone across
+   sets it); the kernel only copies it. Since H1 h5i-app-pg sends that
+   `SELECT` in the same flight as the load and sends a transaction's writes
+   pipelined, in plan order (h5i branch `app/range-reads`); trusted with the
+   rest of the engine: `transaction_timestamp()` is fixed for the
+   transaction whatever statement runs first, and PostgreSQL runs a
+   connection's pipelined statements in the order they were sent. It is not monotone across
    transactions (two transactions that start in one order may commit in the
    other; `n` gives the order per payment or account). That nothing outside
    the kernels rewrites the history is PostgreSQL's: triggers on both

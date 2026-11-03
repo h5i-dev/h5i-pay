@@ -260,3 +260,41 @@ After G (done, PROGRESS.md "After G", `docs/benchmarks.md` "After G"): re-run al
 with the previous build if the host is loaded), update `docs/benchmarks.md`,
 `docs/security-review.md`, `docs/proof-assumptions.md`, and report what was
 proven, measured and left open.
+
+## H. Win back what G cost
+
+Same ground rules. Tick each off here and in PROGRESS.md as it lands.
+
+1. [x] **No extra round trip for the database clock.** Since G1 the engines
+   use `Clock::Database`, which runs `SELECT transaction_timestamp()` as a
+   separate statement in every kernel transaction; the after-G bisect puts
+   the whole 19–23% throughput drop (≈183 → 142 payments/s) at G1. Read the
+   clock without an extra round trip: e.g. fold it into the first query of
+   the load, or let the write use `now()`/`transaction_timestamp()`. If
+   this needs h5i-app-pg changes, make them upstream (below). The history's
+   `at` must stay the transaction's own clock, monotonic per tenant as
+   before; keep G1's proofs. Measure G1's two costs separately (clock vs
+   history row) and report both.
+2. [ ] **Range comparisons in h5i-app reads.** h5i-app's read predicates
+   have no range comparison, so a page is an `OR` of 64 keys and a G6
+   period (≤ 4096 ids) costs 64 `Range` + 64 `RefundRange` + 128
+   `TransferRange` kernel transactions (290–420 ms per call; whole tenant
+   at 100k: 9.6 s vs 509 ms before G). Add range predicates (`>=`, `<`,
+   and an ordered limit if needed) to h5i-app's read language
+   (`h5i_app_sql::Pred`/`Read`, the reference `eval`, `h5i_app_pgsql`'s
+   compiler, the Lean `H5iAppLib.Query` semantics and the differential
+   test against PostgreSQL), so a page or a period is one read per table.
+   Do it in `/root/h5i-upstream` on a branch from current `main`, with
+   h5i's own checks (its CI script `scripts/app/ci-rust-tests.sh`, lean
+   job, examples) passing, push the branch over SSH
+   (`git@github.com:h5i-dev/h5i.git`) and say so in PROGRESS.md. Until it
+   is merged and released, h5i-pay may depend on that branch's commit by
+   git rev (all h5i-app crates and `h5i_app_lib` from the same rev). Then
+   move F3/G4/G6 paging (List, Accounts, Transfers journal, Range,
+   RefundRange, TransferRange) to range reads, with plans and frame
+   theorems re-proven, and re-measure reconcile (one call and whole
+   tenant), paging, and the paged audit.
+
+After H: re-run all checks and the B4 end-to-end benchmarks interleaved
+with `74225cd`, update `docs/benchmarks.md` and PROGRESS.md, and report
+what was proven, measured and left open.
