@@ -7,4 +7,5 @@ mod ledger_api;
 mod payments_api;
 mod reconcile_periods;
 mod sign_ranges;
+mod find_work;
 mod recovery_job;

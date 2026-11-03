@@ -373,6 +373,35 @@ entry's transfer up among the page's transfers, which grows with the page.
 - Everything else is unchanged: the HTTP journal page, the reconciliation
   sweep (its period reads were already ranges of 4096) and throughput.
 
+### I3: `POST /v1/recover` by id pages
+
+`Orchestrator::find_work` (the work `POST /v1/recover` does for one
+tenant) loaded the tenant's payments in one snapshot and every journal
+page of the PSP clearing and refund holding accounts. Since I3 it reads
+pages of 4096 ids: per page a `Range` and a `RefundRange` of the payment
+kernel and the four `TransferRange`s of the ledger's posting kinds, six
+read-only transactions, so memory is one page. The harness times three
+calls of `POST /v1/recover` after the recovery passes (nothing left to do,
+so the time is `find_work`).
+
+`d71881b` with this harness and I3 (which includes I1 and I2), two rounds
+per size, `E2E_CLIENTS=8`, medians [range] (raw:
+`benchmarks/results/e2e-I3-g5.xlarge.json`), load average about 2:
+
+| | build | 10k | 100k |
+|---|---|---:|---:|
+| `POST /v1/recover`, p50 ms | H2 | 245.9 [245.7–246.1] | 3323 [3321–3325] |
+| | I3 | 65.7 [64.9–66.5] | 552.9 [552.6–553.2] |
+| … kernel transactions per call | H2 / I3 | 209 / 18 | 2038 / 162 |
+
+- **3.7× at 10k, 6.0× at 100k**, and bounded memory. H2's call was one
+  snapshot of the payments plus 209 and 2,038 kernel transactions, nearly
+  all journal pages of 64; I3's is 3 and 27 pages of ids, six
+  transactions each.
+- It is still O(tenant): the journal check (a marked payment whose
+  postings the ledger lost, as after an older ledger backup was restored)
+  has to look at every captured payment.
+
 ### The batch worker, with its files
 
 `h5i-pay-batch reconcile` on CSV files in the page cache (local disk, not

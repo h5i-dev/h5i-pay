@@ -321,7 +321,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    internal readers: export, reconcile, recovery) use larger range pages
    (e.g. up to 4096) while the HTTP page limit stays bounded; plans and
    frame theorems as before. Re-measure the audit at 1k/10k/100k.
-3. [ ] **`find_work` without a whole-tenant load.** `POST /v1/recover`'s
+3. [x] **`find_work` without a whole-tenant load.** `POST /v1/recover`'s
    `find_work` still loads the whole tenant's payments. Read only the
    unfinished work (the `open_payments` / `payments_refunding` sets and
    range reads), keep it at least as thorough as now (it also catches a

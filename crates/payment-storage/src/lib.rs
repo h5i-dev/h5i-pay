@@ -386,21 +386,27 @@ impl RecoveryWork {
 /// release once it failed (unless the reservation never happened: then
 /// there is nothing to release).
 pub fn needs_ledger_sync(p: &payment_domain::Payment, refunds: &[payment_domain::Refund], has: impl Fn(u64) -> bool) -> bool {
-    use ledger::{system_transfer_id as id, POST_CAPTURE, POST_REFUND_RELEASE, POST_REFUND_RESERVE, POST_REFUND_SETTLE};
-    if p.status != payment_domain::CAPTURED {
-        return false;
+    capture_needs_sync(p, &has)
+        || (p.status == payment_domain::CAPTURED && refunds.iter().filter(|r| r.payment == p.id).any(|r| refund_needs_sync(r, &has)))
+}
+
+/// The capture part of [`needs_ledger_sync`]: `p` is `CAPTURED` and its
+/// capture posting is missing.
+pub fn capture_needs_sync(p: &payment_domain::Payment, has: impl Fn(u64) -> bool) -> bool {
+    p.status == payment_domain::CAPTURED && !has(ledger::system_transfer_id(ledger::POST_CAPTURE, p.id))
+}
+
+/// The refund part of [`needs_ledger_sync`], for one refund of a `CAPTURED`
+/// payment: its reservation is missing, or its settlement once it
+/// succeeded, or its release once it failed after a reservation.
+pub fn refund_needs_sync(r: &payment_domain::Refund, has: impl Fn(u64) -> bool) -> bool {
+    use ledger::{system_transfer_id as id, POST_REFUND_RELEASE, POST_REFUND_RESERVE, POST_REFUND_SETTLE};
+    let reserved = has(id(POST_REFUND_RESERVE, r.id));
+    match r.status {
+        payment_domain::REFUND_SUCCEEDED => !reserved || !has(id(POST_REFUND_SETTLE, r.id)),
+        payment_domain::REFUND_FAILED => reserved && !has(id(POST_REFUND_RELEASE, r.id)),
+        _ => !reserved,
     }
-    if !has(id(POST_CAPTURE, p.id)) {
-        return true;
-    }
-    refunds.iter().filter(|r| r.payment == p.id).any(|r| {
-        let reserved = has(id(POST_REFUND_RESERVE, r.id));
-        match r.status {
-            payment_domain::REFUND_SUCCEEDED => !reserved || !has(id(POST_REFUND_SETTLE, r.id)),
-            payment_domain::REFUND_FAILED => reserved && !has(id(POST_REFUND_RELEASE, r.id)),
-            _ => !reserved,
-        }
-    })
 }
 
 /// Whether recovery must sync a payment's ledger postings (or, for a

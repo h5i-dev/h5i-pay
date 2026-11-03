@@ -294,11 +294,20 @@ committed history is such a sequence.
   `TransferRange` serve reconciliation and the export, one period of at
   most 4096 ids per `POST /v1/reconcile`; since H2 each reads its ids as one
   range (`MAX_RANGE` = 4096 ids), so a period is one read per table.
-  Whole-tenant snapshots remain only in `Orchestrator::find_work`
-  (`POST /v1/recover` for one tenant, an operator's repair call; the
-  scheduled recovery reads only unfinished payments), in
-  `reconcile_inputs` (kept as the whole-tenant reference the tests compare
-  periods with; no route calls it) and in the benchmark's row count.
+  Since I3 `Orchestrator::find_work` (`POST /v1/recover`) reads the tenant
+  by pages of 4096 ids too: per page `Range`, `RefundRange` and the
+  `TransferRange`s of the four posting kinds, each its own read-only
+  transaction. On a state that does not change meanwhile it returns what
+  the whole-tenant version (`find_work_whole`) returns; not proven, tested
+  on random states with pages of 1, 2, 3, 7 and 4096 ids
+  (`find_work_matches_the_whole_tenant`). Its journal check reads
+  transfers by id where the whole-tenant version read the journals of the
+  PSP clearing and refund holding accounts; these agree because every
+  system posting is in the journal of one of those accounts (it debits or
+  credits one) and a transfer is in the journals of both its accounts
+  (`every_change_logged`). Whole-tenant snapshots remain only in
+  `find_work_whole` and `reconcile_inputs` (the references the tests
+  compare with; no route calls them) and in the benchmark's row count.
 - **A reconciliation period is a range of ids, not of clock time.** The
   result for a period equals the whole-tenant result restricted to the
   keys with ids in it (`Period.join_period` for the single-thread join;

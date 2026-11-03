@@ -178,6 +178,33 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### I3: `find_work` without a whole-tenant load
+
+- `Orchestrator::find_work` is `find_work_paged(tenant, MAX_RANGE)`: per
+  page of ids, `Range` and `RefundRange` (payments; refunds with their
+  payments) and the `TransferRange`s of the capture, reservation,
+  settlement and release postings of those ids. The PSP work, pending
+  refunds, `ledger_pending` and the journal check (`capture_needs_sync`
+  per payment, `refund_needs_sync` per refund; `needs_ledger_sync` is now
+  their combination) come from the page. The old version is kept as
+  `find_work_whole`, the reference.
+- Differential test `find_work::find_work_matches_the_whole_tenant`: 6
+  random tenants (payments created, processing, authorized, captured,
+  declined or canceled; refunds pending, settled or failed; ledger synced,
+  marked without postings, or synced and changed afterwards), each
+  compared with pages of 1, 2, 3, 7 and 4096 ids and with `find_work`; it
+  asserts every kind of work (PSP, refunds, ledger, lost postings)
+  occurs. Injected bugs it caught: skipping an id at a page boundary, not
+  reading release postings, a wrong "has posting" set. Not caught: the
+  refund rule without the parent's `CAPTURED` check (equivalent: refunds
+  exist only for captured payments) and `refund_pending > 1` (no state
+  with a pending refund of 1 alone).
+- The `e2e` harness times three `POST /v1/recover` calls.
+- Measured (`docs/benchmarks.md`, "I3"): 246 → 66 ms at 10k, 3323 → 553 ms
+  at 100k; 209 → 18 and 2038 → 162 kernel transactions per call.
+- Checks: `cargo test --workspace` (107), clippy ×3, `cargo deny check`.
+  No kernel changed (no gates re-run for I3).
+
 ### I2: larger journal pages for the system's readers
 
 - Ledger kernel: `Transfers` and `AccountRange` take pages of up to

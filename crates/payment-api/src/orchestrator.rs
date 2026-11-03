@@ -571,11 +571,96 @@ impl Orchestrator {
         self.recover_work(&work, fail_unsubmitted).await
     }
 
-    /// One tenant's unfinished work, read from both kernels (one snapshot
-    /// each): the scheduled job's rule (`payment_storage::recovery_work`),
-    /// and also every captured payment whose postings the journal lacks
-    /// even though it is marked (`needs_ledger_sync`).
+    /// One tenant's unfinished work (I3), read by id pages instead of a
+    /// whole-tenant load: [`Orchestrator::find_work_paged`] with pages of
+    /// `MAX_RANGE` ids.
     pub async fn find_work(&self, tenant: u64) -> Result<payment_storage::RecoveryWork> {
+        self.find_work_paged(tenant, d::MAX_RANGE).await
+    }
+
+    /// One tenant's unfinished work: the scheduled job's rule
+    /// (`payment_storage::recovery_work`), and also every captured payment
+    /// whose postings the journal lacks even though it is marked
+    /// (`needs_ledger_sync`: a ledger restored from an older backup), read
+    /// `page` ids at a time. Per page of ids, both kernels' range reads,
+    /// each its own read-only transaction: `Range` (the payments) and
+    /// `RefundRange` (the refunds, with their payments) of the payment
+    /// kernel, and of the ledger the `TransferRange`s of the capture
+    /// postings of those payment ids and of the refund postings
+    /// (reservation, settlement, release) of those refund ids: system
+    /// transfer ids are contiguous per kind ([`ledger::system_transfer_id`]).
+    /// On a state that does not change meanwhile it finds what
+    /// [`Orchestrator::find_work_whole`] finds (the differential test
+    /// `find_work_matches_the_whole_tenant` checks it on random states);
+    /// while payments are made, each id is read as of its page.
+    pub async fn find_work_paged(&self, tenant: u64, page: u32) -> Result<payment_storage::RecoveryWork> {
+        use ledger::{system_transfer_id as tid, POST_CAPTURE, POST_REFUND_RELEASE, POST_REFUND_RESERVE, POST_REFUND_SETTLE};
+        let op = self.op_p(tenant);
+        let op_l = self.op_l(tenant);
+        let mut w = payment_storage::RecoveryWork { tenant, ..Default::default() };
+        let mut ledger_ids = std::collections::BTreeSet::new();
+        // System transfer ids keep the low 56 bits of a payment or refund id:
+        // no page crosses a multiple of 2^56, so each kind's ids stay one range.
+        const ID_BITS: u64 = 1 << 56;
+        let mut at = 0u64;
+        loop {
+            let limit = u64::from(page.clamp(1, d::MAX_RANGE)).min(ID_BITS - at % ID_BITS) as u32;
+            let ps = match self.pay(&op, d::Command::Range { from: at, limit }).await? {
+                Ok(d::Reply::Range(ps, _, _, _)) => ps,
+                Ok(r) => unreachable!("range replied {r:?}"),
+                Err(e) => return Err(OrchError::Payment(e)),
+            };
+            let (rs, parents, next) = match self.pay(&op, d::Command::RefundRange { from: at, limit }).await? {
+                Ok(d::Reply::Range(_, rs, parents, next)) => (rs, parents, next),
+                Ok(r) => unreachable!("refund range replied {r:?}"),
+                Err(e) => return Err(OrchError::Payment(e)),
+            };
+            let mut has = std::collections::HashSet::new();
+            for kind in [POST_CAPTURE, POST_REFUND_RESERVE, POST_REFUND_SETTLE, POST_REFUND_RELEASE] {
+                match self.ledger.execute(&op_l, &l::Command::TransferRange { from: tid(kind, at), limit }).await? {
+                    Ok(l::Reply::Transfers(ts, _)) => has.extend(ts.iter().map(|t| t.id)),
+                    Ok(r) => unreachable!("transfer range replied {r:?}"),
+                    Err(e) => return Err(OrchError::Ledger(e)),
+                }
+            }
+            let has = |id: u64| has.contains(&id);
+            for p in &ps {
+                if p.status == d::PROCESSING || (p.status == d::AUTHORIZED && !p.manual_capture) {
+                    w.psp.push(p.id);
+                }
+                if p.refund_pending > 0 {
+                    w.refunds.push(p.id);
+                }
+                if payment_storage::ledger_pending(p) || payment_storage::capture_needs_sync(p, has) {
+                    ledger_ids.insert(p.id);
+                }
+            }
+            let parents: std::collections::HashMap<u64, &d::Payment> = parents.iter().map(|p| (p.id, p)).collect();
+            for r in &rs {
+                if let Some(p) = parents.get(&r.payment)
+                    && p.status == d::CAPTURED
+                    && payment_storage::refund_needs_sync(r, has)
+                {
+                    ledger_ids.insert(p.id);
+                }
+            }
+            match next {
+                Some(n) => at = n,
+                None => break,
+            }
+        }
+        // Ids in `u64` order (a page is in `BIGINT` order).
+        w.psp.sort_unstable();
+        w.refunds.sort_unstable();
+        w.ledger = ledger_ids.into_iter().collect();
+        Ok(w)
+    }
+
+    /// [`Orchestrator::find_work`] from one whole-tenant snapshot of the
+    /// payments and the journals of the PSP clearing and refund holding
+    /// accounts (what `POST /v1/recover` did before I3): the reference the
+    /// differential test compares the paged version with.
+    pub async fn find_work_whole(&self, tenant: u64) -> Result<payment_storage::RecoveryWork> {
         let pay = self.payments.snapshot(TenantId(tenant)).await?;
         let ids = self.system_postings(tenant, &[PSP_CLEARING, REFUND_HOLDING]).await?.into_iter().map(|t| t.id).collect::<std::collections::HashSet<u64>>();
         let mut w = payment_storage::RecoveryWork { tenant, ..Default::default() };

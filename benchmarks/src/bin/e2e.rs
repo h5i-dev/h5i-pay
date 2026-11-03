@@ -404,6 +404,17 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
         journal_ms.push(t.elapsed().as_secs_f64() * 1e3);
     }
     eprintln!("{label}: list page p50 {:.2} ms, journal page p50 {:.2} ms", stats(list_ms.clone())["p50_ms"], stats(journal_ms.clone())["p50_ms"]);
+    // `POST /v1/recover` (I3): the tenant's work found by `find_work`, and
+    // done; three calls (the work is done by the first, if any is left).
+    let (mut recover_ms, mut recover_tx) = (Vec::new(), 0);
+    for _ in 0..3 {
+        let (t, a0) = (Instant::now(), api.attempts());
+        let (st, r) = api.post("/v1/recover", &api.op, json!({})).await;
+        assert_eq!(st, 200, "{r}");
+        recover_ms.push(t.elapsed().as_secs_f64() * 1e3);
+        recover_tx = api.attempts() - a0;
+    }
+    eprintln!("{label}: POST /v1/recover p50 {:.1} ms, {recover_tx} kernel transactions", stats(recover_ms.clone())["p50_ms"]);
 
     // How many updates of `payments` during the run were HOT (no index
     // entries; G5).
@@ -423,6 +434,7 @@ async fn measure(base: &str, template: &str, label: &str, out: Option<&str>) {
         "recovery_passes": passes,
         "reconcile": stats(recon), "reconcile_exceptions": exceptions,
         "audit": stats(audit_ms), "list_page": stats(list_ms), "journal_page": stats(journal_ms),
+        "recover": stats(recover_ms), "recover_kernel_tx": recover_tx,
         "reconcile_sweep": stats(sweep), "reconcile_sweep_periods": sweep_periods,
         "reconcile_sweep_exceptions": {"psp": sweep_exceptions.0, "ledger": sweep_exceptions.1},
         "payments_updates": hot,
