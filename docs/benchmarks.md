@@ -343,6 +343,36 @@ ran at load 2–4.
   order the join; it scanned every payment of the tenant (an empty pass
   20 ms at 10k, 57 ms at 100k) and was replaced by lookups by key.
 
+### I2: larger journal pages for the system's readers
+
+The ledger kernel takes `Transfers` (an account's journal) and
+`AccountRange` (accounts by id) pages of up to 4096 (`MAX_RANGE`; before
+64), operator-only as before; over HTTP they stay at most 64. The paged
+audit, reconciliation's whole-tenant inputs and `find_work` read pages of
+1024 (`payment_storage::ledger::JOURNAL_PAGE`). One audit at 100k payments
+per page size (one run each, the I2 build otherwise): 64 entries 4.40 s,
+512 1.55 s, 1024 1.42–1.43 s, 2048 1.46 s, 4096 1.51–1.53 s. Past a few
+hundred entries the audit is bound by the rows it reads (every transfer
+twice, once per account), and the kernel's journal page looks each
+entry's transfer up among the page's transfers, which grows with the page.
+
+`d71881b` (H2) and I2 interleaved, order rotating, two rounds per size,
+`E2E_CLIENTS=8`, medians [range] (raw:
+`benchmarks/results/e2e-I2-g5.xlarge.json`), load average 1.4–2.6:
+
+| | build | 1k | 10k | 100k |
+|---|---|---:|---:|---:|
+| paged audit, ms | H2 | 46.4 [46.2–46.5] | 369.6 [369.2–370.0] | 4393 [4376–4410] |
+| | I2 | 20.9 [20.8–20.9] | 143.5 [143.5–143.5] | 1454 [1452–1456] |
+| journal page of 64 over HTTP, p50 ms | H2 / I2 | 1.36 / 1.57 | 1.38 / 1.38 | 1.59 / 1.38 |
+| whole tenant reconciled, all periods, ms | H2 / I2 | 9.9 / 9.3 | 65.5 / 63.6 | 514 / 522 |
+| 8 clients, payments/s | H2 / I2 | 178.3 / 177.9 | 176.3 / 180.3 | 195.7 / 196.2 |
+
+- **The paged audit** is 2.2–3.0× faster (100k: 4.4 s → 1.45 s); before,
+  at 100k it read about 3,400 journal pages of 64.
+- Everything else is unchanged: the HTTP journal page, the reconciliation
+  sweep (its period reads were already ranges of 4096) and throughput.
+
 ### The batch worker, with its files
 
 `h5i-pay-batch reconcile` on CSV files in the page cache (local disk, not

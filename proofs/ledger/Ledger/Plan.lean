@@ -108,10 +108,10 @@ def readsA (a : Principal) : Command → Option (List (Read Val))
     if l.val ≠ 0 ∧ l.val ≤ 64 ∧ (a.operator = true ∨ owner = a.user) then some (pageA owner f.val (pageEndN f.val l.val))
     else some []
   | .Transfers acc f l =>
-    if l.val ≠ 0 ∧ l.val ≤ 64 ∧ a.operator = true then some (journalA acc f.val (pageEndN f.val l.val))
+    if l.val ≠ 0 ∧ l.val ≤ 4096 ∧ a.operator = true then some (journalA acc f.val (pageEndN f.val l.val))
     else some []
   | .AccountRange f l =>
-    if l.val ≠ 0 ∧ l.val ≤ 64 ∧ a.operator = true then some (idsA f.val (pageEndN f.val l.val))
+    if l.val ≠ 0 ∧ l.val ≤ 4096 ∧ a.operator = true then some (idsA f.val (pageEndN f.val l.val))
     else some []
   | .History acc f l =>
     if l.val ≠ 0 ∧ l.val ≤ 64 ∧ a.operator = true then some (histA acc f.val (pageEndN f.val l.val))
@@ -362,14 +362,14 @@ theorem reads_abs (a : Principal) (c : Command) : ∃ o, reads a c = ok o ∧ pl
     by_cases h0 : l = 0#u32
     · subst h0; simp [planOf]
     have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
-    by_cases hm : l ≤ MAX_PAGE
-    · have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+    by_cases hm : l ≤ MAX_RANGE
+    · have hm' : l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       cases ha : a.operator
       · simp [h0, hm, ha, h0', hm', planOf]
       · simp only [h0, hm, ha, h0', hm', bne_iff_ne, ne_eq, not_false_eq_true, if_true, is_operator_eq, bind_ok,
           true_and, and_self, Bool.and_true, decide_true, Bool.true_and, and_true]
         exact page
-    · have hm' : ¬ l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+    · have hm' : ¬ l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       simp [h0, hm, hm', planOf]
   case AccountRange f l =>
     obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)
@@ -397,14 +397,14 @@ theorem reads_abs (a : Principal) (c : Command) : ∃ o, reads a c = ok o ∧ pl
     by_cases h0 : l = 0#u32
     · subst h0; simp [planOf]
     have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
-    by_cases hm : l ≤ MAX_PAGE
-    · have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+    by_cases hm : l ≤ MAX_RANGE
+    · have hm' : l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       cases ha : a.operator
       · simp [h0, hm, ha, h0', hm', planOf]
       · simp only [h0, hm, ha, h0', hm', bne_iff_ne, ne_eq, not_false_eq_true, if_true, is_operator_eq, bind_ok,
           true_and, and_self, Bool.and_true, decide_true, Bool.true_and, and_true]
         exact page
-    · have hm' : ¬ l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+    · have hm' : ¬ l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       simp [h0, hm, hm', planOf]
   case TransferRange f l =>
     obtain ⟨e, he, hev⟩ := ok_of' (page_end_spec f l)

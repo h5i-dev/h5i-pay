@@ -280,8 +280,14 @@ committed history is such a sequence.
   since an `OR` chain of a few hundred terms already costs PostgreSQL
   tens of milliseconds of planning), and `List`/`Accounts` read one page
   of at most 64 sequence numbers of one merchant or owner. Since G4 the
-  ledger journal (`Transfers`) is one page of at most 64 history entries
-  of one account, and `AccountRange` one page of at most 64 account ids;
+  ledger journal (`Transfers`) is one page of history entries of one
+  account, and `AccountRange` one page of account ids, both operator-only
+  and since I2 of at most 4096 (`MAX_RANGE`; before, 64): the system's own
+  readers (the paged audit, reconciliation, recovery) read pages of 1024
+  (`payment_storage::ledger::JOURNAL_PAGE`). Over HTTP these pages stay at
+  most 64: `payment_storage::ledger::http_limit` turns a larger limit into
+  0, which the kernel refuses (`BadPage`). That bound is in the HTTP
+  decoding, not proven (tested in `ledger_api`);
   the audit, `find_work` and `reconcile_inputs` read the ledger through
   them. Since G6 the payment kernel's `Range` and `RefundRange` (ids of
   payments, or of refunds with their payments) and the ledger's

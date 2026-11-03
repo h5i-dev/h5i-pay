@@ -221,7 +221,8 @@ pub enum CommandJson {
         #[serde(default)]
         limit: Option<u32>,
     },
-    /// A page of the tenant's accounts by id (operators only, G4).
+    /// A page of the tenant's accounts by id (operators only, G4), at most
+    /// `limit` (default and maximum `k::MAX_PAGE`).
     AccountsById {
         #[serde(default)]
         from: u64,
@@ -269,10 +270,23 @@ impl CommandJson {
             CommandJson::Accounts { owner, from, limit } => {
                 k::Command::Accounts { owner: owner.unwrap_or(k::user_of(actor)), from, limit: limit.unwrap_or(k::MAX_PAGE) }
             }
-            CommandJson::Transfers { account, from, limit } => k::Command::Transfers { account, from, limit: limit.unwrap_or(k::MAX_PAGE) },
-            CommandJson::AccountsById { from, limit } => k::Command::AccountRange { from, limit: limit.unwrap_or(k::MAX_PAGE) },
+            CommandJson::Transfers { account, from, limit } => k::Command::Transfers { account, from, limit: http_limit(limit) },
+            CommandJson::AccountsById { from, limit } => k::Command::AccountRange { from, limit: http_limit(limit) },
             CommandJson::History { account, from, limit } => k::Command::History { account, from, limit: limit.unwrap_or(k::MAX_PAGE) },
         }
+    }
+}
+
+/// A page limit from the HTTP API: `k::MAX_PAGE` if none is given, and 0 (a
+/// page the kernel refuses as `BadPage`, as before I2) above `k::MAX_PAGE`.
+/// The kernel takes `Transfers` and `AccountRange` pages up to
+/// `k::MAX_RANGE` for the system's own readers ([`JOURNAL_PAGE`]); over
+/// HTTP they stay at most `k::MAX_PAGE`.
+pub fn http_limit(limit: Option<u32>) -> u32 {
+    match limit {
+        None => k::MAX_PAGE,
+        Some(l) if l <= k::MAX_PAGE => l,
+        Some(_) => 0,
     }
 }
 
@@ -608,8 +622,18 @@ fn refused(e: k::Error) -> DbError {
     DbError::Decode(format!("ledger refused a page: {e:?}"))
 }
 
+/// Entries per `Transfers` and `AccountRange` page of the system's own
+/// paged readers (the paged audit, reconciliation, recovery; I2), each page
+/// one index range; the kernel takes up to `k::MAX_RANGE`. The paged audit
+/// at 100k payments took 1.42–1.43 s with pages of 1024, 1.46 s with 2048,
+/// 1.51–1.53 s with 4096 and 1.55 s with 512 (4.4 s with 64): past a few
+/// hundred entries it is bound by the rows, and the kernel's journal page
+/// looks each entry's transfer up in the page's transfers.
+pub const JOURNAL_PAGE: u32 = 1024;
+const _: () = assert!(JOURNAL_PAGE <= k::MAX_RANGE);
+
 /// Entries `from` up to `upto` (all if `None`) of `account`'s journal,
-/// read a page (at most `k::MAX_PAGE` entries) per kernel command.
+/// read a page (at most [`JOURNAL_PAGE`] entries) per kernel command.
 /// `actor` must be an operator. Also returns the number of pages read.
 pub async fn journal_range(
     engine: &crate::LedgerEngine,
@@ -624,8 +648,8 @@ pub async fn journal_range(
     loop {
         let limit = match upto {
             Some(u) if u <= at => break,
-            Some(u) => (u - at).min(u64::from(k::MAX_PAGE)) as u32,
-            None => k::MAX_PAGE,
+            Some(u) => (u - at).min(u64::from(JOURNAL_PAGE)) as u32,
+            None => JOURNAL_PAGE,
         };
         pages += 1;
         match engine.execute(actor, &k::Command::Transfers { account, from: at, limit }).await?.map_err(refused)? {
@@ -698,7 +722,7 @@ pub struct AuditReport {
 pub async fn audit_paged(engine: &crate::LedgerEngine, actor: &k::Principal) -> Result<Result<AuditReport, String>, DbError> {
     use std::collections::{BTreeMap, HashMap};
     let mut rep = AuditReport::default();
-    let (accounts, pages) = all_pages(engine, actor, |from| k::Command::AccountRange { from, limit: k::MAX_PAGE }).await?;
+    let (accounts, pages) = all_pages(engine, actor, |from| k::Command::AccountRange { from, limit: JOURNAL_PAGE }).await?;
     rep.pages += pages;
     rep.accounts = accounts.len() as u64;
     let bound: HashMap<u64, u64> = accounts.iter().map(|a| (a.id, a.changes)).collect();

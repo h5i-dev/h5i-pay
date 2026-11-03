@@ -115,7 +115,11 @@ async fn ledger_over_http() {
     assert_eq!(j["transfers"][0]["id"], json!(1));
     let (_, j) = s.ledger(&op, json!({"cmd": "transfers", "account": 1, "from": 2}), None).await;
     assert_eq!((j["transfers"][0]["id"].clone(), j["next"].clone()), (json!(3), Value::Null));
+    // I2: the kernel takes journal and account-id pages up to MAX_RANGE for
+    // the system's own readers; over HTTP they stay at most MAX_PAGE.
     assert_eq!(s.ledger(&op, json!({"cmd": "transfers", "account": 1, "limit": 65}), None).await.0, 400);
+    assert_eq!(s.ledger(&op, json!({"cmd": "transfers", "account": 1, "limit": 4096}), None).await.0, 400);
+    assert_eq!(s.ledger(&op, json!({"cmd": "accounts_by_id", "limit": 65}), None).await.0, 400);
     assert_eq!(s.ledger(&op, json!({"cmd": "transfers", "account": 9}), None).await.0, 404);
     assert_eq!(s.ledger(&op, json!({"cmd": "transfers"}), None).await.0, 400);
     let (st, ids) = s.ledger(&op, json!({"cmd": "accounts_by_id", "from": 1, "limit": 1}), None).await;

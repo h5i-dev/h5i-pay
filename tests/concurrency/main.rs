@@ -142,7 +142,9 @@ async fn paged_audit_across_account_pages() {
     let Some(url) = database_url() else { return };
     let e = engine(&url, true, 16).await;
     let org = fresh_tenant();
-    let wallets = u64::from(k::MAX_PAGE) + 16;
+    // Two pages of accounts by id (the audit's pages, I2: `JOURNAL_PAGE`).
+    let page = u64::from(payment_storage::ledger::JOURNAL_PAGE);
+    let wallets = page + 16;
     setup(&e, org, wallets, 1_000_000).await;
     let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let mut tasks = Vec::new();
@@ -153,8 +155,8 @@ async fn paged_audit_across_account_pages() {
             let mut i = 0;
             while !done.load(std::sync::atomic::Ordering::Relaxed) && i < 20_000 {
                 // One side on the first page of accounts, the other on the second.
-                let a = 1 + rng.below(u64::from(k::MAX_PAGE) - 1);
-                let b = u64::from(k::MAX_PAGE) + rng.below(16);
+                let a = 1 + rng.below(page - 1);
+                let b = page + rng.below(16);
                 let (from, to) = if rng.below(2) == 0 { (a, b) } else { (b, a) };
                 i += 1;
                 let r = e.execute(&user(org, from), &transfer(task * 100_000 + i, from, to, 1 + rng.below(50))).await.unwrap();

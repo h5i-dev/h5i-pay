@@ -1345,7 +1345,7 @@ def HistoryEntry.put
   HistoryEntry.put_loop v x 0#usize
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::Account}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 108:13-108:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 114:13-114:18
     Visibility: public -/
 def Account.Insts.CoreCloneClone.clone (self : Account) : Result Account := do
   ok self
@@ -1400,7 +1400,7 @@ def Account.del
   Account.del_loop v id (alloc.vec.Vec.new Account) 0#usize
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::Transfer}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 128:13-128:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 134:13-134:18
     Visibility: public -/
 def Transfer.Insts.CoreCloneClone.clone
   (self : Transfer) : Result Transfer := do
@@ -1456,7 +1456,7 @@ def Transfer.del
   Transfer.del_loop v id (alloc.vec.Vec.new Transfer) 0#usize
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::OwnerCounter}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 147:13-147:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 153:13-153:18
     Visibility: public -/
 def OwnerCounter.Insts.CoreCloneClone.clone
   (self : OwnerCounter) : Result OwnerCounter := do
@@ -1513,7 +1513,7 @@ def OwnerCounter.del
   OwnerCounter.del_loop v owner (alloc.vec.Vec.new OwnerCounter) 0#usize
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::HistoryEntry}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 159:13-159:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 165:13-165:18
     Visibility: public -/
 def HistoryEntry.Insts.CoreCloneClone.clone
   (self : HistoryEntry) : Result HistoryEntry := do
@@ -1900,7 +1900,7 @@ def decode (r : Rows) : Result (Option Snapshot) := do
               })
 
 /-- [payment_ledger::Write]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 228:0-234:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 234:0-240:1
     Visibility: public -/
 @[discriminant isize]
 inductive Write where
@@ -1911,7 +1911,7 @@ inductive Write where
 | PutHistory : HistoryEntry → Write
 
 /-- [payment_ledger::apply_write]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 918:0-926:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 925:0-933:1 -/
 def apply_write (s : Snapshot) (w : Write) : Result Snapshot := do
   match w with
   | Write.PutAccount a =>
@@ -1929,47 +1929,47 @@ def apply_write (s : Snapshot) (w : Write) : Result Snapshot := do
     ok { s with history := v }
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::Write}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 227:9-227:14
+    Source: 'crates/payment-ledger/src/lib.rs', lines 233:9-233:14
     Visibility: public -/
 def Write.Insts.CoreCloneClone.clone (self : Write) : Result Write := do
   ok self
 
 /-- Trait implementation: [payment_ledger::{impl core::clone::Clone for payment_ledger::HistoryEntry}]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 159:13-159:18 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 165:13-165:18 -/
 @[reducible]
 def HistoryEntry.Insts.CoreCloneClone : core.clone.Clone HistoryEntry := {
   clone := HistoryEntry.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [payment_ledger::{impl core::clone::Clone for payment_ledger::OwnerCounter}]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 147:13-147:18 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 153:13-153:18 -/
 @[reducible]
 def OwnerCounter.Insts.CoreCloneClone : core.clone.Clone OwnerCounter := {
   clone := OwnerCounter.Insts.CoreCloneClone.clone
 }
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::Ledger}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 140:13-140:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 146:13-146:18
     Visibility: public -/
 def Ledger.Insts.CoreCloneClone.clone (self : Ledger) : Result Ledger := do
   ok self
 
 /-- Trait implementation: [payment_ledger::{impl core::clone::Clone for payment_ledger::Transfer}]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 128:13-128:18 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 134:13-134:18 -/
 @[reducible]
 def Transfer.Insts.CoreCloneClone : core.clone.Clone Transfer := {
   clone := Transfer.Insts.CoreCloneClone.clone
 }
 
 /-- Trait implementation: [payment_ledger::{impl core::clone::Clone for payment_ledger::Account}]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 108:13-108:18 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 114:13-114:18 -/
 @[reducible]
 def Account.Insts.CoreCloneClone : core.clone.Clone Account := {
   clone := Account.Insts.CoreCloneClone.clone
 }
 
 /-- [payment_ledger::{impl core::clone::Clone for payment_ledger::Snapshot}::clone]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 97:13-97:18
+    Source: 'crates/payment-ledger/src/lib.rs', lines 103:13-103:18
     Visibility: public -/
 def Snapshot.Insts.CoreCloneClone.clone
   (self : Snapshot) : Result Snapshot := do
@@ -2024,7 +2024,7 @@ def apply (snap : Snapshot) (ws : alloc.vec.Vec Write) : Result Snapshot := do
   apply_loop ws s 0#usize
 
 /-- [payment_ledger::sql_write]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 929:0-937:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 936:0-944:1 -/
 def sql_write
   (w : Write) (out : alloc.vec.Vec h5i_app_sql.Write) :
   Result (alloc.vec.Vec h5i_app_sql.Write)
@@ -2140,27 +2140,27 @@ def actor_id (actor : Principal) : Result Std.U64 := do
 @[global_simps, irreducible] def MAX_BATCH : Std.Usize := 64#usize
 
 /-- [payment_ledger::MAX_PAGE]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 87:0-87:29
+    Source: 'crates/payment-ledger/src/lib.rs', lines 88:0-88:29
     Visibility: public -/
 @[global_simps, irreducible] def MAX_PAGE : Std.U32 := 64#u32
 
 /-- [payment_ledger::MAX_RANGE]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 91:0-91:32
+    Source: 'crates/payment-ledger/src/lib.rs', lines 97:0-97:32
     Visibility: public -/
 @[global_simps, irreducible] def MAX_RANGE : Std.U32 := 4096#u32
 
 /-- [payment_ledger::CMD_OPEN]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 176:0-176:28
+    Source: 'crates/payment-ledger/src/lib.rs', lines 182:0-182:28
     Visibility: public -/
 @[global_simps, irreducible] def CMD_OPEN : Std.U32 := 1#u32
 
 /-- [payment_ledger::CMD_POST]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 178:0-178:28
+    Source: 'crates/payment-ledger/src/lib.rs', lines 184:0-184:28
     Visibility: public -/
 @[global_simps, irreducible] def CMD_POST : Std.U32 := 2#u32
 
 /-- [payment_ledger::TransferReq]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 186:0-192:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 192:0-198:1
     Visibility: public -/
 structure TransferReq where
   id : Std.U64
@@ -2170,7 +2170,7 @@ structure TransferReq where
   code : Std.U32
 
 /-- [payment_ledger::Command]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 195:0-225:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 201:0-231:1
     Visibility: public -/
 @[discriminant isize]
 inductive Command where
@@ -2185,7 +2185,7 @@ inductive Command where
 | TransferRange : Std.U64 → Std.U32 → Command
 
 /-- [payment_ledger::Reply]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 237:0-254:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 243:0-260:1
     Visibility: public -/
 @[discriminant isize]
 inductive Reply where
@@ -2199,7 +2199,7 @@ inductive Reply where
 | History : alloc.vec.Vec HistoryEntry → Option Std.U64 → Reply
 
 /-- [payment_ledger::Error]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 257:0-278:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 263:0-285:1
     Visibility: public -/
 @[discriminant isize]
 inductive Error where
@@ -2219,7 +2219,7 @@ inductive Error where
 | BadPage : Error
 
 /-- [payment_ledger::four]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 282:0-289:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 289:0-296:1 -/
 def four
   (a : Write) (b : Write) (c : Write) (d : Write) :
   Result (alloc.vec.Vec Write)
@@ -2230,7 +2230,7 @@ def four
   alloc.vec.Vec.push ws2 d
 
 /-- [payment_ledger::five]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 291:0-299:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 298:0-306:1 -/
 def five
   (a : Write) (b : Write) (c : Write) (d : Write) (e : Write) :
   Result (alloc.vec.Vec Write)
@@ -2242,7 +2242,7 @@ def five
   alloc.vec.Vec.push ws3 e
 
 /-- [payment_ledger::entry]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 303:0-318:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 310:0-325:1 -/
 def entry
   (actor : Principal) (command : Std.U32) (transfer1 : Std.U64)
   (code : Std.U32) (n : Std.U64) (before : Account) (after : Account) :
@@ -2267,7 +2267,7 @@ def entry
     }
 
 /-- [payment_ledger::find_account]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 322:4-329:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 329:4-336:1
     Visibility: public -/
 @[rust_loop_body]
 def find_account_loop.body
@@ -2287,7 +2287,7 @@ def find_account_loop.body
   else ok (done none)
 
 /-- [payment_ledger::find_account]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 322:4-329:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 329:4-336:1
     Visibility: public -/
 @[rust_loop]
 def find_account_loop
@@ -2299,7 +2299,7 @@ def find_account_loop
     i
 
 /-- [payment_ledger::find_account]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 320:0-329:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 327:0-336:1
     Visibility: public -/
 @[reducible]
 def find_account
@@ -2309,7 +2309,7 @@ def find_account
   find_account_loop accounts id 0#usize
 
 /-- [payment_ledger::find_transfer]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 333:4-340:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 340:4-347:1
     Visibility: public -/
 @[rust_loop_body]
 def find_transfer_loop.body
@@ -2329,7 +2329,7 @@ def find_transfer_loop.body
   else ok (done none)
 
 /-- [payment_ledger::find_transfer]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 333:4-340:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 340:4-347:1
     Visibility: public -/
 @[rust_loop]
 def find_transfer_loop
@@ -2341,7 +2341,7 @@ def find_transfer_loop
     i
 
 /-- [payment_ledger::find_transfer]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 331:0-340:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 338:0-347:1
     Visibility: public -/
 @[reducible]
 def find_transfer
@@ -2351,7 +2351,7 @@ def find_transfer
   find_transfer_loop transfers id 0#usize
 
 /-- [payment_ledger::owner_next]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 345:4-352:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 352:4-359:1
     Visibility: public -/
 @[rust_loop_body]
 def owner_next_loop.body
@@ -2371,7 +2371,7 @@ def owner_next_loop.body
   else ok (done 0#u64)
 
 /-- [payment_ledger::owner_next]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 345:4-352:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 352:4-359:1
     Visibility: public -/
 @[rust_loop]
 def owner_next_loop
@@ -2383,7 +2383,7 @@ def owner_next_loop
     i
 
 /-- [payment_ledger::owner_next]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 343:0-352:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 350:0-359:1
     Visibility: public -/
 @[reducible]
 def owner_next
@@ -2391,7 +2391,7 @@ def owner_next
   owner_next_loop cs owner 0#usize
 
 /-- [payment_ledger::page_end]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 356:0-363:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 363:0-370:1
     Visibility: public -/
 def page_end («from» : Std.U64) (limit : Std.U32) : Result Std.U64 := do
   let n ← lift (UScalar.cast .U64 limit)
@@ -2401,7 +2401,7 @@ def page_end («from» : Std.U64) (limit : Std.U32) : Result Std.U64 := do
   else «from» + n
 
 /-- [payment_ledger::same_transfer]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 366:0-368:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 373:0-375:1
     Visibility: public -/
 def same_transfer (old : Transfer) (t : TransferReq) : Result Bool := do
   if old.debit = t.debit
@@ -2414,7 +2414,7 @@ def same_transfer (old : Transfer) (t : TransferReq) : Result Bool := do
   else ok false
 
 /-- [payment_ledger::may_debit]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 371:0-373:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 378:0-380:1
     Visibility: public -/
 def may_debit (actor : Principal) (a : Account) : Result Bool := do
   let b ← is_operator actor
@@ -2424,7 +2424,7 @@ def may_debit (actor : Principal) (a : Account) : Result Bool := do
        ok (a.owner = i)
 
 /-- [payment_ledger::open]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 375:0-406:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 382:0-413:1 -/
 def «open»
   (actor : Principal) (s : Snapshot) (owner : Std.U64) (currency : Std.U32)
   (code : Std.U32) (no_overdraft : Bool) (no_overcredit : Bool) :
@@ -2658,7 +2658,7 @@ def «open»
             ok (core.result.Result.Ok (v, Reply.Created s.ledger.next_account))
 
 /-- [payment_ledger::post]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 449:0-508:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 456:0-515:1 -/
 def post
   (actor : Principal) (s : Snapshot) (t : TransferReq) (a : Account)
   (b : Account) (op : Std.U64) :
@@ -2794,7 +2794,7 @@ def post
                 ok (core.result.Result.Ok (v, Reply.Posted t.id))
 
 /-- [payment_ledger::transfer]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 412:0-444:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 419:0-451:1
     Visibility: public -/
 def transfer
   (actor : Principal) (s : Snapshot) (t : TransferReq) :
@@ -2834,7 +2834,7 @@ def transfer
           else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::append]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 512:4-515:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 519:4-522:5 -/
 @[rust_loop_body]
 def append_loop.body
   (more : alloc.vec.Vec Write) (ws : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -2852,7 +2852,7 @@ def append_loop.body
   else ok (done ws)
 
 /-- [payment_ledger::append]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 512:4-515:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 519:4-522:5 -/
 @[rust_loop]
 def append_loop
   (ws : alloc.vec.Vec Write) (more : alloc.vec.Vec Write) (i : Std.Usize) :
@@ -2863,7 +2863,7 @@ def append_loop
     (ws, i)
 
 /-- [payment_ledger::append]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 510:0-516:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 517:0-523:1 -/
 @[reducible]
 def append
   (ws : alloc.vec.Vec Write) (more : alloc.vec.Vec Write) :
@@ -2872,7 +2872,7 @@ def append
   append_loop ws more 0#usize
 
 /-- [payment_ledger::batch]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 529:4-540:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 536:4-547:1
     Visibility: public -/
 @[rust_loop_body]
 def batch_loop.body
@@ -2902,7 +2902,7 @@ def batch_loop.body
     ok (done (core.result.Result.Ok (ws, Reply.Batch i3)))
 
 /-- [payment_ledger::batch]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 529:4-540:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 536:4-547:1
     Visibility: public -/
 @[rust_loop]
 def batch_loop
@@ -2915,7 +2915,7 @@ def batch_loop
     (cur, ws, i)
 
 /-- [payment_ledger::batch]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 519:0-540:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 526:0-547:1
     Visibility: public -/
 def batch
   (actor : Principal) (s : Snapshot) (ts : alloc.vec.Vec TransferReq) :
@@ -2933,7 +2933,7 @@ def batch
       batch_loop actor ts cur (alloc.vec.Vec.new Write) 0#usize
 
 /-- [payment_ledger::read_account]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 542:0-554:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 549:0-561:1 -/
 def read_account
   (actor : Principal) (s : Snapshot) (id : Std.U64) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -2948,7 +2948,7 @@ def read_account
     else ok (core.result.Result.Err Error.NotFound)
 
 /-- [payment_ledger::owner_range]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-567:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-574:5 -/
 @[rust_loop_body]
 def owner_range_loop.body
   (s : Snapshot) (owner : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -2976,7 +2976,7 @@ def owner_range_loop.body
   else ok (done out)
 
 /-- [payment_ledger::owner_range]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-567:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-574:5 -/
 @[rust_loop]
 def owner_range_loop
   (s : Snapshot) (owner : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -2988,7 +2988,7 @@ def owner_range_loop
     (out, i)
 
 /-- [payment_ledger::owner_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 558:0-569:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 565:0-576:1 -/
 @[reducible]
 def owner_range
   (s : Snapshot) (owner : Std.U64) («from» : Std.U64) («end» : Std.U64) :
@@ -2997,7 +2997,7 @@ def owner_range
   owner_range_loop s owner «from» «end» (alloc.vec.Vec.new Account) 0#usize
 
 /-- [payment_ledger::accounts_page]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 571:0-581:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 578:0-588:1 -/
 def accounts_page
   (actor : Principal) (s : Snapshot) (owner : Std.U64) («from» : Std.U64)
   (limit : Std.U32) :
@@ -3035,7 +3035,7 @@ def accounts_page
             next))
 
 /-- [payment_ledger::history_range]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-594:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-601:5 -/
 @[rust_loop_body]
 def history_range_loop.body
   (s : Snapshot) (account : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -3063,7 +3063,7 @@ def history_range_loop.body
   else ok (done out)
 
 /-- [payment_ledger::history_range]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-594:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-601:5 -/
 @[rust_loop]
 def history_range_loop
   (s : Snapshot) (account : Std.U64) («from» : Std.U64) («end» : Std.U64)
@@ -3076,7 +3076,7 @@ def history_range_loop
     (out, i)
 
 /-- [payment_ledger::history_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 585:0-596:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 592:0-603:1 -/
 @[reducible]
 def history_range
   (s : Snapshot) (account : Std.U64) («from» : Std.U64) («end» : Std.U64) :
@@ -3086,7 +3086,7 @@ def history_range
     HistoryEntry) 0#usize
 
 /-- [payment_ledger::history_page]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 598:0-613:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 605:0-620:1 -/
 def history_page
   (actor : Principal) (s : Snapshot) (account : Std.U64) («from» : Std.U64)
   (limit : Std.U32) :
@@ -3116,7 +3116,7 @@ def history_page
       else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::transfers_of]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 619:4-625:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 626:4-632:5 -/
 @[rust_loop_body]
 def transfers_of_loop.body
   (s : Snapshot) (entries : alloc.vec.Vec HistoryEntry)
@@ -3140,7 +3140,7 @@ def transfers_of_loop.body
   else ok (done out)
 
 /-- [payment_ledger::transfers_of]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 619:4-625:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 626:4-632:5 -/
 @[rust_loop]
 def transfers_of_loop
   (s : Snapshot) (entries : alloc.vec.Vec HistoryEntry)
@@ -3152,7 +3152,7 @@ def transfers_of_loop
     (out, i)
 
 /-- [payment_ledger::transfers_of]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 616:0-627:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 623:0-634:1 -/
 @[reducible]
 def transfers_of
   (s : Snapshot) (entries : alloc.vec.Vec HistoryEntry) :
@@ -3161,7 +3161,7 @@ def transfers_of
   transfers_of_loop s entries (alloc.vec.Vec.new Transfer) 0#usize
 
 /-- [payment_ledger::journal_page]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 629:0-645:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 636:0-652:1 -/
 def journal_page
   (actor : Principal) (s : Snapshot) (account : Std.U64) («from» : Std.U64)
   (limit : Std.U32) :
@@ -3170,7 +3170,7 @@ def journal_page
   if limit = 0#u32
   then ok (core.result.Result.Err Error.BadPage)
   else
-    if limit > MAX_PAGE
+    if limit > MAX_RANGE
     then ok (core.result.Result.Err Error.BadPage)
     else
       let b ← is_operator actor
@@ -3192,7 +3192,7 @@ def journal_page
       else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::id_range]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-657:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-664:5 -/
 @[rust_loop_body]
 def id_range_loop.body
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -3217,7 +3217,7 @@ def id_range_loop.body
   else ok (done out)
 
 /-- [payment_ledger::id_range]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-657:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-664:5 -/
 @[rust_loop]
 def id_range_loop
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -3229,7 +3229,7 @@ def id_range_loop
     (out, i)
 
 /-- [payment_ledger::id_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 648:0-659:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 655:0-666:1 -/
 @[reducible]
 def id_range
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64) :
@@ -3238,7 +3238,7 @@ def id_range
   id_range_loop s «from» «end» (alloc.vec.Vec.new Account) 0#usize
 
 /-- [payment_ledger::account_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 661:0-671:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 668:0-678:1 -/
 def account_range
   (actor : Principal) (s : Snapshot) («from» : Std.U64) (limit : Std.U32) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3246,7 +3246,7 @@ def account_range
   if limit = 0#u32
   then ok (core.result.Result.Err Error.BadPage)
   else
-    if limit > MAX_PAGE
+    if limit > MAX_RANGE
     then ok (core.result.Result.Err Error.BadPage)
     else
       let b ← is_operator actor
@@ -3263,7 +3263,7 @@ def account_range
       else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::transfer_ids]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-683:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-690:5 -/
 @[rust_loop_body]
 def transfer_ids_loop.body
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -3288,7 +3288,7 @@ def transfer_ids_loop.body
   else ok (done out)
 
 /-- [payment_ledger::transfer_ids]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-683:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 1:0-690:5 -/
 @[rust_loop]
 def transfer_ids_loop
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64)
@@ -3300,7 +3300,7 @@ def transfer_ids_loop
     (out, i)
 
 /-- [payment_ledger::transfer_ids]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 674:0-685:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 681:0-692:1 -/
 @[reducible]
 def transfer_ids
   (s : Snapshot) («from» : Std.U64) («end» : Std.U64) :
@@ -3309,7 +3309,7 @@ def transfer_ids
   transfer_ids_loop s «from» «end» (alloc.vec.Vec.new Transfer) 0#usize
 
 /-- [payment_ledger::transfer_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 687:0-696:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 694:0-703:1 -/
 def transfer_range
   (actor : Principal) (s : Snapshot) («from» : Std.U64) (limit : Std.U32) :
   Result (core.result.Result ((alloc.vec.Vec Write) × Reply) Error)
@@ -3330,7 +3330,7 @@ def transfer_range
       else ok (core.result.Result.Err Error.Forbidden)
 
 /-- [payment_ledger::transition]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 701:0-715:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 708:0-722:1
     Visibility: public -/
 def transition
   (actor : Principal) (s : Snapshot) (cmd : Command) :
@@ -3353,95 +3353,95 @@ def transition
     transfer_range actor s «from» limit
 
 /-- [payment_ledger::T_ACCOUNTS]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 720:0-720:30
+    Source: 'crates/payment-ledger/src/lib.rs', lines 727:0-727:30
     Visibility: public -/
 @[global_simps, irreducible] def T_ACCOUNTS : Std.U32 := 0#u32
 
 /-- [payment_ledger::T_TRANSFERS]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 721:0-721:31
+    Source: 'crates/payment-ledger/src/lib.rs', lines 728:0-728:31
     Visibility: public -/
 @[global_simps, irreducible] def T_TRANSFERS : Std.U32 := 1#u32
 
 /-- [payment_ledger::T_LEDGER]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 722:0-722:28
+    Source: 'crates/payment-ledger/src/lib.rs', lines 729:0-729:28
     Visibility: public -/
 @[global_simps, irreducible] def T_LEDGER : Std.U32 := 2#u32
 
 /-- [payment_ledger::T_OWNERS]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 723:0-723:28
+    Source: 'crates/payment-ledger/src/lib.rs', lines 730:0-730:28
     Visibility: public -/
 @[global_simps, irreducible] def T_OWNERS : Std.U32 := 3#u32
 
 /-- [payment_ledger::T_HISTORY]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 724:0-724:29
+    Source: 'crates/payment-ledger/src/lib.rs', lines 731:0-731:29
     Visibility: public -/
 @[global_simps, irreducible] def T_HISTORY : Std.U32 := 4#u32
 
 /-- [payment_ledger::ACCOUNT_ID]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 726:0-726:30
+    Source: 'crates/payment-ledger/src/lib.rs', lines 733:0-733:30
     Visibility: public -/
 @[global_simps, irreducible] def ACCOUNT_ID : Std.U32 := 0#u32
 
 /-- [payment_ledger::ACCOUNT_OWNER]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 727:0-727:33
+    Source: 'crates/payment-ledger/src/lib.rs', lines 734:0-734:33
     Visibility: public -/
 @[global_simps, irreducible] def ACCOUNT_OWNER : Std.U32 := 1#u32
 
 /-- [payment_ledger::ACCOUNT_SEQ]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 728:0-728:31
+    Source: 'crates/payment-ledger/src/lib.rs', lines 735:0-735:31
     Visibility: public -/
 @[global_simps, irreducible] def ACCOUNT_SEQ : Std.U32 := 8#u32
 
 /-- [payment_ledger::TRANSFER_ID]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 729:0-729:31
+    Source: 'crates/payment-ledger/src/lib.rs', lines 736:0-736:31
     Visibility: public -/
 @[global_simps, irreducible] def TRANSFER_ID : Std.U32 := 0#u32
 
 /-- [payment_ledger::OWNER_KEY]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 730:0-730:29
+    Source: 'crates/payment-ledger/src/lib.rs', lines 737:0-737:29
     Visibility: public -/
 @[global_simps, irreducible] def OWNER_KEY : Std.U32 := 0#u32
 
 /-- [payment_ledger::HISTORY_ACCOUNT]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 731:0-731:35
+    Source: 'crates/payment-ledger/src/lib.rs', lines 738:0-738:35
     Visibility: public -/
 @[global_simps, irreducible] def HISTORY_ACCOUNT : Std.U32 := 0#u32
 
 /-- [payment_ledger::HISTORY_N]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 732:0-732:29
+    Source: 'crates/payment-ledger/src/lib.rs', lines 739:0-739:29
     Visibility: public -/
 @[global_simps, irreducible] def HISTORY_N : Std.U32 := 1#u32
 
 /-- [payment_ledger::HISTORY_TRANSFER]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 733:0-733:36
+    Source: 'crates/payment-ledger/src/lib.rs', lines 740:0-740:36
     Visibility: public -/
 @[global_simps, irreducible] def HISTORY_TRANSFER : Std.U32 := 6#u32
 
 /-- [payment_ledger::v_int]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 738:0-740:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 745:0-747:1 -/
 def v_int (x : Std.U64) : Result h5i_app_sql.Val := do
   U64.Insts.H5i_app_sqlColumn.to_val x
 
 /-- [payment_ledger::p_eq]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 742:0-744:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 749:0-751:1 -/
 def p_eq (col : Std.U32) (v : h5i_app_sql.Val) : Result h5i_app_sql.Pred := do
   ok (h5i_app_sql.Pred.Eq col v)
 
 /-- [payment_ledger::p_or]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 746:0-748:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 753:0-755:1 -/
 def p_or
   (a : h5i_app_sql.Pred) (b : h5i_app_sql.Pred) : Result h5i_app_sql.Pred := do
   ok (h5i_app_sql.Pred.Or a b)
 
 /-- [payment_ledger::rd_where]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 750:0-752:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 757:0-759:1 -/
 def rd_where
   (table : Std.U32) (pred : h5i_app_sql.Pred) : Result h5i_app_sql.Read := do
   let w ← h5i_app_sql.whole
   ok { table, pred, window := w }
 
 /-- [payment_ledger::accounts_of]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 755:0-757:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 762:0-764:1 -/
 def accounts_of (t : TransferReq) : Result h5i_app_sql.Pred := do
   let v ← v_int t.debit
   let p ← p_eq ACCOUNT_ID v
@@ -3450,12 +3450,12 @@ def accounts_of (t : TransferReq) : Result h5i_app_sql.Pred := do
   p_or p p1
 
 /-- [payment_ledger::SIGN]
-    Source: 'crates/payment-ledger/src/lib.rs', lines 761:0-761:44
+    Source: 'crates/payment-ledger/src/lib.rs', lines 768:0-768:44
     Visibility: public -/
 @[global_simps, irreducible] def SIGN : Std.U64 := 9223372036854775808#u64
 
 /-- [payment_ledger::seq_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 766:0-774:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 773:0-781:1 -/
 def seq_range
   (col : Std.U32) («from» : Std.U64) («end» : Std.U64) :
   Result h5i_app_sql.Pred
@@ -3474,7 +3474,7 @@ def seq_range
       col v1))
 
 /-- [payment_ledger::entry_range]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 777:0-779:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 784:0-786:1 -/
 def entry_range
   (account : Std.U64) («from» : Std.U64) («end» : Std.U64) :
   Result h5i_app_sql.Pred
@@ -3485,7 +3485,7 @@ def entry_range
   ok (h5i_app_sql.Pred.And p p1)
 
 /-- [payment_ledger::batch_reads]: loop body 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 786:4-790:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 793:4-797:5 -/
 @[rust_loop_body]
 def batch_reads_loop.body
   (ts : alloc.vec.Vec TransferReq) (accts : h5i_app_sql.Pred)
@@ -3509,7 +3509,7 @@ def batch_reads_loop.body
   else ok (done (accts, trs))
 
 /-- [payment_ledger::batch_reads]: loop 0:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 786:4-790:5 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 793:4-797:5 -/
 @[rust_loop]
 def batch_reads_loop
   (ts : alloc.vec.Vec TransferReq) (accts : h5i_app_sql.Pred)
@@ -3521,7 +3521,7 @@ def batch_reads_loop
     (accts, trs, i)
 
 /-- [payment_ledger::batch_reads]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 782:0-795:1 -/
+    Source: 'crates/payment-ledger/src/lib.rs', lines 789:0-802:1 -/
 def batch_reads
   (ts : alloc.vec.Vec TransferReq) :
   Result (alloc.vec.Vec h5i_app_sql.Read)
@@ -3539,7 +3539,7 @@ def batch_reads
   alloc.vec.Vec.push out r1
 
 /-- [payment_ledger::read_only]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 802:0-812:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 809:0-819:1
     Visibility: public -/
 def read_only (cmd : Command) : Result Bool := do
   match cmd with
@@ -3554,7 +3554,7 @@ def read_only (cmd : Command) : Result Bool := do
   | Command.TransferRange _ _ => ok true
 
 /-- [payment_ledger::reads]:
-    Source: 'crates/payment-ledger/src/lib.rs', lines 819:0-915:1
+    Source: 'crates/payment-ledger/src/lib.rs', lines 826:0-922:1
     Visibility: public -/
 def reads
   (actor : Principal) (cmd : Command) :
@@ -3644,7 +3644,7 @@ def reads
   | Command.Transfers account «from» limit =>
     if limit != 0#u32
     then
-      if limit <= MAX_PAGE
+      if limit <= MAX_RANGE
       then
         let b ← is_operator actor
         if b
@@ -3672,7 +3672,7 @@ def reads
   | Command.AccountRange «from» limit =>
     if limit != 0#u32
     then
-      if limit <= MAX_PAGE
+      if limit <= MAX_RANGE
       then
         let b ← is_operator actor
         if b

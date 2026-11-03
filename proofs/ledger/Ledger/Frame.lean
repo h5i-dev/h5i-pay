@@ -860,9 +860,9 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
       by_cases h0 : l = 0#u32
       · simp [h0]
       have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
-      by_cases hm : l > MAX_PAGE
+      by_cases hm : l > MAX_RANGE
       · simp [h0, hm]
-      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hm' : l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
       simp [h0, hm, hna, is_operator_eq]
   | AccountRange f l =>
@@ -895,9 +895,9 @@ theorem frame (a : Principal) (c : Command) (plan : List (Read Val)) (s : Snapsh
       by_cases h0 : l = 0#u32
       · simp [h0]
       have h0' : l.val ≠ 0 := fun h => h0 (by scalar_tac)
-      by_cases hm : l > MAX_PAGE
+      by_cases hm : l > MAX_RANGE
       · simp [h0, hm]
-      have hm' : l.val ≤ 64 := by simp only [MAX_PAGE] at hm; scalar_tac
+      have hm' : l.val ≤ 4096 := by simp only [MAX_RANGE] at hm; scalar_tac
       have hna : ¬ a.operator = true := fun h => hc ⟨h0', hm', h⟩
       simp [h0, hm, hna, is_operator_eq]
   | TransferRange f l =>

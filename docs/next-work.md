@@ -316,7 +316,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    throughput (e.g. narrower `Create` plan, per-merchant advisory lock,
    id allocation that does not read a shared counter). Measure retries and
    throughput at 10k/100k with 8 and 32 clients, interleaved with `d71881b`.
-2. [ ] **Larger pages for the paged audit.** At 100k the paged audit reads
+2. [x] **Larger pages for the paged audit.** At 100k the paged audit reads
    about 3,400 journal pages of 64 (4.6 s). Let the audit (and other
    internal readers: export, reconcile, recovery) use larger range pages
    (e.g. up to 4096) while the HTTP page limit stays bounded; plans and

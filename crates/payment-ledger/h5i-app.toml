@@ -142,8 +142,16 @@ new = "        if from <= a.id && a.id <= end {"
 # G4: a user reading an account's journal.
 [[mutant]]
 name = "journal_open_to_users"
-old = "fn journal_page(actor: &Principal, s: &Snapshot, account: u64, from: u64, limit: u32) -> Outcome {\n    if limit == 0 || limit > MAX_PAGE {\n        return Err(Error::BadPage);\n    }\n    if !is_operator(actor) {"
-new = "fn journal_page(actor: &Principal, s: &Snapshot, account: u64, from: u64, limit: u32) -> Outcome {\n    if limit == 0 || limit > MAX_PAGE {\n        return Err(Error::BadPage);\n    }\n    if false {"
+old = "fn journal_page(actor: &Principal, s: &Snapshot, account: u64, from: u64, limit: u32) -> Outcome {\n    if limit == 0 || limit > MAX_RANGE {\n        return Err(Error::BadPage);\n    }\n    if !is_operator(actor) {"
+new = "fn journal_page(actor: &Principal, s: &Snapshot, account: u64, from: u64, limit: u32) -> Outcome {\n    if limit == 0 || limit > MAX_RANGE {\n        return Err(Error::BadPage);\n    }\n    if false {"
+
+# I2: the journal's read plan keeps the old page bound while the command
+# accepts pages up to MAX_RANGE: pages of 65 to 4096 entries would load
+# nothing (the frame theorem must fail).
+[[mutant]]
+name = "journal_plan_old_bound"
+old = "        Command::Transfers { account, from, limit } => {\n            let mut out = Vec::new();\n            // Refused pages read nothing.\n            if *limit != 0 && *limit <= MAX_RANGE && is_operator(actor) {"
+new = "        Command::Transfers { account, from, limit } => {\n            let mut out = Vec::new();\n            // Refused pages read nothing.\n            if *limit != 0 && *limit <= MAX_PAGE && is_operator(actor) {"
 
 # G4: a transfer declared read-only (it would run READ ONLY, unserialized).
 [[mutant]]

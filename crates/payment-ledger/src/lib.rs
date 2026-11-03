@@ -83,11 +83,17 @@ pub fn actor_id(actor: &Principal) -> u64 {
 /// PostgreSQL's planning time grow faster than linearly (F3).
 pub const MAX_BATCH: usize = 64;
 
-/// The most accounts one `Accounts` page covers (sequence numbers per page).
+/// The most accounts one `Accounts` page covers (sequence numbers per page),
+/// and the most entries one `History` page covers.
 pub const MAX_PAGE: u32 = 64;
 
 /// The most ids one `TransferRange` covers (H2): one reconciliation period
-/// (`payment_api::orchestrator::MAX_PERIOD`), read as one id range.
+/// (`payment_api::orchestrator::MAX_PERIOD`), read as one id range. Also
+/// the most entries one `Transfers` page and the most ids one
+/// `AccountRange` page cover (I2): those are operator-only reads for the
+/// system's own readers (the paged audit, reconciliation, recovery), each
+/// one index range. The HTTP API asks for at most `MAX_PAGE`
+/// (`payment_storage::ledger::CommandJson`).
 pub const MAX_RANGE: u32 = 4096;
 
 h5i_app_schema::schema! {
@@ -207,11 +213,11 @@ pub enum Command {
     Accounts { owner: u64, from: u64, limit: u32 },
     /// One page of `account`'s journal (operators only, G4): the transfers
     /// of its history entries numbered `from` to `from + limit - 1`, in that
-    /// order, `limit` at most `MAX_PAGE`. Every transfer is in the journal
+    /// order, `limit` at most `MAX_RANGE`. Every transfer is in the journal
     /// of its debit and of its credit account.
     Transfers { account: u64, from: u64, limit: u32 },
     /// One page of the tenant's accounts by id (operators only, G4): those
-    /// with ids `from` to `from + limit - 1`.
+    /// with ids `from` to `from + limit - 1`, `limit` at most `MAX_RANGE`.
     AccountRange { from: u64, limit: u32 },
     /// One page of an account's history (operators only): its entries
     /// numbered `from` to `from + limit - 1`, `limit` at most `MAX_PAGE`.
@@ -273,7 +279,8 @@ pub enum Error {
     InvalidFlags,
     EmptyBatch,
     BatchTooLarge,
-    /// A page limit of 0 or above `MAX_PAGE` (`MAX_RANGE` for `TransferRange`).
+    /// A page limit of 0 or above `MAX_PAGE` (`MAX_RANGE` for `Transfers`,
+    /// `AccountRange` and `TransferRange`).
     BadPage,
 }
 
@@ -627,7 +634,7 @@ fn transfers_of(s: &Snapshot, entries: &Vec<HistoryEntry>) -> Vec<Transfer> {
 }
 
 fn journal_page(actor: &Principal, s: &Snapshot, account: u64, from: u64, limit: u32) -> Outcome {
-    if limit == 0 || limit > MAX_PAGE {
+    if limit == 0 || limit > MAX_RANGE {
         return Err(Error::BadPage);
     }
     if !is_operator(actor) {
@@ -659,7 +666,7 @@ fn id_range(s: &Snapshot, from: u64, end: u64) -> Vec<Account> {
 }
 
 fn account_range(actor: &Principal, s: &Snapshot, from: u64, limit: u32) -> Outcome {
-    if limit == 0 || limit > MAX_PAGE {
+    if limit == 0 || limit > MAX_RANGE {
         return Err(Error::BadPage);
     }
     if !is_operator(actor) {
@@ -860,7 +867,7 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
         Command::Transfers { account, from, limit } => {
             let mut out = Vec::new();
             // Refused pages read nothing.
-            if *limit != 0 && *limit <= MAX_PAGE && is_operator(actor) {
+            if *limit != 0 && *limit <= MAX_RANGE && is_operator(actor) {
                 out.push(rd_where(T_ACCOUNTS, p_eq(ACCOUNT_ID, v_int(*account))));
                 let end = page_end(*from, *limit);
                 if *from < end {
@@ -880,7 +887,7 @@ pub fn reads(actor: &Principal, cmd: &Command) -> Option<Vec<h5i_app_sql::Read>>
         }
         Command::AccountRange { from, limit } => {
             let mut out = Vec::new();
-            if *limit != 0 && *limit <= MAX_PAGE && is_operator(actor) {
+            if *limit != 0 && *limit <= MAX_RANGE && is_operator(actor) {
                 let end = page_end(*from, *limit);
                 if *from < end {
                     out.push(rd_where(T_ACCOUNTS, seq_range(ACCOUNT_ID, *from, end)));
@@ -1082,7 +1089,10 @@ mod tests {
         assert_eq!(page(&s, 1, 2, 2), (vec![11, 12], None));
         assert_eq!(page(&s, 2, 0, 64), (vec![11, 12], None));
         assert_eq!(page(&s, 0, 0, 64), (vec![10], None));
-        assert_eq!(run(&s, op(), Command::Transfers { account: 1, from: 0, limit: 65 }).1, Err(Error::BadPage));
+        // I2: operator pages up to MAX_RANGE entries.
+        assert_eq!(page(&s, 1, 0, MAX_RANGE).1, None);
+        assert_eq!(run(&s, op(), Command::Transfers { account: 1, from: 0, limit: MAX_RANGE + 1 }).1, Err(Error::BadPage));
+        assert_eq!(run(&s, op(), Command::AccountRange { from: 0, limit: MAX_RANGE + 1 }).1, Err(Error::BadPage));
         assert_eq!(run(&s, op(), Command::Transfers { account: 9, from: 0, limit: 1 }).1, Err(Error::NotFound));
         // Accounts by id, operators only.
         let ids = |r: Result<Reply, Error>| match r {

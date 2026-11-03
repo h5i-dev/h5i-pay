@@ -178,6 +178,27 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### I2: larger journal pages for the system's readers
+
+- Ledger kernel: `Transfers` and `AccountRange` take pages of up to
+  `MAX_RANGE` (4096; before `MAX_PAGE`, 64), both operator-only; the read
+  plans' guards follow. `Plan.lean` (`readsA` and the two plan proofs) and
+  `Frame.lean` (the two refusal branches) re-proved; new mutant
+  `journal_plan_old_bound` (the plan keeps the old bound) caught.
+- Storage: `JOURNAL_PAGE` = 1024 for the paged audit (`audit_paged`:
+  `AccountRange` and `journal_range`), and so for `system_postings`
+  (reconciliation inputs, `find_work`). 1024 measured best among 512–4096
+  (1.42 s against 1.46–1.55 s at 100k). HTTP: `http_limit` keeps
+  `transfers` and `accounts_by_id` at most 64 (a larger limit is refused
+  as before; `ledger_api` asserts 65 and 4096 are 400).
+- `paged_audit_across_account_pages` now uses `JOURNAL_PAGE + 16` wallets,
+  so the audit still reads two account pages.
+- Measured (`docs/benchmarks.md`, "I2"): paged audit 46 / 370 / 4393 ms →
+  21 / 144 / 1454 ms at 1k / 10k / 100k.
+- Checks: `cargo test --workspace` (106), clippy ×3, GPU differential,
+  `cargo deny check`; ledger `extract --check`, `lint`, `check` (375
+  theorems in 15 modules), `mutate` (22/22 caught).
+
 ### I1: the last serialization retries removed
 
 - Cause: PostgreSQL's log with `log_statement = all` named `MarkPosted`,
