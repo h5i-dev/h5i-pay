@@ -328,7 +328,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    ledger restored from an older backup: keep that check, by range pages),
    prove or test that it finds exactly what the whole-tenant version
    found (differential test on random states), and measure at 10k/100k.
-4. [ ] **README in the style of h5i-ai-gateway.** Rewrite `README.md`
+4. [x] **README in the style of h5i-ai-gateway.** Rewrite `README.md`
    after <https://github.com/h5i-dev/h5i-ai-gateway/blob/main/README.md>:
    - one short opening paragraph: what h5i-pay is, that the money-moving
      decisions are a pure Rust kernel extracted to Lean 4 and proven on

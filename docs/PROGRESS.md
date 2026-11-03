@@ -178,6 +178,34 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### I4: the README in the style of h5i-ai-gateway
+
+- `README.md` rewritten after h5i-ai-gateway's: an opening paragraph, then
+  Run, Deploy, Use, How it decides, Verification, GPU batch, Performance
+  (the "After I" numbers of `docs/benchmarks.md`, hardware and date), Code
+  and License.
+- Moved out: the layout table, build/test/prove commands, the dependency
+  pin, the Lake cache note and the GPU and benchmark commands to the new
+  `docs/development.md`; the ledger, payments, reconciliation, history,
+  recovery and token walk-through, the TLS and PSP settings to the new
+  `docs/api.md`; the list of documents to the Code section.
+- Run as written: the README's Run and Use blocks in a clean environment
+  (`env -i`) against `scripts/dev-db.sh`'s database (payment created
+  authorized, captured 1000, refund 300 succeeded), and every block of
+  `docs/api.md` on a scratch PostgreSQL (open, transfer, replay, journal,
+  audit, payments, reconcile, history, recover, a scope refused, a token
+  revoked); the Verification commands are the final checks below.
+
+### After I: full checks and the B4 end-to-end re-run
+
+- Benchmarks (`docs/benchmarks.md`, "After I"; raw
+  `benchmarks/results/e2e-afterI-g5.xlarge.json`): `d71881b` (H2) and
+  `d271c28` (I1–I3), three rounds per size at 1k / 10k / 100k. No
+  serialization retry in any I run (H2 up to 32 per run); throughput and
+  latency at H2's level; `POST /v1/recover` 64.7 / 283.9 / 3461 ms →
+  14.7 / 72.4 / 544.0 ms; paged audit 80 / 418 / 4642 ms → 35 / 159 /
+  1480 ms; scheduled recovery passes +3 to +13 ms (pruning).
+
 ### I3: `find_work` without a whole-tenant load
 
 - `Orchestrator::find_work` is `find_work_paged(tenant, MAX_RANGE)`: per

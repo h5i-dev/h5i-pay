@@ -402,6 +402,52 @@ per size, `E2E_CLIENTS=8`, medians [range] (raw:
   postings the ledger lost, as after an older ledger backup was restored)
   has to look at every captured payment.
 
+### After I (h5i `9ec26b5`)
+
+The B4-era seeds, `d71881b` (H2, with the I3 harness so that it also
+times `POST /v1/recover`) and `d271c28` (I1–I3) interleaved, order
+rotating, three rounds per size, `E2E_CLIENTS=8,32`, medians [range]
+(raw: `benchmarks/results/e2e-afterI-g5.xlarge.json`), load average
+2.2–2.6, 2026-11-03:
+
+| | build | 1k | 10k | 100k |
+|---|---|---:|---:|---:|
+| 8 clients, payments/s | H2 | 173.4 [168–175] | 171.3 [144–173] | 195.9 [184–197] |
+| | I | 179.7 [173–181] | 176.4 [174–177] | 196.6 [147–198] |
+| 32 clients, payments/s | H2 | 182.3 [176–186] | 184.4 [183–186] | 185.8 [186–186] |
+| | I | 184.9 [180–186] | 183.2 [183–185] | 186.0 [183–186] |
+| retries per run (8 / 32 clients) | H2 | 9–16 / 14–18 | 19–32 / 14–26 | 0–1 / 9–22 |
+| | I | 0 / 0 | 0 / 0 | 0 / 0 |
+| `POST /v1/payments`, p50 ms | H2 / I | 19.6 / 19.6 | 19.5 / 18.7 | 16.8 / 16.7 |
+| `GET /v1/payments/{id}`, p50 ms | H2 / I | 0.79 / 0.78 | 0.78 / 0.77 | 0.77 / 0.78 |
+| recovery pass, 5 to fix, ms | H2 / I | 57.4 / 67.5 | 60.8 / 70.4 | 74.4 / 87.8 |
+| recovery pass, nothing to fix, ms | H2 / I | 7.7 / 11.6 | 10.1 / 13.7 | 23.4 / 28.4 |
+| `POST /v1/recover`, p50 ms | H2 | 64.7 | 283.9 | 3461 |
+| | I | 14.7 | 72.4 | 544.0 |
+| … kernel transactions per call | H2 / I | 39 / 6 | 222 / 18 | 2051 / 168 |
+| paged audit, ms | H2 | 80.4 | 417.5 | 4642 |
+| | I | 35.0 | 158.9 | 1480 |
+| `POST /v1/reconcile`, one call, p50 ms | H2 / I | 15.5 / 15.8 | 28.7 / 27.8 | 24.3 / 25.0 |
+| whole tenant reconciled, ms | H2 / I | 14.7 / 14.9 | 74.8 / 72.8 | 535.0 / 535.3 |
+| `List` page of 64, p50 ms | H2 / I | 1.69 / 1.69 | 1.69 / 1.70 | 1.73 / 1.73 |
+| journal page of 64, p50 ms | H2 / I | 1.41 / 1.67 | 1.42 / 1.63 | 1.62 / 1.43 |
+
+(The two runs below 150 payments/s, H2 at 10k and I at 100k with 8
+clients, are single outliers; the other two runs of each are within 3%
+of the medians.)
+
+- **Retries**: none in any run (H2: up to 32 per run).
+- **Throughput and latency** are H2's: within 4% either way at every size
+  and client count, `POST /v1/payments` 16.7–19.6 ms, a view 0.78 ms.
+- **`POST /v1/recover`** is 3.9–6.4× faster (100k: 3.46 s → 0.54 s) and
+  reads the tenant a page of ids at a time (I3).
+- **The paged audit** is 2.3–3.1× faster (100k: 4.64 s → 1.48 s; I2).
+- **The scheduled recovery** pays for the pruning of `open_payments`
+  (I1): +10 to +13 ms for a pass after the throughput runs, +3.6 to
+  +5.0 ms for an empty pass.
+- Reconciliation and the 64-row pages over HTTP did not change (the
+  journal page differs by ±0.2 ms in both directions between sizes).
+
 ### The batch worker, with its files
 
 `h5i-pay-batch reconcile` on CSV files in the page cache (local disk, not
