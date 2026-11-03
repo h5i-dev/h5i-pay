@@ -281,6 +281,68 @@ ledger-side.)
   cut that; not done.
 - The empty recovery pass did not move (it is `open_payments`, G5).
 
+### I1: the last serialization retries (h5i `9ec26b5`)
+
+The retries left after H were not `Create`'s. PostgreSQL's log with
+`log_statement = all` (one 32-client run at 10k: 121 aborts) names the
+aborted transactions by their statements: all were `MarkPosted` (reads of
+`payments` and `refunds`, a write of `payments`), aborted as the pivot on
+its `payments` write or at commit. Its trigger deleted the payment's row
+from `open_payments`, and under SERIALIZABLE that `DELETE` is a read: of
+the whole table (`pg_locks` showed a relation-level SIRead lock on
+`open_payments` during the runs; the table is small, so the planner scans
+it) or of the one index page every new payment's row is inserted into. So
+each `MarkPosted` read what concurrent `Create`s (their insert trigger)
+and other `MarkPosted`s (their deletes) wrote. (H1 and H2 named `Create`
+from the failing `INSERT INTO "payments"` statement, which is also the
+upsert `MarkPosted` updates with.)
+
+I1 makes the triggers insert only (a payment inserted unmarked, a marker
+cleared); the scheduled recovery prunes marked payments from
+`open_payments` at the start of each pass, in `READ COMMITTED`, each row
+deleted only with its payment locked `FOR SHARE` and seen marked
+(`payment_storage::prune_open_payments`). The same runs also exposed an
+h5i-app-pg bug from H1: a pipelined group whose first statement failed
+could report a later statement's "current transaction is aborted"
+(25P02, not retryable) instead of the serialization failure; under load
+3 of 9 runs of the `concurrency` tests failed so once the new pruning test ran beside them. h5i branch `app/pipeline-errors`
+(`9ec26b5`, on main `3ab10b3`) awaits every reply and returns the cause.
+
+The B4-era seeds, `d71881b` (H2) and I1 interleaved, order rotating, three
+rounds per size, `E2E_CLIENTS=8,32,32` (a second 32-client run after the
+first), medians [range] (raw: `benchmarks/results/e2e-I1-g5.xlarge.json`).
+Other users' jobs ran on the machine during the 10k rounds (load average
+4–6 instead of about 2), so the 10k throughput is noisy; the 100k rounds
+ran at load 2–4.
+
+| | build | 10k | 100k |
+|---|---|---:|---:|
+| 8 clients, payments/s | H2 | 171.9 [169–179] | 187.8 [186–190] |
+| | I1 | 170.8 [146–178] | 188.9 [189–193] |
+| 32 clients, payments/s | H2 | 169.1 [135–177] | 181.5 [181–182] |
+| | I1 | 173.5 [130–180] | 183.3 [182–184] |
+| 32 clients again, payments/s | H2 | 135.1 [95–177] | 186.1 [186–186] |
+| | I1 | 181.7 [164–183] | 183.7 [170–186] |
+| retries per run (8 / 32 / 32 clients) | H2 | 3–16 / 20–24 / 18–45 | 0–7 / 18–27 / 4–12 |
+| | I1 | 0 / 0 / 0 | 0 / 0 / 0 |
+| `POST /v1/payments`, p50 ms | H2 / I1 | 17.3 / 21.0 | 16.9 / 16.9 |
+| recovery pass, 5 to fix, ms | H2 / I1 | 68.4 / 75.8 | 80.5 / 97.9 |
+| recovery pass, nothing to fix, ms | H2 / I1 | 10.6 / 14.5 | 26.9 / 30.5 |
+
+- **Retries**: none in any I1 run, against 3–45 per run for H2.
+- **Throughput** is H2's at 100k (within 2% either way); at 10k the
+  noise is larger than any difference. An earlier series at load 2.5–4
+  (three rounds, I1 with the first version of the pruning and without the
+  h5i fix) gave the same picture: 182 / 185 / 187 against 177 / 182 / 188
+  payments/s at 10k and 194 / 186 / 188 against 189 / 180 / 191 at 100k,
+  0 retries against 0–27.
+- **Recovery** pays for the deletes `MarkPosted` no longer does: the first
+  pass after the throughput runs prunes about 1,100 rows (+7 to +17 ms),
+  and an empty pass costs one more short transaction (+3 to +4 ms). A
+  first version joined `open_payments` to `payments` and let the planner
+  order the join; it scanned every payment of the tenant (an empty pass
+  20 ms at 10k, 57 ms at 100k) and was replaced by lookups by key.
+
 ### The batch worker, with its files
 
 `h5i-pay-batch reconcile` on CSV files in the page cache (local disk, not

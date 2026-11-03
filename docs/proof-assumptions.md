@@ -24,7 +24,7 @@ not proven. Every theorem named here builds with `lake build` and passes
 | Read-only commands (G4) | `payment_ledger.ReadOnly.sound` | the extracted `read_only` and `transition`: every command `read_only` names writes nothing when accepted, for every actor and state (h5i-app's `H5iAppLib.ReadOnly.Sound`), so the engine may run it `SERIALIZABLE READ ONLY DEFERRABLE` |
 | Read plans | `payment_ledger.Plan.reads_abs`, `payment_ledger.Frame.frame`, `load_for_sound`; `payment_domain.Plan.reads_abs`, `payment_domain.Frame.frame`, `load_for_sound`; `*.Schema.decode_load` (generated) | the extracted `reads` of each kernel (`Store::load_for` runs it) and the extracted `transition`: on what each command's plan loads, `transition` gives its whole-tenant result |
 
-Gate results (after I0, h5i main `7b91863`): `h5i app check
+Gate results (after I1, h5i `9ec26b5`): `h5i app check
 crates/payment-ledger` — 375 theorems in 15 modules; `h5i app check
 crates/payment-domain` — 450 theorems in 10 modules; `h5i app check
 crates/payment-reconcile` — 69 in 3; all on the three standard axioms
@@ -164,13 +164,21 @@ committed history is such a sequence.
    unless rows are changed outside the engines; the scheduled recovery
    trusts the marker, and `POST /v1/recover` and reconciliation also check
    the journal itself. Since G5 the scheduled recovery finds unmarked
-   payments through `open_payments`, which two triggers on `payments` keep
-   equal to the payments with `ledger_done = false` (not proven; compared
-   with the kernel's snapshot in `payments_load_for_matches_the_whole_tenant`;
-   `recovery_work` re-checks `NOT ledger_done` on each row it returns). A
-   row missing from `open_payments` would delay that payment's recovery
-   until `POST /v1/recover` or reconciliation finds it; a stale extra row
-   is filtered out.
+   payments through `open_payments`. Since I1 two triggers on `payments`
+   only insert there (a payment inserted unmarked, a marker cleared), so
+   it holds every payment with `ledger_done = false` and, until
+   `prune_open_payments` removes them at the start of each scheduled pass,
+   marked ones too; `recovery_work` re-checks `NOT ledger_done` on each row.
+   The pruning deletes a row only with its payment locked `FOR SHARE` and
+   seen marked (`READ COMMITTED`), so a concurrent clearing of the marker
+   either commits first (the re-check keeps the row) or waits and then
+   inserts it again. Not proven; tested in
+   `payments_load_for_matches_the_whole_tenant` (superset, then equal
+   after pruning) and `pruning_keeps_every_unmarked_payment` (pruning in a
+   loop while 8 tasks clear and set markers; it caught a pruning without
+   the row lock in 3 of 6 runs: a race, not a proof). A row missing from
+   `open_payments` would delay that payment's recovery until `POST
+   /v1/recover` or reconciliation finds it.
 
 8. **The history's clock and its storage (G1).** Both kernels prove that
    every change writes exactly one history entry per changed payment or

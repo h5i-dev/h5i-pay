@@ -6,7 +6,7 @@ require aeneas from git
   "https://github.com/AeneasVerif/aeneas" @ "b86120db3183b0107eb5f2637b11c424cd06ef1c" / "backends/lean"
 
 require h5i_app_lib from git
-  "https://github.com/h5i-dev/h5i" @ "7b91863063707d16c339b029d6d5543b89642de8" / "crates/h5i-app-core/proofs"
+  "https://github.com/h5i-dev/h5i" @ "9ec26b510cbcbbe0bea703e63239b0e6a515e33d" / "crates/h5i-app-core/proofs"
 
 package h5i_pay_reconcile_proofs
 

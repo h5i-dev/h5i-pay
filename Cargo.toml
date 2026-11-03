@@ -22,17 +22,20 @@ repository = "https://github.com/h5i-dev/h5i-pay"
 
 [workspace.dependencies]
 # Every h5i-app crate, and `h5i_app_lib` in proofs/*/lakefile.lean, from one
-# commit of github.com/h5i-dev/h5i main: 7b91863 (PR #775, range comparisons
-# in reads, squash-merged), which also has H1 (PR #773, ae87ef7). Once
-# h5i-app is released with it, go back to a crates.io version.
-h5i-app = { git = "https://github.com/h5i-dev/h5i", rev = "7b91863063707d16c339b029d6d5543b89642de8" }
-h5i-app-core = { git = "https://github.com/h5i-dev/h5i", rev = "7b91863063707d16c339b029d6d5543b89642de8" }
-h5i-app-pg = { git = "https://github.com/h5i-dev/h5i", rev = "7b91863063707d16c339b029d6d5543b89642de8" }
-h5i-app-http = { git = "https://github.com/h5i-dev/h5i", rev = "7b91863063707d16c339b029d6d5543b89642de8" }
-h5i-app-json = { git = "https://github.com/h5i-dev/h5i", rev = "7b91863063707d16c339b029d6d5543b89642de8" }
-h5i-app-schema = { git = "https://github.com/h5i-dev/h5i", rev = "7b91863063707d16c339b029d6d5543b89642de8" }
-h5i-app-sql = { git = "https://github.com/h5i-dev/h5i", rev = "7b91863063707d16c339b029d6d5543b89642de8" }
-h5i-app-gpu = { git = "https://github.com/h5i-dev/h5i", rev = "7b91863063707d16c339b029d6d5543b89642de8" }
+# commit of github.com/h5i-dev/h5i: branch `app/pipeline-errors` (9ec26b5,
+# I1: pipelined statements report the error that failed the transaction),
+# not merged yet, one commit on main 3ab10b3 (h5i-app 0.5.3), which has
+# range comparisons in reads (PR #775, 7b91863) and H1 (PR #773). Once it is
+# merged, pin the main commit; once h5i-app is released with it, go back to
+# a crates.io version.
+h5i-app = { git = "https://github.com/h5i-dev/h5i", rev = "9ec26b510cbcbbe0bea703e63239b0e6a515e33d" }
+h5i-app-core = { git = "https://github.com/h5i-dev/h5i", rev = "9ec26b510cbcbbe0bea703e63239b0e6a515e33d" }
+h5i-app-pg = { git = "https://github.com/h5i-dev/h5i", rev = "9ec26b510cbcbbe0bea703e63239b0e6a515e33d" }
+h5i-app-http = { git = "https://github.com/h5i-dev/h5i", rev = "9ec26b510cbcbbe0bea703e63239b0e6a515e33d" }
+h5i-app-json = { git = "https://github.com/h5i-dev/h5i", rev = "9ec26b510cbcbbe0bea703e63239b0e6a515e33d" }
+h5i-app-schema = { git = "https://github.com/h5i-dev/h5i", rev = "9ec26b510cbcbbe0bea703e63239b0e6a515e33d" }
+h5i-app-sql = { git = "https://github.com/h5i-dev/h5i", rev = "9ec26b510cbcbbe0bea703e63239b0e6a515e33d" }
+h5i-app-gpu = { git = "https://github.com/h5i-dev/h5i", rev = "9ec26b510cbcbbe0bea703e63239b0e6a515e33d" }
 
 payment-ledger = { path = "crates/payment-ledger" }
 payment-domain = { path = "crates/payment-domain" }

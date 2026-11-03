@@ -418,7 +418,7 @@ async fn payments_load_for_matches_the_whole_tenant() {
     let snap = pg.snapshot(TenantId(org)).await.unwrap();
     assert!(snap.payments.len() > 20 && !snap.refunds.is_empty(), "{} payments, {} refunds", snap.payments.len(), snap.refunds.len());
     // Mark every settled payment as the orchestrator would (its own captured
-    // amount and refunds): the trigger takes them out of `open_payments`.
+    // amount and refunds): pruning then takes them out of `open_payments`.
     let mut marked = 0;
     for p in &snap.payments {
         let refunds: Vec<d::Refund> = snap.refunds.iter().filter(|r| r.payment == p.id).copied().collect();
@@ -440,17 +440,106 @@ async fn payments_load_for_matches_the_whole_tenant() {
     open_payments_agree(&url, &pg, org).await;
 }
 
-/// G5: `open_payments` (kept by triggers) holds exactly the tenant's
-/// payments not marked `ledger_done`.
+/// G5, I1: `open_payments` (kept by triggers, which only insert) holds
+/// every one of the tenant's payments not marked `ledger_done`, and after
+/// `prune_open_payments` exactly those.
 async fn open_payments_agree(url: &str, pg: &payment_storage::PaymentsEngine, org: u64) {
+    let want = unmarked(pg, org).await;
+    let got = open_rows(url, org).await;
+    assert!(want.iter().all(|id| got.contains(id)), "open_payments {got:?} lacks some of the unmarked {want:?}");
+    payment_storage::prune_open_payments(url, &payment_storage::DbTls::Off).await.unwrap();
+    assert_eq!(open_rows(url, org).await, unmarked(pg, org).await, "open_payments vs payments not ledger_done, pruned");
+}
+
+async fn unmarked(pg: &payment_storage::PaymentsEngine, org: u64) -> Vec<i64> {
     let snap = pg.snapshot(TenantId(org)).await.unwrap();
     let mut want: Vec<i64> = snap.payments.iter().filter(|p| !p.ledger_done).map(|p| p.id as i64).collect();
     want.sort_unstable();
+    want
+}
+
+async fn open_rows(url: &str, org: u64) -> Vec<i64> {
     let (c, conn) = tokio_postgres::connect(url, tokio_postgres::NoTls).await.unwrap();
     let h = tokio::spawn(conn);
     let sql = format!("SELECT id FROM {}.open_payments WHERE tenant_id = $1 ORDER BY id", payment_storage::PAYMENTS_SCHEMA);
     let got: Vec<i64> = c.query(sql.as_str(), &[&(org as i64)]).await.unwrap().iter().map(|r| r.get(0)).collect();
     drop(c);
     let _ = h.await;
-    assert_eq!(got, want, "open_payments vs payments not ledger_done");
+    got
+}
+
+/// I1: pruning while payments are marked and unmarked never drops the row
+/// of a payment left unmarked. Captured payments are marked, then tasks
+/// refund (which clears the mark) and mark them again at random while
+/// another prunes in a loop; at every step and at the end every unmarked
+/// payment is in `open_payments`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn pruning_keeps_every_unmarked_payment() {
+    use payment_domain as d;
+    let Some(url) = database_url() else { return };
+    let (_, pg) = payment_storage::engines(&url, 16, EngineConfig { max_attempts: 200, ..EngineConfig::default() }).await.unwrap();
+    let org = fresh_tenant();
+    let op = d::Principal { org, actor: d::Actor::Operator(1), at: 0 };
+    let user = d::Principal { org, actor: d::Actor::User(3), at: 0 };
+    let n = 40u64;
+    let mut ids = Vec::new();
+    for _ in 0..n {
+        let id = match pg.execute(&user, &d::Command::Create { amount: 10_000, currency: JPY, manual_capture: false }).await.unwrap() {
+            Ok(d::Reply::Created(id)) => id,
+            r => panic!("create: {r:?}"),
+        };
+        pg.execute(&op, &d::Command::BeginAuthorize { id }).await.unwrap().unwrap();
+        pg.execute(&op, &d::Command::Record { payment: id, result: d::PspResult::Authorized { amount: 10_000 } }).await.unwrap().unwrap();
+        pg.execute(&op, &d::Command::Record { payment: id, result: d::PspResult::Captured { amount: 10_000 } }).await.unwrap().unwrap();
+        ids.push(id);
+    }
+    let mark = move |pg: Arc<payment_storage::PaymentsEngine>, id: u64| async move {
+        let v = match pg.execute(&op, &d::Command::View { id }).await.unwrap() {
+            Ok(d::Reply::View(p, refunds, _)) => (p, refunds),
+            r => panic!("view: {r:?}"),
+        };
+        pg.execute(&op, &d::Command::MarkPosted { payment: id, captured: v.0.captured, refunds: v.1 }).await.unwrap().ok();
+    };
+    for &id in &ids {
+        mark(pg.clone(), id).await;
+    }
+    assert!(unmarked(&pg, org).await.is_empty(), "every payment marked");
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let pruner = {
+        let (url, stop) = (url.clone(), stop.clone());
+        tokio::spawn(async move {
+            let mut passes = 0u64;
+            while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                payment_storage::prune_open_payments(&url, &payment_storage::DbTls::Off).await.unwrap();
+                passes += 1;
+            }
+            passes
+        })
+    };
+    let mut tasks = Vec::new();
+    for t in 0..8u64 {
+        let (pg, ids) = (pg.clone(), ids.clone());
+        tasks.push(tokio::spawn(async move {
+            let mut rng = Rng(100 + t);
+            for _ in 0..120 {
+                let id = ids[rng.below(ids.len() as u64) as usize];
+                if rng.below(2) == 0 {
+                    pg.execute(&user, &d::Command::RequestRefund { payment: id, amount: 1 }).await.unwrap().ok();
+                } else {
+                    mark(pg.clone(), id).await;
+                }
+            }
+        }));
+    }
+    for t in tasks {
+        t.await.unwrap();
+    }
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let passes = pruner.await.unwrap();
+    assert!(passes > 1, "the pruner ran during the changes ({passes} passes)");
+    let want = unmarked(&pg, org).await;
+    assert!(!want.is_empty(), "some payments were left unmarked");
+    let got = open_rows(&url, org).await;
+    assert!(want.iter().all(|id| got.contains(id)), "open_payments {got:?} lacks some of the unmarked {want:?}");
+    open_payments_agree(&url, &pg, org).await;
 }

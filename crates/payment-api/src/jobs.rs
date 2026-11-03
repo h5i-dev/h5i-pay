@@ -16,7 +16,9 @@ pub struct RecoverAll {
 /// Tenants recovered at once by one pass.
 pub const TENANT_CONCURRENCY: usize = 4;
 
-/// One pass: find every tenant's unfinished work with one read-only query
+/// One pass: prune `open_payments` of payments marked since the last pass
+/// ([`payment_storage::prune_open_payments`]), then, on the same
+/// connection, find every tenant's unfinished work with one read-only query
 /// ([`payment_storage::recovery_work`]: only payments still waiting on the
 /// PSP, with a pending refund, or with a ledger posting missing) and run
 /// [`Orchestrator::recover_work`] for up to [`TENANT_CONCURRENCY`] tenants
@@ -25,7 +27,7 @@ pub const TENANT_CONCURRENCY: usize = 4;
 /// stays an operator's call (`POST /v1/recover?fail_unsubmitted=true`).
 pub async fn recover_all(o: &Orchestrator, url: &str, tls: &DbTls) -> Result<RecoverAll, h5i_app_pg::DbError> {
     use futures_util::stream::{self, StreamExt};
-    let work = payment_storage::recovery_work(url, tls).await?;
+    let work = payment_storage::recovery_work_with(url, tls, true).await?;
     let mut out = RecoverAll { tenants: work.len() as u64, ..Default::default() };
     let results: Vec<_> = stream::iter(work.iter())
         .map(|w| async move { (w.tenant, o.recover_work(w, false).await) })

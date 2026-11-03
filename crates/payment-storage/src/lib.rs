@@ -130,25 +130,32 @@ pub(crate) fn append_only_history() -> Vec<String> {
 /// instead of a partial index on `payments`. A partial index on the marker
 /// makes `MarkPosted` a non-HOT update, which adds primary-key entries on
 /// the index page that concurrent `Create`s read and insert into, and
-/// under SERIALIZABLE one of each such pair was aborted. `open_payments` is
-/// written only by these triggers, when a payment is inserted unmarked or
-/// its marker changes, and no kernel command reads it, so `MarkPosted`
-/// (now a HOT update of `payments`, plus a delete here) and `Create` (an
-/// insert here) form no read/write cycle. Recovery reads it
-/// (`recovery_work`). Outside the kernels' tables: it is an index the
-/// database maintains, not state a kernel decides on.
+/// under SERIALIZABLE one of each such pair was aborted. No kernel command
+/// reads `open_payments`; recovery does (`recovery_work`). Outside the
+/// kernels' tables: it is an index the database maintains, not state a
+/// kernel decides on.
+///
+/// I1: the triggers only insert: when a payment is inserted unmarked, and
+/// when its marker is cleared. They never delete. `open_payments` holds
+/// every payment not marked, and may also hold marked ones until
+/// [`prune_open_payments`] removes them (the scheduled recovery does, first
+/// thing in each pass). Before, marking deleted the row here, and that
+/// `DELETE` is a read under SERIALIZABLE: of the whole (small) table, or of
+/// the one index page every new payment's row goes to. Each `MarkPosted`
+/// then read what concurrent `Create`s and `MarkPosted`s wrote, and was
+/// aborted as the pivot of such pairs (I1 in `docs/benchmarks.md`).
 ///
 /// The trigger is created before the backfill: `CREATE TRIGGER` locks
 /// `payments` against writes until this transaction commits, so no payment
-/// changes between the copy and the trigger.
+/// changes between the copy and the trigger. A table from before I1 has
+/// the trigger `open_payments_mark`, which also fired on marking; it is
+/// replaced once by `open_payments_unmark`.
 pub(crate) fn open_payments() -> Vec<String> {
     vec![
         "CREATE OR REPLACE FUNCTION open_payments_sync() RETURNS trigger LANGUAGE plpgsql \
            SET search_path FROM CURRENT AS $$ \
          BEGIN \
-           IF NEW.ledger_done THEN \
-             DELETE FROM open_payments WHERE tenant_id = NEW.tenant_id AND id = NEW.id; \
-           ELSE \
+           IF NOT NEW.ledger_done THEN \
              INSERT INTO open_payments (tenant_id, id) VALUES (NEW.tenant_id, NEW.id) ON CONFLICT DO NOTHING; \
            END IF; \
            RETURN NULL; \
@@ -159,14 +166,89 @@ pub(crate) fn open_payments() -> Vec<String> {
              CREATE TABLE open_payments (tenant_id BIGINT NOT NULL, id BIGINT NOT NULL, PRIMARY KEY (tenant_id, id)); \
              CREATE TRIGGER open_payments_insert AFTER INSERT ON payments \
                FOR EACH ROW WHEN (NOT NEW.ledger_done) EXECUTE FUNCTION open_payments_sync(); \
-             CREATE TRIGGER open_payments_mark AFTER UPDATE ON payments \
-               FOR EACH ROW WHEN (OLD.ledger_done IS DISTINCT FROM NEW.ledger_done) EXECUTE FUNCTION open_payments_sync(); \
+             CREATE TRIGGER open_payments_unmark AFTER UPDATE ON payments \
+               FOR EACH ROW WHEN (OLD.ledger_done AND NOT NEW.ledger_done) EXECUTE FUNCTION open_payments_sync(); \
              INSERT INTO open_payments (tenant_id, id) SELECT tenant_id, id FROM payments WHERE NOT ledger_done; \
              ANALYZE open_payments; \
            END IF; \
          END $$"
             .into(),
+        "DO $$ BEGIN \
+           IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'open_payments_unmark' \
+                          AND tgrelid = 'payments'::regclass) THEN \
+             DROP TRIGGER IF EXISTS open_payments_mark ON payments; \
+             CREATE TRIGGER open_payments_unmark AFTER UPDATE ON payments \
+               FOR EACH ROW WHEN (OLD.ledger_done AND NOT NEW.ledger_done) EXECUTE FUNCTION open_payments_sync(); \
+           END IF; \
+         END $$"
+            .into(),
     ]
+}
+
+/// Rows of `open_payments` removed per statement by [`prune_open_payments`].
+pub const PRUNE_BATCH: i64 = 10_000;
+
+/// Remove from `open_payments` the payments marked `ledger_done` (I1: the
+/// triggers never delete). Returns how many rows went.
+///
+/// `READ COMMITTED`, outside SERIALIZABLE, so it takes no predicate locks
+/// and aborts no kernel transaction. A row goes only with its payment
+/// locked `FOR SHARE` and seen marked: a command clearing the marker at the
+/// same time either committed first (then the lock's re-check sees the
+/// marker cleared and keeps the row) or waits for this transaction and
+/// then inserts the row again by its trigger. So every payment not marked
+/// keeps its row, as `recovery_work` needs.
+pub async fn prune_open_payments(url: &str, tls: &DbTls) -> Result<u64, DbError> {
+    let (mut client, conn) = connect_direct(url, tls).await?;
+    let n = prune_with(&mut client).await;
+    drop(client);
+    let _ = conn.await;
+    n
+}
+
+/// [`prune_open_payments`] on an open connection: `open_payments` in key
+/// order, [`PRUNE_BATCH`] rows per transaction. Each batch reads its rows,
+/// locks those of their payments that are marked (`FOR SHARE`, re-checked
+/// on the newest version after any wait) and deletes just those. The
+/// rows' payments are looked up by key: a join the planner orders itself
+/// scans every payment of the tenant when it misjudges the table's size.
+async fn prune_with(client: &mut tokio_postgres::Client) -> Result<u64, DbError> {
+    let page = format!(
+        "SELECT tenant_id, id FROM {PAYMENTS_SCHEMA}.open_payments \
+         WHERE (tenant_id, id) > ($1, $2) ORDER BY tenant_id, id LIMIT {PRUNE_BATCH}"
+    );
+    let marked = format!(
+        "SELECT p.tenant_id, p.id FROM unnest($1::bigint[], $2::bigint[]) AS c (tenant_id, id) \
+           CROSS JOIN LATERAL (SELECT tenant_id, id FROM {PAYMENTS_SCHEMA}.payments q \
+              WHERE q.tenant_id = c.tenant_id AND q.id = c.id AND q.ledger_done FOR SHARE) p"
+    );
+    let delete = format!(
+        "DELETE FROM {PAYMENTS_SCHEMA}.open_payments o USING unnest($1::bigint[], $2::bigint[]) AS d (tenant_id, id) \
+         WHERE o.tenant_id = d.tenant_id AND o.id = d.id"
+    );
+    let (mut total, mut after) = (0, (i64::MIN, i64::MIN));
+    loop {
+        let tx = client.build_transaction().isolation_level(tokio_postgres::IsolationLevel::ReadCommitted).start().await?;
+        let rows = match tx.query(page.as_str(), &[&after.0, &after.1]).await {
+            Ok(r) => r,
+            // No tables yet: nothing to prune.
+            Err(e) if e.code() == Some(&tokio_postgres::error::SqlState::UNDEFINED_TABLE) => return Ok(0),
+            Err(e) => return Err(e.into()),
+        };
+        let (ts, ids): (Vec<i64>, Vec<i64>) = rows.iter().map(|r| (r.get::<_, i64>(0), r.get::<_, i64>(1))).unzip();
+        if let (Some(t), Some(id)) = (ts.last(), ids.last()) {
+            after = (*t, *id);
+        }
+        let locked = tx.query(marked.as_str(), &[&ts, &ids]).await?;
+        let (lt, li): (Vec<i64>, Vec<i64>) = locked.iter().map(|r| (r.get::<_, i64>(0), r.get::<_, i64>(1))).unzip();
+        if !lt.is_empty() {
+            total += tx.execute(delete.as_str(), &[&lt, &li]).await?;
+        }
+        tx.commit().await?;
+        if rows.len() < PRUNE_BATCH as usize {
+            return Ok(total);
+        }
+    }
 }
 
 /// `ALTER TABLE … SET (fillfactor = n)`, only when not set yet (it takes a
@@ -354,8 +436,8 @@ async fn connect_direct(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Clien
 /// Every tenant's unfinished work, in one read-only query: payments to ask
 /// the PSP about, payments with a pending refund, and captured payments
 /// whose ledger postings are not marked complete ([`ledger_pending`]).
-/// The parts read `open_payments` (the payments not `ledger_done`, kept by
-/// triggers; G5) and the partial index `payments_refunding`, so a pass
+/// The parts read `open_payments` (every payment not `ledger_done`, kept by
+/// triggers, G5, and maybe marked ones not pruned yet, I1) and the partial index `payments_refunding`, so a pass
 /// costs O(unfinished payments), not O(captured) (F2; before, an anti-join
 /// on the ledger's transfer ids per captured payment).
 ///
@@ -367,10 +449,16 @@ async fn connect_direct(url: &str, tls: &DbTls) -> Result<(tokio_postgres::Clien
 /// by reconciliation and by `POST /v1/recover` (`Orchestrator::find_work`
 /// also checks the journal).
 pub async fn recovery_work(url: &str, tls: &DbTls) -> Result<Vec<RecoveryWork>, DbError> {
+    recovery_work_with(url, tls, false).await
+}
+
+/// [`recovery_work`], after [`prune_open_payments`] on the same connection
+/// when `prune` (the scheduled pass, `jobs::recover_all`).
+pub async fn recovery_work_with(url: &str, tls: &DbTls, prune: bool) -> Result<Vec<RecoveryWork>, DbError> {
     use payment_domain::{AUTHORIZED, CANCELED, CAPTURED, FAILED, PROCESSING};
     // A payment in PROCESSING or AUTHORIZED is never marked, so it is in
-    // `open_payments`. `NOT p.ledger_done` is what the triggers keep true
-    // of every row there; checked again in case of a row left over.
+    // `open_payments`. Rows there may be marked payments not pruned yet
+    // (I1): `NOT p.ledger_done` filters them out.
     let sql = format!(
         "SELECT p.tenant_id, p.id, 0 FROM {PAYMENTS_SCHEMA}.open_payments o \
            JOIN {PAYMENTS_SCHEMA}.payments p ON p.tenant_id = o.tenant_id AND p.id = o.id \
@@ -384,6 +472,9 @@ pub async fn recovery_work(url: &str, tls: &DbTls) -> Result<Vec<RecoveryWork>, 
          ORDER BY 1, 3, 2"
     );
     let (mut client, conn) = connect_direct(url, tls).await?;
+    if prune {
+        prune_with(&mut client).await?;
+    }
     let tx = client.build_transaction().read_only(true).start().await?;
     let rows = match tx.query(sql.as_str(), &[]).await {
         Ok(r) => r,

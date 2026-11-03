@@ -48,10 +48,11 @@ test keys). It never handles raw card numbers.
 Every h5i-app crate (`h5i-app`, `-core`, `-pg`, `-http`, `-json`, `-schema`,
 `-sql`, `-gpu`, `-gpu-backend-nvvm`) and the Lean library `h5i_app_lib` in
 `proofs/*/lakefile.lean` come from one commit of <https://github.com/h5i-dev/h5i>
-by git rev: h5i main `7b91863`, which has range comparisons in reads
-(PR #775) and the database clock and the writes pipelined (PR #773) on
-top of h5i-app 0.5.2 (`02ccdde`, on crates.io). Once h5i-app is released
-with them, go back to a crates.io version. Keep the Cargo revs, the Lake revs and CI's
+by git rev: branch `app/pipeline-errors` (`9ec26b5`), one commit on h5i
+main `3ab10b3` (h5i-app 0.5.3), which has range comparisons in reads (PR
+#775) and the database clock and the writes pipelined (PR #773). Once it
+is merged, pin the main commit; once h5i-app is released with it, go back
+to a crates.io version. Keep the Cargo revs, the Lake revs and CI's
 `H5I_REV` in step.
 
 ## Build, test, prove

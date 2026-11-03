@@ -9,7 +9,7 @@ after a disconnect. Newest entries first within each milestone.
 |---|---|---|
 | Rust | 1.99.1 | workspace edition 2024 |
 | h5i CLI | 0.5.2, `~/.local/bin/h5i` | built from `/root/h5i-upstream` with `H5I_SKIP_WEB_BUILD=1` (no Node on the host, so the `h5i ui` web bundle is not embedded) |
-| h5i-app | git rev `7b91863` of h5i main (I0) | H2 (PR #775, `app/range-compare` squash-merged) on top of H1 (PR #773, `ae87ef7`) and h5i-app 0.5.2. Every h5i-app crate, `h5i-app-gpu`, `-gpu-backend-nvvm` and the `h5i_app_lib` Lean library from that one commit. Earlier: crates.io 0.1.4 + tag `v0.5.2` (M1–M5), git rev `a19667c`, crates.io 0.5.2 (until G), `a45b6e3` (H1), `a98bcbd` (branch `app/range-compare`, H2). The h5i CLI is still the tag-v0.5.2 build |
+| h5i-app | git rev `9ec26b5` of h5i branch `app/pipeline-errors` (I1) | one commit (pipelined statements report the cause) on main `3ab10b3` (h5i-app 0.5.3), which has H2 (PR #775, `7b91863`) and H1 (PR #773, `ae87ef7`); not merged yet. Every h5i-app crate, `h5i-app-gpu`, `-gpu-backend-nvvm` and the `h5i_app_lib` Lean library from that one commit. Earlier: crates.io 0.1.4 + tag `v0.5.2` (M1–M5), git rev `a19667c`, crates.io 0.5.2 (until G), `a45b6e3` (H1), `a98bcbd` (branch `app/range-compare`, H2), `7b91863` (main, I0). The h5i CLI is still the tag-v0.5.2 build |
 | Charon / Aeneas | 4bd5a29f6e97 / b86120db3183 at `/opt/aeneas/{charon,aeneas}/bin` | built with `nix build github:AeneasVerif/aeneas/<rev>` (Determinate Nix installer); `h5i app doctor` is green when both are on `PATH` |
 | Lean | leanprover/lean4:v4.31.0 via elan (`~/.elan/bin`) | Mathlib cache from `lake exe cache get` |
 | PostgreSQL | 17 in docker (`scripts/dev-db.sh`, port 55432) | |
@@ -177,6 +177,45 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 - README updated with the full layout and commands.
 
 ## After M5 (newest first)
+
+### I1: the last serialization retries removed
+
+- Cause: PostgreSQL's log with `log_statement = all` named `MarkPosted`,
+  not `Create`, as every aborted transaction (121 aborts in one 32-client
+  run at 10k). Its `open_payments` trigger deleted the payment's row; that
+  `DELETE` reads the small table (a relation-level SIRead lock in
+  `pg_locks`) or the index page new payments are inserted into, so each
+  `MarkPosted` was the pivot between concurrent `Create`s and `MarkPosted`s.
+- Fix (`payment-storage`): the triggers only insert (payment inserted
+  unmarked: `open_payments_insert`; marker cleared: `open_payments_unmark`,
+  which replaces `open_payments_mark` once on existing databases).
+  `prune_open_payments` removes marked payments in `READ COMMITTED`, each
+  row only with its payment locked `FOR SHARE` and seen marked; the
+  scheduled recovery runs it first, on the connection of its work query
+  (`recovery_work_with`). Rows are looked up by key: a planner-ordered
+  join scanned every payment (empty pass 57 ms at 100k).
+- h5i: the new pruning test, running next to the ledger concurrency
+  tests, made a transfer fail with 25P02 ("current transaction is
+  aborted") in 3 of 9 runs: pipelined statements (H1) returned the first
+  error polled, which can be a later statement's refusal instead of the
+  serialization failure. Branch `app/pipeline-errors` (`9ec26b5`, one
+  commit on main `3ab10b3`, h5i-app 0.5.3; PR not opened) awaits every
+  reply and returns the cause, with `pipeline_test.rs`; h5i's
+  `ci-rust-tests.sh` (72 binaries), clippy for h5i-app-pg, `cargo app
+  lint`, `cargo deny check bans`. h5i-pay is pinned to it (Cargo, Lake
+  revs and manifests, CI); 12 runs of the `concurrency` tests since: no
+  failure.
+- Tests: `pruning_keeps_every_unmarked_payment` (8 tasks clear and set
+  markers while the pruner loops; it caught a pruning without the row
+  lock in 3 of 6 runs), `open_payments_agree` (superset, then equal after
+  pruning).
+- Measured (`docs/benchmarks.md`, "I1"): 0 retries in every run (H2 3–45
+  per run); throughput at H2's level (100k: 189 / 183 / 184 against 188 /
+  181 / 186 payments/s); recovery passes +3 to +17 ms.
+- Checks: `cargo test --workspace` (106), clippy ×3, GPU differential,
+  `build-device.sh --check`, `cargo deny check`, `h5i app extract --check`,
+  `lint`, `check` (375 / 450 / 69 theorems). The kernels did not change, so
+  `mutate` was not re-run for I1.
 
 ### I0: pinned to h5i main `7b91863`
 

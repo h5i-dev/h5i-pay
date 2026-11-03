@@ -1,0 +1,3173 @@
+{
+ "note": "I1: B4-era seeds e2e_seed_{10000,100000}; builds d71881b (H2, h5i a98bcbd) and I1 (insert-only open_payments triggers, pruning in the recovery pass; h5i 9ec26b5), interleaved, order rotating, three rounds per size, E2E_CLIENTS=8,32,32. Series 'final' is the committed I1; series 'earlier' an I1 build with the first pruning (a planner-ordered join) and without the h5i pipeline fix (h5i 7b91863). Other users' jobs ran during the final series' 10k rounds (load average 4-6).",
+ "runs": [
+  {
+   "audit": {
+    "max_ms": 496.631577,
+    "n": 2,
+    "p50_ms": 496.631577,
+    "p95_ms": 496.631577
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 146.2455809950808,
+     "retries_total": 0,
+     "seconds": 1.367562689
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 173.52546096954654,
+     "retries_total": 0,
+     "seconds": 4.610274455
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 183.41240485892456,
+     "retries_total": 0,
+     "seconds": 4.361755142
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 146.2455809950808,
+    "retries_total": 0,
+    "seconds": 1.367562689
+   },
+   "create": {
+    "max_ms": 23.68328,
+    "n": 30,
+    "p50_ms": 22.140742000000003,
+    "p95_ms": 23.646048999999998
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 2.389353,
+    "n": 20,
+    "p50_ms": 1.604589,
+    "p95_ms": 1.845113
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 2.2276700000000003,
+    "n": 20,
+    "p50_ms": 1.939994,
+    "p95_ms": 2.1701289999999998
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 30.805355,
+    "n": 3,
+    "p50_ms": 28.437576,
+    "p95_ms": 30.805355
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 87.061616,
+    "n": 3,
+    "p50_ms": 83.139166,
+    "p95_ms": 87.061616
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 45,
+     "ledger_synced": 0,
+     "ms": 79.02772399999999,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 13.886516,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 23.859772,
+    "n": 20,
+    "p50_ms": 22.353098,
+    "p95_ms": 23.515877
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 1.086429,
+    "n": 30,
+    "p50_ms": 0.867186,
+    "p95_ms": 0.9146259999999999
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 10000,
+   "round": 1,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 476.273193,
+    "n": 2,
+    "p50_ms": 476.273193,
+    "p95_ms": 476.273193
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 170.77895283536094,
+     "retries_total": 0,
+     "seconds": 1.171104499
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 130.3000709668098,
+     "retries_total": 0,
+     "seconds": 6.139674323
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 163.9568856350224,
+     "retries_total": 0,
+     "seconds": 4.87933152
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 170.77895283536094,
+    "retries_total": 0,
+    "seconds": 1.171104499
+   },
+   "create": {
+    "max_ms": 25.592717,
+    "n": 30,
+    "p50_ms": 21.040502,
+    "p95_ms": 23.599971
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.577137,
+    "n": 20,
+    "p50_ms": 1.423015,
+    "p95_ms": 1.560997
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 1.9160030000000001,
+    "n": 20,
+    "p50_ms": 1.6805990000000002,
+    "p95_ms": 1.786251
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 28.862175,
+    "n": 3,
+    "p50_ms": 28.324953999999998,
+    "p95_ms": 28.862175
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 87.850153,
+    "n": 3,
+    "p50_ms": 78.73725400000001,
+    "p95_ms": 87.850153
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 42,
+     "ledger_synced": 0,
+     "ms": 74.943298,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 14.496482,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 26.037613,
+    "n": 20,
+    "p50_ms": 19.838393,
+    "p95_ms": 24.729899
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 1.774321,
+    "n": 30,
+    "p50_ms": 0.832354,
+    "p95_ms": 1.69108
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 10000,
+   "round": 2,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 464.128749,
+    "n": 2,
+    "p50_ms": 464.128749,
+    "p95_ms": 464.128749
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 177.51611775786586,
+     "retries_total": 0,
+     "seconds": 1.126658258
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 180.31484844657686,
+     "retries_total": 0,
+     "seconds": 4.436683983
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 181.6490919856999,
+     "retries_total": 0,
+     "seconds": 4.404095783
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 177.51611775786586,
+    "retries_total": 0,
+    "seconds": 1.126658258
+   },
+   "create": {
+    "max_ms": 18.585758000000002,
+    "n": 30,
+    "p50_ms": 17.177284,
+    "p95_ms": 18.160140000000002
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.70536,
+    "n": 20,
+    "p50_ms": 1.462776,
+    "p95_ms": 1.568158
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 1.937554,
+    "n": 20,
+    "p50_ms": 1.68784,
+    "p95_ms": 1.922074
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 28.77282,
+    "n": 3,
+    "p50_ms": 28.437463,
+    "p95_ms": 28.77282
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 90.776809,
+    "n": 3,
+    "p50_ms": 81.796345,
+    "p95_ms": 90.776809
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 42,
+     "ledger_synced": 0,
+     "ms": 75.76759600000001,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 14.801492,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 18.75053,
+    "n": 20,
+    "p50_ms": 17.024428,
+    "p95_ms": 18.1391
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 0.864545,
+    "n": 30,
+    "p50_ms": 0.796555,
+    "p95_ms": 0.833504
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 10000,
+   "round": 3,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 4000.9711919999995,
+    "n": 2,
+    "p50_ms": 4000.9711919999995,
+    "p95_ms": 4000.9711919999995
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 192.46952790436157,
+     "retries_total": 0,
+     "seconds": 1.039125529
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 183.30375447334796,
+     "retries_total": 0,
+     "seconds": 4.364340503
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 186.2625958182872,
+     "retries_total": 0,
+     "seconds": 4.295011548
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 192.46952790436157,
+    "retries_total": 0,
+    "seconds": 1.039125529
+   },
+   "create": {
+    "max_ms": 18.028889,
+    "n": 30,
+    "p50_ms": 16.954621,
+    "p95_ms": 17.920617999999997
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.6586800000000002,
+    "n": 20,
+    "p50_ms": 1.4516259999999999,
+    "p95_ms": 1.5494180000000002
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 2.107837,
+    "n": 20,
+    "p50_ms": 1.69849,
+    "p95_ms": 2.013756
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 26.412988,
+    "n": 3,
+    "p50_ms": 24.992265,
+    "p95_ms": 26.412988
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 593.48505,
+    "n": 3,
+    "p50_ms": 573.534395,
+    "p95_ms": 593.48505
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 41,
+     "ledger_synced": 0,
+     "ms": 90.370087,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 30.485704,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 33.714118,
+    "n": 20,
+    "p50_ms": 17.200755,
+    "p95_ms": 27.301724999999998
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.9977479999999999,
+    "n": 30,
+    "p50_ms": 0.7963939999999999,
+    "p95_ms": 0.883026
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 100000,
+   "round": 1,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 4038.138849,
+    "n": 2,
+    "p50_ms": 4038.138849,
+    "p95_ms": 4038.138849
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 188.9267621552399,
+     "retries_total": 0,
+     "seconds": 1.058611272
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 181.58005768925992,
+     "retries_total": 0,
+     "seconds": 4.405770161
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 183.7258303729642,
+     "retries_total": 0,
+     "seconds": 4.354314243
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 188.9267621552399,
+    "retries_total": 0,
+    "seconds": 1.058611272
+   },
+   "create": {
+    "max_ms": 22.613353999999998,
+    "n": 30,
+    "p50_ms": 16.921032,
+    "p95_ms": 18.700115
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.572018,
+    "n": 20,
+    "p50_ms": 1.432615,
+    "p95_ms": 1.524517
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 2.140638,
+    "n": 20,
+    "p50_ms": 1.71381,
+    "p95_ms": 1.9739050000000002
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 27.433639,
+    "n": 3,
+    "p50_ms": 25.641877,
+    "p95_ms": 27.433639
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 592.337869,
+    "n": 3,
+    "p50_ms": 580.7653029999999,
+    "p95_ms": 592.337869
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 46,
+     "ledger_synced": 0,
+     "ms": 97.866655,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 30.195348,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 18.282753999999997,
+    "n": 20,
+    "p50_ms": 17.214387000000002,
+    "p95_ms": 18.070374
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.907046,
+    "n": 30,
+    "p50_ms": 0.812784,
+    "p95_ms": 0.867856
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 100000,
+   "round": 2,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 4788.720198,
+    "n": 2,
+    "p50_ms": 4788.720198,
+    "p95_ms": 4788.720198
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 188.59002085334157,
+     "retries_total": 0,
+     "seconds": 1.0605015
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 184.06369108045897,
+     "retries_total": 0,
+     "seconds": 4.34632162
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 169.67346574182727,
+     "retries_total": 0,
+     "seconds": 4.714938759
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 188.59002085334157,
+    "retries_total": 0,
+    "seconds": 1.0605015
+   },
+   "create": {
+    "max_ms": 18.55395,
+    "n": 30,
+    "p50_ms": 16.599925000000002,
+    "p95_ms": 17.844717
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.793932,
+    "n": 20,
+    "p50_ms": 1.611919,
+    "p95_ms": 1.759332
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 2.082277,
+    "n": 20,
+    "p50_ms": 1.730741,
+    "p95_ms": 1.849313
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 29.202182,
+    "n": 3,
+    "p50_ms": 28.789341999999998,
+    "p95_ms": 29.202182
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 649.651268,
+    "n": 3,
+    "p50_ms": 624.3887080000001,
+    "p95_ms": 649.651268
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 45,
+     "ledger_synced": 0,
+     "ms": 103.431803,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 32.593571000000004,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 18.467129,
+    "n": 20,
+    "p50_ms": 17.172525,
+    "p95_ms": 17.832948000000002
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.9030159999999999,
+    "n": 30,
+    "p50_ms": 0.7920740000000001,
+    "p95_ms": 0.849815
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 100000,
+   "round": 3,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 508.66907800000007,
+    "n": 2,
+    "p50_ms": 508.66907800000007,
+    "p95_ms": 508.66907800000007
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1603,
+     "payments": 200,
+     "per_s": 171.89411688190754,
+     "retries_total": 3,
+     "seconds": 1.163506952
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6424,
+     "payments": 800,
+     "per_s": 169.07657736516742,
+     "retries_total": 24,
+     "seconds": 4.731583833
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6418,
+     "payments": 800,
+     "per_s": 135.1163716250319,
+     "retries_total": 18,
+     "seconds": 5.920822106
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1603,
+    "payments": 200,
+    "per_s": 171.89411688190754,
+    "retries_total": 3,
+    "seconds": 1.163506952
+   },
+   "create": {
+    "max_ms": 25.440935,
+    "n": 30,
+    "p50_ms": 17.967221,
+    "p95_ms": 23.952297
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 2.480944,
+    "n": 20,
+    "p50_ms": 1.613689,
+    "p95_ms": 1.968885
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 3.86235,
+    "n": 20,
+    "p50_ms": 1.926255,
+    "p95_ms": 2.694377
+   },
+   "payments_updates": {
+    "hot": 7414,
+    "updates": 7454
+   },
+   "reconcile": {
+    "max_ms": 32.159894,
+    "n": 3,
+    "p50_ms": 32.096382999999996,
+    "p95_ms": 32.159894
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 100.25716899999999,
+    "n": 3,
+    "p50_ms": 91.560654,
+    "p95_ms": 100.25716899999999
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 43,
+     "ledger_synced": 0,
+     "ms": 68.35076,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 10.632670000000001,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 20.853371,
+    "n": 20,
+    "p50_ms": 19.758522,
+    "p95_ms": 20.273711
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 0.875255,
+    "n": 30,
+    "p50_ms": 0.775234,
+    "p95_ms": 0.8456950000000001
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 10000,
+   "round": 1,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 448.91111700000005,
+    "n": 2,
+    "p50_ms": 448.91111700000005,
+    "p95_ms": 448.91111700000005
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1610,
+     "payments": 200,
+     "per_s": 168.6287740285274,
+     "retries_total": 10,
+     "seconds": 1.186037206
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6424,
+     "payments": 800,
+     "per_s": 134.98735674585512,
+     "retries_total": 24,
+     "seconds": 5.926480963
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6445,
+     "payments": 800,
+     "per_s": 94.69417769832413,
+     "retries_total": 45,
+     "seconds": 8.448249084
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1610,
+    "payments": 200,
+    "per_s": 168.6287740285274,
+    "retries_total": 10,
+    "seconds": 1.186037206
+   },
+   "create": {
+    "max_ms": 23.431167,
+    "n": 30,
+    "p50_ms": 17.299518,
+    "p95_ms": 21.080064
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.69808,
+    "n": 20,
+    "p50_ms": 1.410435,
+    "p95_ms": 1.6025390000000002
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 1.8700329999999998,
+    "n": 20,
+    "p50_ms": 1.7055799999999999,
+    "p95_ms": 1.8506930000000001
+   },
+   "payments_updates": {
+    "hot": 7447,
+    "updates": 7487
+   },
+   "reconcile": {
+    "max_ms": 29.138249000000002,
+    "n": 3,
+    "p50_ms": 28.680778,
+    "p95_ms": 29.138249000000002
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 88.81344800000001,
+    "n": 3,
+    "p50_ms": 78.10901700000001,
+    "p95_ms": 88.81344800000001
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 43,
+     "ledger_synced": 0,
+     "ms": 55.596788000000004,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 10.063538000000001,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 18.909625,
+    "n": 20,
+    "p50_ms": 17.473751999999998,
+    "p95_ms": 17.927709
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 0.8542550000000001,
+    "n": 30,
+    "p50_ms": 0.785664,
+    "p95_ms": 0.845565
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 10000,
+   "round": 2,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 510.445382,
+    "n": 2,
+    "p50_ms": 510.445382,
+    "p95_ms": 510.445382
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1616,
+     "payments": 200,
+     "per_s": 179.3131846166742,
+     "retries_total": 16,
+     "seconds": 1.115366951
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6420,
+     "payments": 800,
+     "per_s": 177.36433571731908,
+     "retries_total": 20,
+     "seconds": 4.510489647
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6431,
+     "payments": 800,
+     "per_s": 177.03771312357298,
+     "retries_total": 31,
+     "seconds": 4.518811195
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1616,
+    "payments": 200,
+    "per_s": 179.3131846166742,
+    "retries_total": 16,
+    "seconds": 1.115366951
+   },
+   "create": {
+    "max_ms": 24.503556,
+    "n": 30,
+    "p50_ms": 17.046292,
+    "p95_ms": 18.680952
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.804052,
+    "n": 20,
+    "p50_ms": 1.620088,
+    "p95_ms": 1.760941
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 2.5020149999999997,
+    "n": 20,
+    "p50_ms": 1.9291939999999999,
+    "p95_ms": 2.212739
+   },
+   "payments_updates": {
+    "hot": 7434,
+    "updates": 7474
+   },
+   "reconcile": {
+    "max_ms": 35.465321,
+    "n": 3,
+    "p50_ms": 32.899907,
+    "p95_ms": 35.465321
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 96.28621,
+    "n": 3,
+    "p50_ms": 95.67712,
+    "p95_ms": 96.28621
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 42,
+     "ledger_synced": 0,
+     "ms": 71.425189,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 11.633056,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 18.686122,
+    "n": 20,
+    "p50_ms": 17.391999,
+    "p95_ms": 17.756316
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 0.878815,
+    "n": 30,
+    "p50_ms": 0.750853,
+    "p95_ms": 0.8720359999999999
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 10000,
+   "round": 3,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 4020.3817129999998,
+    "n": 2,
+    "p50_ms": 4020.3817129999998,
+    "p95_ms": 4020.3817129999998
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1607,
+     "payments": 200,
+     "per_s": 187.76261970357538,
+     "retries_total": 7,
+     "seconds": 1.065174742
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6418,
+     "payments": 800,
+     "per_s": 181.88842663248795,
+     "retries_total": 18,
+     "seconds": 4.398300732
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6404,
+     "payments": 800,
+     "per_s": 186.0556924811493,
+     "retries_total": 4,
+     "seconds": 4.299787818
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1607,
+    "payments": 200,
+    "per_s": 187.76261970357538,
+    "retries_total": 7,
+    "seconds": 1.065174742
+   },
+   "create": {
+    "max_ms": 17.793364999999998,
+    "n": 30,
+    "p50_ms": 16.606623000000003,
+    "p95_ms": 17.157902
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.557217,
+    "n": 20,
+    "p50_ms": 1.4349750000000001,
+    "p95_ms": 1.532657
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 2.0890969999999998,
+    "n": 20,
+    "p50_ms": 1.7128899999999998,
+    "p95_ms": 1.8766530000000001
+   },
+   "payments_updates": {
+    "hot": 7398,
+    "updates": 7438
+   },
+   "reconcile": {
+    "max_ms": 26.413998,
+    "n": 3,
+    "p50_ms": 25.186655,
+    "p95_ms": 26.413998
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 600.139282,
+    "n": 3,
+    "p50_ms": 592.104859,
+    "p95_ms": 600.139282
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 44,
+     "ledger_synced": 0,
+     "ms": 81.203307,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 26.914337,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 21.865657,
+    "n": 20,
+    "p50_ms": 17.248034,
+    "p95_ms": 18.503566999999997
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.912926,
+    "n": 30,
+    "p50_ms": 0.7882539999999999,
+    "p95_ms": 0.898096
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 100000,
+   "round": 1,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 3995.691192,
+    "n": 2,
+    "p50_ms": 3995.691192,
+    "p95_ms": 3995.691192
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1604,
+     "payments": 200,
+     "per_s": 186.21522747425576,
+     "retries_total": 4,
+     "seconds": 1.074026022
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6427,
+     "payments": 800,
+     "per_s": 180.4826255659419,
+     "retries_total": 27,
+     "seconds": 4.43255963
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6412,
+     "payments": 800,
+     "per_s": 185.7259132409613,
+     "retries_total": 12,
+     "seconds": 4.307422621
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1604,
+    "payments": 200,
+    "per_s": 186.21522747425576,
+    "retries_total": 4,
+    "seconds": 1.074026022
+   },
+   "create": {
+    "max_ms": 17.727127,
+    "n": 30,
+    "p50_ms": 16.875004,
+    "p95_ms": 17.633017000000002
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.537137,
+    "n": 20,
+    "p50_ms": 1.432776,
+    "p95_ms": 1.528727
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 2.1265479999999997,
+    "n": 20,
+    "p50_ms": 1.728831,
+    "p95_ms": 1.961735
+   },
+   "payments_updates": {
+    "hot": 7414,
+    "updates": 7454
+   },
+   "reconcile": {
+    "max_ms": 26.649659999999997,
+    "n": 3,
+    "p50_ms": 25.969605,
+    "p95_ms": 26.649659999999997
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 594.534659,
+    "n": 3,
+    "p50_ms": 588.403738,
+    "p95_ms": 594.534659
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 45,
+     "ledger_synced": 0,
+     "ms": 79.647211,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 25.561488999999998,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 18.157175000000002,
+    "n": 20,
+    "p50_ms": 17.331733,
+    "p95_ms": 17.837719
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.881356,
+    "n": 30,
+    "p50_ms": 0.792574,
+    "p95_ms": 0.854515
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 100000,
+   "round": 2,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 4940.865133,
+    "n": 2,
+    "p50_ms": 4940.865133,
+    "p95_ms": 4940.865133
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 189.88807888394376,
+     "retries_total": 0,
+     "seconds": 1.053252006
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6425,
+     "payments": 800,
+     "per_s": 181.45298274063117,
+     "retries_total": 25,
+     "seconds": 4.408855605
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6406,
+     "payments": 800,
+     "per_s": 186.13724786554855,
+     "retries_total": 6,
+     "seconds": 4.297903881
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 189.88807888394376,
+    "retries_total": 0,
+    "seconds": 1.053252006
+   },
+   "create": {
+    "max_ms": 18.422541,
+    "n": 30,
+    "p50_ms": 17.035763,
+    "p95_ms": 18.267777
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.6568500000000002,
+    "n": 20,
+    "p50_ms": 1.439566,
+    "p95_ms": 1.551418
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 2.092277,
+    "n": 20,
+    "p50_ms": 1.751142,
+    "p95_ms": 1.925375
+   },
+   "payments_updates": {
+    "hot": 7400,
+    "updates": 7440
+   },
+   "reconcile": {
+    "max_ms": 28.489769000000003,
+    "n": 3,
+    "p50_ms": 25.952018,
+    "p95_ms": 28.489769000000003
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 598.5181859999999,
+    "n": 3,
+    "p50_ms": 584.3589850000001,
+    "p95_ms": 598.5181859999999
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 46,
+     "ledger_synced": 0,
+     "ms": 80.502453,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 27.687689000000002,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 19.588592,
+    "n": 20,
+    "p50_ms": 17.281227,
+    "p95_ms": 17.958402
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.906137,
+    "n": 30,
+    "p50_ms": 0.804244,
+    "p95_ms": 0.880626
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 100000,
+   "round": 3,
+   "series": "final"
+  },
+  {
+   "audit": {
+    "max_ms": 440.428726,
+    "n": 2,
+    "p50_ms": 440.428726,
+    "p95_ms": 440.428726
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 187.88147360459942,
+     "retries_total": 0,
+     "seconds": 1.064500912
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 185.97807130840906,
+     "retries_total": 0,
+     "seconds": 4.301582409
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 190.7119291285254,
+     "retries_total": 0,
+     "seconds": 4.194808388
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 187.88147360459942,
+    "retries_total": 0,
+    "seconds": 1.064500912
+   },
+   "create": {
+    "max_ms": 18.946616,
+    "n": 30,
+    "p50_ms": 16.597897,
+    "p95_ms": 17.748216
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.601948,
+    "n": 20,
+    "p50_ms": 1.401494,
+    "p95_ms": 1.552567
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 2.214868,
+    "n": 20,
+    "p50_ms": 1.677349,
+    "p95_ms": 1.9992949999999998
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 29.055622,
+    "n": 3,
+    "p50_ms": 28.217156,
+    "p95_ms": 29.055622
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 88.104849,
+    "n": 3,
+    "p50_ms": 81.500096,
+    "p95_ms": 88.104849
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 42,
+     "ledger_synced": 0,
+     "ms": 76.365547,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 20.861621,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 18.207964999999998,
+    "n": 20,
+    "p50_ms": 16.966925,
+    "p95_ms": 18.004949999999997
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 0.802334,
+    "n": 30,
+    "p50_ms": 0.764733,
+    "p95_ms": 0.7949930000000001
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 10000,
+   "round": 1,
+   "series": "earlier"
+  },
+  {
+   "audit": {
+    "max_ms": 442.66134600000004,
+    "n": 2,
+    "p50_ms": 442.66134600000004,
+    "p95_ms": 442.66134600000004
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 182.50274480250002,
+     "retries_total": 0,
+     "seconds": 1.095873929
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 185.14092891753862,
+     "retries_total": 0,
+     "seconds": 4.321032657
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 187.18424003152103,
+     "retries_total": 0,
+     "seconds": 4.273864081
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 182.50274480250002,
+    "retries_total": 0,
+    "seconds": 1.095873929
+   },
+   "create": {
+    "max_ms": 19.858522,
+    "n": 30,
+    "p50_ms": 16.696717,
+    "p95_ms": 19.015678
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.475886,
+    "n": 20,
+    "p50_ms": 1.392975,
+    "p95_ms": 1.444985
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 1.9102329999999998,
+    "n": 20,
+    "p50_ms": 1.643259,
+    "p95_ms": 1.71763
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 28.423772,
+    "n": 3,
+    "p50_ms": 26.868915,
+    "p95_ms": 28.423772
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 86.71363099999999,
+    "n": 3,
+    "p50_ms": 79.903082,
+    "p95_ms": 86.71363099999999
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 42,
+     "ledger_synced": 0,
+     "ms": 75.492876,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 20.421622,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 20.063973999999998,
+    "n": 20,
+    "p50_ms": 19.455705000000002,
+    "p95_ms": 19.661336000000002
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 0.881195,
+    "n": 30,
+    "p50_ms": 0.789674,
+    "p95_ms": 0.8389639999999999
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 10000,
+   "round": 2,
+   "series": "earlier"
+  },
+  {
+   "audit": {
+    "max_ms": 450.52753099999995,
+    "n": 2,
+    "p50_ms": 450.52753099999995,
+    "p95_ms": 450.52753099999995
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 176.02445234526482,
+     "retries_total": 0,
+     "seconds": 1.136205779
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 182.2503590117359,
+     "retries_total": 0,
+     "seconds": 4.389566113
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 186.44731112545662,
+     "retries_total": 0,
+     "seconds": 4.290756435
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 176.02445234526482,
+    "retries_total": 0,
+    "seconds": 1.136205779
+   },
+   "create": {
+    "max_ms": 20.878538,
+    "n": 30,
+    "p50_ms": 19.386681,
+    "p95_ms": 20.624303
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.6965999999999999,
+    "n": 20,
+    "p50_ms": 1.384604,
+    "p95_ms": 1.557847
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 2.065076,
+    "n": 20,
+    "p50_ms": 1.675569,
+    "p95_ms": 1.969854
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 29.542453,
+    "n": 3,
+    "p50_ms": 26.745791,
+    "p95_ms": 29.542453
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 88.040075,
+    "n": 3,
+    "p50_ms": 87.772432,
+    "p95_ms": 88.040075
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 42,
+     "ledger_synced": 0,
+     "ms": 74.346039,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 20.490846,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 21.820175,
+    "n": 20,
+    "p50_ms": 19.91488,
+    "p95_ms": 21.273017000000003
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 0.8871760000000001,
+    "n": 30,
+    "p50_ms": 0.7791239999999999,
+    "p95_ms": 0.868646
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 10000,
+   "round": 3,
+   "series": "earlier"
+  },
+  {
+   "audit": {
+    "max_ms": 4749.529699,
+    "n": 2,
+    "p50_ms": 4749.529699,
+    "p95_ms": 4749.529699
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 195.99963106597443,
+     "retries_total": 0,
+     "seconds": 1.020410084
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 186.063966548233,
+     "retries_total": 0,
+     "seconds": 4.299596611
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 192.33758059678215,
+     "retries_total": 0,
+     "seconds": 4.159353557
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 195.99963106597443,
+    "retries_total": 0,
+    "seconds": 1.020410084
+   },
+   "create": {
+    "max_ms": 17.598764,
+    "n": 30,
+    "p50_ms": 16.406682,
+    "p95_ms": 17.096014
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.6541489999999999,
+    "n": 20,
+    "p50_ms": 1.6125880000000001,
+    "p95_ms": 1.648648
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 2.137087,
+    "n": 20,
+    "p50_ms": 1.703799,
+    "p95_ms": 1.798011
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 26.651421000000003,
+    "n": 3,
+    "p50_ms": 26.593052,
+    "p95_ms": 26.651421000000003
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 592.077423,
+    "n": 3,
+    "p50_ms": 565.110905,
+    "p95_ms": 592.077423
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 45,
+     "ledger_synced": 0,
+     "ms": 114.46210699999999,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 58.159879,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 17.947689,
+    "n": 20,
+    "p50_ms": 16.90494,
+    "p95_ms": 17.45134
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.849095,
+    "n": 30,
+    "p50_ms": 0.7942440000000001,
+    "p95_ms": 0.837185
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 100000,
+   "round": 1,
+   "series": "earlier"
+  },
+  {
+   "audit": {
+    "max_ms": 4654.8843099999995,
+    "n": 2,
+    "p50_ms": 4654.8843099999995,
+    "p95_ms": 4654.8843099999995
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 193.99652401102205,
+     "retries_total": 0,
+     "seconds": 1.030946307
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 184.48102925297948,
+     "retries_total": 0,
+     "seconds": 4.3364892489999995
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 187.60899371672738,
+     "retries_total": 0,
+     "seconds": 4.264187895
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 193.99652401102205,
+    "retries_total": 0,
+    "seconds": 1.030946307
+   },
+   "create": {
+    "max_ms": 17.653128,
+    "n": 30,
+    "p50_ms": 16.362565,
+    "p95_ms": 17.196162
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 3.191356,
+    "n": 20,
+    "p50_ms": 1.647049,
+    "p95_ms": 2.198849
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 2.351111,
+    "n": 20,
+    "p50_ms": 1.7550700000000001,
+    "p95_ms": 2.0389649999999997
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 27.216856,
+    "n": 3,
+    "p50_ms": 25.856202,
+    "p95_ms": 27.216856
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 572.516216,
+    "n": 3,
+    "p50_ms": 537.2644009999999,
+    "p95_ms": 572.516216
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 46,
+     "ledger_synced": 0,
+     "ms": 113.585187,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 51.075475000000004,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 17.919402,
+    "n": 20,
+    "p50_ms": 16.883506,
+    "p95_ms": 17.891473
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.912856,
+    "n": 30,
+    "p50_ms": 0.773154,
+    "p95_ms": 0.822135
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 100000,
+   "round": 2,
+   "series": "earlier"
+  },
+  {
+   "audit": {
+    "max_ms": 3932.338779,
+    "n": 2,
+    "p50_ms": 3932.338779,
+    "p95_ms": 3932.338779
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 189.45109675394914,
+     "retries_total": 0,
+     "seconds": 1.055681405
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 186.5228879605844,
+     "retries_total": 0,
+     "seconds": 4.289017872
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6400,
+     "payments": 800,
+     "per_s": 188.42786850766112,
+     "retries_total": 0,
+     "seconds": 4.245656475
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 189.45109675394914,
+    "retries_total": 0,
+    "seconds": 1.055681405
+   },
+   "create": {
+    "max_ms": 17.864352,
+    "n": 30,
+    "p50_ms": 16.575969999999998,
+    "p95_ms": 17.251361
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.4832770000000002,
+    "n": 20,
+    "p50_ms": 1.458416,
+    "p95_ms": 1.479176
+   },
+   "label": "I1",
+   "list_page": {
+    "max_ms": 2.060616,
+    "n": 20,
+    "p50_ms": 1.69288,
+    "p95_ms": 1.773091
+   },
+   "payments_updates": {
+    "hot": 7372,
+    "updates": 7412
+   },
+   "reconcile": {
+    "max_ms": 25.596254,
+    "n": 3,
+    "p50_ms": 25.275067,
+    "p95_ms": 25.596254
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 599.939777,
+    "n": 3,
+    "p50_ms": 578.408809,
+    "p95_ms": 599.939777
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 45,
+     "ledger_synced": 0,
+     "ms": 119.41926699999999,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 57.40174,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 20.097071,
+    "n": 20,
+    "p50_ms": 16.706991000000002,
+    "p95_ms": 18.569634
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.835224,
+    "n": 30,
+    "p50_ms": 0.7865139999999999,
+    "p95_ms": 0.822454
+   },
+   "view_kernel_tx": 1.0,
+   "build": "I1",
+   "size": 100000,
+   "round": 3,
+   "series": "earlier"
+  },
+  {
+   "audit": {
+    "max_ms": 436.94515299999995,
+    "n": 2,
+    "p50_ms": 436.94515299999995,
+    "p95_ms": 436.94515299999995
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1611,
+     "payments": 200,
+     "per_s": 186.09627515678642,
+     "retries_total": 11,
+     "seconds": 1.074712537
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6413,
+     "payments": 800,
+     "per_s": 183.14446890019593,
+     "retries_total": 13,
+     "seconds": 4.368136285
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6406,
+     "payments": 800,
+     "per_s": 192.0339433975026,
+     "retries_total": 6,
+     "seconds": 4.165930178
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1611,
+    "payments": 200,
+    "per_s": 186.09627515678642,
+    "retries_total": 11,
+    "seconds": 1.074712537
+   },
+   "create": {
+    "max_ms": 17.343272,
+    "n": 30,
+    "p50_ms": 16.6532,
+    "p95_ms": 17.278089
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.7640799999999999,
+    "n": 20,
+    "p50_ms": 1.409884,
+    "p95_ms": 1.631338
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 1.907323,
+    "n": 20,
+    "p50_ms": 1.685439,
+    "p95_ms": 1.896553
+   },
+   "payments_updates": {
+    "hot": 7399,
+    "updates": 7439
+   },
+   "reconcile": {
+    "max_ms": 29.887635999999997,
+    "n": 3,
+    "p50_ms": 27.586325,
+    "p95_ms": 29.887635999999997
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 84.788072,
+    "n": 3,
+    "p50_ms": 80.784222,
+    "p95_ms": 84.788072
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 45,
+     "ledger_synced": 0,
+     "ms": 62.71497099999999,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 9.850939,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 18.550361000000002,
+    "n": 20,
+    "p50_ms": 17.334732,
+    "p95_ms": 18.338738
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 0.829944,
+    "n": 30,
+    "p50_ms": 0.779994,
+    "p95_ms": 0.808294
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 10000,
+   "round": 1,
+   "series": "earlier"
+  },
+  {
+   "audit": {
+    "max_ms": 428.922904,
+    "n": 2,
+    "p50_ms": 428.922904,
+    "p95_ms": 428.922904
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1608,
+     "payments": 200,
+     "per_s": 176.73670620385198,
+     "retries_total": 8,
+     "seconds": 1.131626838
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6420,
+     "payments": 800,
+     "per_s": 182.26314584837797,
+     "retries_total": 20,
+     "seconds": 4.389258159
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6409,
+     "payments": 800,
+     "per_s": 184.3123694372357,
+     "retries_total": 9,
+     "seconds": 4.340457466
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1608,
+    "payments": 200,
+    "per_s": 176.73670620385198,
+    "retries_total": 8,
+    "seconds": 1.131626838
+   },
+   "create": {
+    "max_ms": 18.754838,
+    "n": 30,
+    "p50_ms": 16.750742,
+    "p95_ms": 18.075806
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.4474749999999998,
+    "n": 20,
+    "p50_ms": 1.3728740000000001,
+    "p95_ms": 1.439615
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 1.905273,
+    "n": 20,
+    "p50_ms": 1.675959,
+    "p95_ms": 1.7451
+   },
+   "payments_updates": {
+    "hot": 7408,
+    "updates": 7448
+   },
+   "reconcile": {
+    "max_ms": 28.439196,
+    "n": 3,
+    "p50_ms": 27.808145,
+    "p95_ms": 28.439196
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 85.047235,
+    "n": 3,
+    "p50_ms": 77.631394,
+    "p95_ms": 85.047235
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 42,
+     "ledger_synced": 0,
+     "ms": 58.516381,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 9.875403,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 20.482568,
+    "n": 20,
+    "p50_ms": 19.356418,
+    "p95_ms": 20.272352
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 0.852385,
+    "n": 30,
+    "p50_ms": 0.793004,
+    "p95_ms": 0.850235
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 10000,
+   "round": 2,
+   "series": "earlier"
+  },
+  {
+   "audit": {
+    "max_ms": 434.751446,
+    "n": 2,
+    "p50_ms": 434.751446,
+    "p95_ms": 434.751446
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1627,
+     "payments": 200,
+     "per_s": 172.67008731404854,
+     "retries_total": 27,
+     "seconds": 1.158278212
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6418,
+     "payments": 800,
+     "per_s": 182.32132519474882,
+     "retries_total": 18,
+     "seconds": 4.387857532
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6414,
+     "payments": 800,
+     "per_s": 188.32315528874207,
+     "retries_total": 14,
+     "seconds": 4.248017185
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1627,
+    "payments": 200,
+    "per_s": 172.67008731404854,
+    "retries_total": 27,
+    "seconds": 1.158278212
+   },
+   "create": {
+    "max_ms": 29.526670000000003,
+    "n": 30,
+    "p50_ms": 20.027016000000003,
+    "p95_ms": 26.42796
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.567568,
+    "n": 20,
+    "p50_ms": 1.401654,
+    "p95_ms": 1.489345
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 1.893363,
+    "n": 20,
+    "p50_ms": 1.670499,
+    "p95_ms": 1.839762
+   },
+   "payments_updates": {
+    "hot": 7428,
+    "updates": 7468
+   },
+   "reconcile": {
+    "max_ms": 27.672850999999998,
+    "n": 3,
+    "p50_ms": 27.580687,
+    "p95_ms": 27.672850999999998
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 92.666767,
+    "n": 3,
+    "p50_ms": 83.28998299999999,
+    "p95_ms": 92.666767
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 11000
+   },
+   "reconcile_sweep_periods": 4,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 42,
+     "ledger_synced": 0,
+     "ms": 57.421664,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 9.7712,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 20.82656,
+    "n": 20,
+    "p50_ms": 19.512659000000003,
+    "p95_ms": 19.969534
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 10000,
+    "psp_refs": 10000,
+    "refunds": 1000,
+    "transfers": 12000
+   },
+   "view": {
+    "max_ms": 0.826304,
+    "n": 30,
+    "p50_ms": 0.783724,
+    "p95_ms": 0.816524
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 10000,
+   "round": 3,
+   "series": "earlier"
+  },
+  {
+   "audit": {
+    "max_ms": 4695.743643,
+    "n": 2,
+    "p50_ms": 4695.743643,
+    "p95_ms": 4695.743643
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1608,
+     "payments": 200,
+     "per_s": 188.17423321719082,
+     "retries_total": 8,
+     "seconds": 1.062844772
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6426,
+     "payments": 800,
+     "per_s": 180.32842358777208,
+     "retries_total": 26,
+     "seconds": 4.436349989
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6414,
+     "payments": 800,
+     "per_s": 185.9650722465519,
+     "retries_total": 14,
+     "seconds": 4.301883092
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1608,
+    "payments": 200,
+    "per_s": 188.17423321719082,
+    "retries_total": 8,
+    "seconds": 1.062844772
+   },
+   "create": {
+    "max_ms": 20.760461,
+    "n": 30,
+    "p50_ms": 16.291703000000002,
+    "p95_ms": 17.139168
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.798291,
+    "n": 20,
+    "p50_ms": 1.624748,
+    "p95_ms": 1.7456500000000001
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 2.077616,
+    "n": 20,
+    "p50_ms": 1.71781,
+    "p95_ms": 2.051076
+   },
+   "payments_updates": {
+    "hot": 7419,
+    "updates": 7459
+   },
+   "reconcile": {
+    "max_ms": 25.939331,
+    "n": 3,
+    "p50_ms": 24.618718,
+    "p95_ms": 25.939331
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 582.368816,
+    "n": 3,
+    "p50_ms": 534.425254,
+    "p95_ms": 582.368816
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 45,
+     "ledger_synced": 0,
+     "ms": 74.321332,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 23.893205000000002,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 18.635832,
+    "n": 20,
+    "p50_ms": 17.043227,
+    "p95_ms": 18.481531
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.836884,
+    "n": 30,
+    "p50_ms": 0.7901940000000001,
+    "p95_ms": 0.827644
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 100000,
+   "round": 1,
+   "series": "earlier"
+  },
+  {
+   "audit": {
+    "max_ms": 4941.918826,
+    "n": 2,
+    "p50_ms": 4941.918826,
+    "p95_ms": 4941.918826
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1601,
+     "payments": 200,
+     "per_s": 188.8974342939873,
+     "retries_total": 1,
+     "seconds": 1.05877563
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6416,
+     "payments": 800,
+     "per_s": 175.75580573417102,
+     "retries_total": 16,
+     "seconds": 4.551769978
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6413,
+     "payments": 800,
+     "per_s": 190.5635355903342,
+     "retries_total": 13,
+     "seconds": 4.198074923
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1601,
+    "payments": 200,
+    "per_s": 188.8974342939873,
+    "retries_total": 1,
+    "seconds": 1.05877563
+   },
+   "create": {
+    "max_ms": 17.407124,
+    "n": 30,
+    "p50_ms": 16.723451999999998,
+    "p95_ms": 17.372843
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.724851,
+    "n": 20,
+    "p50_ms": 1.633079,
+    "p95_ms": 1.6750790000000002
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 2.059286,
+    "n": 20,
+    "p50_ms": 1.6978010000000001,
+    "p95_ms": 1.884393
+   },
+   "payments_updates": {
+    "hot": 7401,
+    "updates": 7441
+   },
+   "reconcile": {
+    "max_ms": 26.086009,
+    "n": 3,
+    "p50_ms": 25.00069,
+    "p95_ms": 26.086009
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 614.538827,
+    "n": 3,
+    "p50_ms": 597.085117,
+    "p95_ms": 614.538827
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 46,
+     "ledger_synced": 0,
+     "ms": 80.254864,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 25.104832000000002,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 18.953521000000002,
+    "n": 20,
+    "p50_ms": 17.610957,
+    "p95_ms": 18.8701
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.823414,
+    "n": 30,
+    "p50_ms": 0.746583,
+    "p95_ms": 0.8096340000000001
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 100000,
+   "round": 2,
+   "series": "earlier"
+  },
+  {
+   "audit": {
+    "max_ms": 4653.386,
+    "n": 2,
+    "p50_ms": 4653.386,
+    "p95_ms": 4653.386
+   },
+   "concurrent": [
+    {
+     "clients": 8,
+     "kernel_tx": 1600,
+     "payments": 200,
+     "per_s": 195.9453372311642,
+     "retries_total": 0,
+     "seconds": 1.020692826
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6422,
+     "payments": 800,
+     "per_s": 188.3749625396078,
+     "retries_total": 22,
+     "seconds": 4.246848887
+    },
+    {
+     "clients": 32,
+     "kernel_tx": 6406,
+     "payments": 800,
+     "per_s": 191.67361314202614,
+     "retries_total": 6,
+     "seconds": 4.173761776
+    }
+   ],
+   "concurrent_create": {
+    "clients": 8,
+    "kernel_tx": 1600,
+    "payments": 200,
+    "per_s": 195.9453372311642,
+    "retries_total": 0,
+    "seconds": 1.020692826
+   },
+   "create": {
+    "max_ms": 19.324847,
+    "n": 30,
+    "p50_ms": 16.732901000000002,
+    "p95_ms": 17.243513
+   },
+   "create_kernel_tx": 8.0,
+   "journal_page": {
+    "max_ms": 1.7334,
+    "n": 20,
+    "p50_ms": 1.617788,
+    "p95_ms": 1.673679
+   },
+   "label": "d71881b",
+   "list_page": {
+    "max_ms": 2.073746,
+    "n": 20,
+    "p50_ms": 1.693279,
+    "p95_ms": 2.004225
+   },
+   "payments_updates": {
+    "hot": 7397,
+    "updates": 7437
+   },
+   "reconcile": {
+    "max_ms": 26.863297000000003,
+    "n": 3,
+    "p50_ms": 24.858634000000002,
+    "p95_ms": 26.863297000000003
+   },
+   "reconcile_exceptions": {
+    "ledger": 0,
+    "psp": 4096
+   },
+   "reconcile_sweep": {
+    "max_ms": 566.521683,
+    "n": 3,
+    "p50_ms": 545.991754,
+    "p95_ms": 566.521683
+   },
+   "reconcile_sweep_exceptions": {
+    "ledger": 0,
+    "psp": 110000
+   },
+   "reconcile_sweep_periods": 28,
+   "recovery_passes": [
+    {
+     "failed": 0,
+     "kernel_tx": 41,
+     "ledger_synced": 0,
+     "ms": 69.475411,
+     "payments_resolved": 5,
+     "psp_calls": 5,
+     "tenants": 1
+    },
+    {
+     "failed": 0,
+     "kernel_tx": 0,
+     "ledger_synced": 0,
+     "ms": 23.336349,
+     "payments_resolved": 0,
+     "psp_calls": 0,
+     "tenants": 0
+    }
+   ],
+   "refund": {
+    "max_ms": 19.028361,
+    "n": 20,
+    "p50_ms": 17.246731,
+    "p95_ms": 17.911872
+   },
+   "refund_kernel_tx": 8.0,
+   "tenant": {
+    "accounts": 3,
+    "payments": 100000,
+    "psp_refs": 100000,
+    "refunds": 10000,
+    "transfers": 120000
+   },
+   "view": {
+    "max_ms": 0.8558450000000001,
+    "n": 30,
+    "p50_ms": 0.776394,
+    "p95_ms": 0.853145
+   },
+   "view_kernel_tx": 1.0,
+   "build": "d71881b",
+   "size": 100000,
+   "round": 3,
+   "series": "earlier"
+  }
+ ]
+}

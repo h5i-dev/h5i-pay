@@ -307,7 +307,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    into main as `7b91863` (`a98bcbd` is not an ancestor of main). Pin every
    h5i-app crate and `h5i_app_lib` to `7b91863` (same rev everywhere,
    lake-manifest updated) and re-run the checks; nothing else should change.
-1. [ ] **`Create` retries.** Since H1 the remaining serialization retries
+1. [x] **`Create` retries.** Since H1 the remaining serialization retries
    (about 5–42 per run, ~1% of transactions) are `Create` aborts in
    PostgreSQL's log. Find the conflicting reads/writes (new payments share
    the tail page of the primary key and the per-merchant sequence; check
