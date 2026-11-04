@@ -29,8 +29,12 @@ on:
   schedule:
     - cron: "17 3 * * 1" # Mondays 03:17 UTC
 
+# PRs: a new push cancels the PR's older run. Main: one group per commit,
+# so no main run is replaced while it waits; the path filters compare each
+# push with the one before it, and a replaced run would leave its changes
+# unchecked. Deploys are serialized by the job-level group below.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
@@ -264,6 +268,9 @@ jobs:
     # skipped is fine, failed or cancelled is not.
     if: ${{ !failure() && !cancelled() && github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AWS_DEPLOY_ROLE_ARN != '' }}
     needs: [rust, cuda-build, proofs, terraform]
+    concurrency:
+      group: images-main
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: test
     permissions:
@@ -321,6 +328,9 @@ jobs:
 
   deploy-test:
     needs: images
+    concurrency:
+      group: deploy-test
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: test
     permissions:

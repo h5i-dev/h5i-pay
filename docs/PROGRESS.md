@@ -225,6 +225,12 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 - Why: the 4cca7bd run (a docs-only commit) spent over two hours in
   `proofs`, mostly `mutate`, and held back the next main run.
 - `actionlint` 1.7.7: no findings except the self-hosted `gpu` label.
+- Follow-up: main runs now have one concurrency group per commit. With one
+  group for main, GitHub replaced waiting runs (b805da2's and 371a866's
+  were cancelled while 4cca7bd's ran), and since the path filters compare a
+  push with the one before it, the replaced commits' kernel or GPU changes
+  would never have been checked. Image builds and the test deploy are
+  serialized by job-level groups instead.
 
 ### K1: every CI job green
 
