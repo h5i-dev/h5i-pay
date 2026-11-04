@@ -178,6 +178,22 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### K2: expensive CI jobs only when they can change
+
+- `ci.yml` starts with the policy. A `changes` job (dorny/paths-filter)
+  decides per event: `proofs` (`extract --check`, `check`) runs on PRs and
+  main pushes that touch a kernel crate, `proofs/**`, `Cargo.toml`,
+  `Cargo.lock` or `ci.yml` (where the h5i pin lives); `mutate` runs in
+  that job only on such main pushes, plus the weekly schedule (Mondays
+  03:17 UTC) and `workflow_dispatch`. `device-ptx` only for
+  `crates/payment-gpu/**`, `crates/payment-domain/src/policy.rs`,
+  `crates/payment-reconcile/**`; `terraform` only for `infra/**`; both
+  also weekly and on dispatch. `rust` and `cuda-build` run on every push
+  and PR. `images` accepts skipped (not failed) `proofs`/`terraform`.
+- Why: the 4cca7bd run (a docs-only commit) spent over two hours in
+  `proofs`, mostly `mutate`, and held back the next main run.
+- `actionlint` 1.7.7: no findings except the self-hosted `gpu` label.
+
 ### K1: every CI job green
 
 - What failed (GitHub API, runs since 2026-10-31): `rust` at cargo-deny,

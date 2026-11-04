@@ -1,5 +1,24 @@
 # Build, test, prove, check the infrastructure; on main, build images and
 # deploy the test environment (approval through the `test` environment).
+#
+# What runs when (K2). Every push to main and every PR: `rust` (build,
+# cargo-deny, clippy, all tests) and `cuda-build`. The expensive jobs run
+# only when a file that can change their result changes (the `changes`
+# job's path filters), and on the weekly schedule and workflow_dispatch:
+#   - proofs: `extract --check` and `check` when a kernel
+#     (crates/payment-{ledger,domain,reconcile}/**), proofs/** or the h5i pin
+#     (Cargo.toml, Cargo.lock, this file's H5I_REV) changes, on PRs and on
+#     main. `mutate` (about a dozen full Lean builds) plants each listed bug
+#     and requires a proof to break; its result depends on the same files
+#     only, so it runs on main pushes that touch them, weekly and on
+#     dispatch, not on every push.
+#   - device-ptx (rebuild the PTX with the pinned Rust-CUDA, compare): when
+#     crates/payment-gpu/**, crates/payment-domain/src/policy.rs or
+#     crates/payment-reconcile/** changes.
+#   - terraform: when infra/** changes.
+# Each filter also lists this file (it holds H5I_REV and the jobs
+# themselves). The weekly run catches drift outside the repository (new
+# advisories, upstream toolchains, the runners' images).
 name: ci
 
 on:
@@ -7,6 +26,8 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1" # Mondays 03:17 UTC
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -24,6 +45,39 @@ env:
   H5I_REV: 9ec26b510cbcbbe0bea703e63239b0e6a515e33d
 
 jobs:
+  # Which expensive jobs this event needs (see the header).
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      kernels: ${{ steps.f.outputs.kernels }}
+      gpu: ${{ steps.f.outputs.gpu }}
+      infra: ${{ steps.f.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: f
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            kernels:
+              - 'crates/payment-ledger/**'
+              - 'crates/payment-domain/**'
+              - 'crates/payment-reconcile/**'
+              - 'proofs/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.github/workflows/ci.yml'
+            gpu:
+              - 'crates/payment-gpu/**'
+              - 'crates/payment-domain/src/policy.rs'
+              - 'crates/payment-reconcile/**'
+              - '.github/workflows/ci.yml'
+            infra:
+              - 'infra/**'
+              - '.github/workflows/ci.yml'
+
   rust:
     runs-on: ubuntu-latest
     services:
@@ -103,6 +157,8 @@ jobs:
   # 12.6's libNVVM, as h5i's backend-nvvm/setup.sh expects. libclang-dev:
   # cust_raw's bindgen loads libclang (LLVM 18's, found without LIBCLANG_PATH).
   device-ptx:
+    needs: changes
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.gpu == 'true'
     runs-on: ubuntu-latest
     container: nvidia/cuda:12.6.3-devel-ubuntu24.04
     steps:
@@ -138,6 +194,8 @@ jobs:
           path: bench.json
 
   proofs:
+    needs: changes
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.kernels == 'true'
     runs-on: ubuntu-latest
     env:
       H5I_SKIP_WEB_BUILD: "1"
@@ -174,11 +232,14 @@ jobs:
       - run: h5i app extract --check crates/payment-ledger crates/payment-domain crates/payment-reconcile
       # lake build + no sorry/native_decide/axiom + standard axioms only.
       - run: h5i app check crates/payment-ledger crates/payment-domain crates/payment-reconcile
-      # Every listed bug must break a proof (main only: ~12 full builds).
-      - if: github.ref == 'refs/heads/main'
+      # Every listed bug must break a proof (~12 full builds): weekly, on
+      # dispatch, and on main pushes that changed a kernel, proof or the pin.
+      - if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         run: h5i app mutate crates/payment-ledger crates/payment-domain crates/payment-reconcile
 
   terraform:
+    needs: changes
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -199,7 +260,9 @@ jobs:
   # repository variable AWS_DEPLOY_ROLE_ARN is set (it is not yet; without
   # it configure-aws-credentials fails, which is not a check of this code).
   images:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AWS_DEPLOY_ROLE_ARN != ''
+    # proofs and terraform may be skipped (nothing they check changed);
+    # skipped is fine, failed or cancelled is not.
+    if: ${{ !failure() && !cancelled() && github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AWS_DEPLOY_ROLE_ARN != '' }}
     needs: [rust, cuda-build, proofs, terraform]
     runs-on: ubuntu-latest
     environment: test

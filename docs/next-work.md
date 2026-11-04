@@ -454,7 +454,7 @@ Same ground rules. Do K right after J1 is committed, before J2.
    - Fix every other failing job the same way; do not disable a check to
      make it green unless it cannot run on GitHub's runners (then say so in
      the workflow and in PROGRESS.md).
-2. [ ] **Run expensive checks only when they can change.** `h5i app
+2. [x] **Run expensive checks only when they can change.** `h5i app
    mutate` is not a fuzzer: it plants each listed bug in a kernel and
    requires a proof to break, which checks that the proofs still
    constrain the code. Its result can only change when a kernel, its
