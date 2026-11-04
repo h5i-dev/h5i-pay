@@ -144,6 +144,32 @@ resource "aws_db_parameter_group" "pg17" {
     name  = "idle_in_transaction_session_timeout"
     value = "60000"
   }
+  # Connections: each API task opens two pools of 16 (ledger, payments)
+  # plus a few direct connections (ops, revocations): ~34; at
+  # api_max_count = 6 that is ~204. The scheduled jobs (recover, export,
+  # ingest) open the same engines, ~34 each, up to three at once: ~100.
+  # With RDS's own sessions and headroom for a rolling deploy (old and new
+  # tasks at once for a while), 400. Set explicitly: the db.t4g.medium
+  # default (memory-derived, ~400) moves with the instance class.
+  # SERIALIZABLE (every engine transaction) keeps its read/write conflicts
+  # in a pool sized from max_connections and its predicate locks in a table
+  # sized by max_pred_locks_per_transaction × max_connections; when either
+  # runs out a transaction fails with 53200 ("not enough elements in
+  # RWConflictPool", "out of shared memory"), which CI hit at the default
+  # 100 connections. 128 locks per transaction (default 64) doubles the
+  # predicate-lock table for wide reads (the paged audit, reconciliation)
+  # at a cost of a few MB of shared memory. Both are static: they apply at
+  # the next reboot.
+  parameter {
+    name         = "max_connections"
+    value        = "400"
+    apply_method = "pending-reboot"
+  }
+  parameter {
+    name         = "max_pred_locks_per_transaction"
+    value        = "128"
+    apply_method = "pending-reboot"
+  }
 }
 
 resource "aws_db_instance" "main" {
