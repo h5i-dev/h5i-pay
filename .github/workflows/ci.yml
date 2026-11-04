@@ -100,12 +100,13 @@ jobs:
 
   # The committed PTX is what the device crate compiles to with the pinned
   # Rust-CUDA toolchain (docs/gpu-toolchain.md). Ubuntu 24.04 with CUDA
-  # 12.6's libNVVM, as h5i's backend-nvvm/setup.sh expects.
+  # 12.6's libNVVM, as h5i's backend-nvvm/setup.sh expects. libclang-dev:
+  # cust_raw's bindgen loads libclang (LLVM 18's, found without LIBCLANG_PATH).
   device-ptx:
     runs-on: ubuntu-latest
     container: nvidia/cuda:12.6.3-devel-ubuntu24.04
     steps:
-      - run: apt-get update && apt-get install -y --no-install-recommends curl ca-certificates build-essential pkg-config git libssl-dev libncurses-dev libxml2-dev libtinfo6 libedit2 zlib1g-dev
+      - run: apt-get update && apt-get install -y --no-install-recommends curl ca-certificates build-essential pkg-config git libssl-dev libncurses-dev libxml2-dev libtinfo6 libedit2 zlib1g-dev libclang-dev
       - uses: actions/checkout@v4
       - name: Rust-CUDA backend at the pinned rev
         run: |
@@ -194,8 +195,11 @@ jobs:
       # the resource they concern.
       - run: pipx run checkov==3.4.0 -d . --framework terraform --compact --quiet
 
+  # Images and the test deploy need an AWS account: they run only when the
+  # repository variable AWS_DEPLOY_ROLE_ARN is set (it is not yet; without
+  # it configure-aws-credentials fails, which is not a check of this code).
   images:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AWS_DEPLOY_ROLE_ARN != ''
     needs: [rust, cuda-build, proofs, terraform]
     runs-on: ubuntu-latest
     environment: test

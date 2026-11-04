@@ -431,7 +431,7 @@ after measuring.
 
 Same ground rules. Do K right after J1 is committed, before J2.
 
-1. [ ] **Make every CI job green.** Look at every failing job of the latest
+1. [x] **Make every CI job green.** Look at every failing job of the latest
    runs on GitHub (the API works without `gh`:
    `https://api.github.com/repos/h5i-dev/h5i-pay/actions/runs?per_page=10`,
    then each run's `jobs`; logs need auth, so reproduce failures locally in

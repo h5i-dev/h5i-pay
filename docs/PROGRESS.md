@@ -178,6 +178,33 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### K1: every CI job green
+
+- What failed (GitHub API, runs since 2026-10-31): `rust` at cargo-deny,
+  `device-ptx` at the Rust-CUDA build, and before those, `images` at
+  `configure-aws-credentials`. `proofs`, `cuda-build` and `terraform`
+  passed. Because deny failed first, the rest of the `rust` job (clippy,
+  tests) had not run on GitHub since 2026-11-01.
+- cargo-deny: the action runs with `--all-features`, which brings in
+  `payment-gpu/cuda` and with it `h5i-app-gpu-backend-nvvm` 0.5.3, whose
+  manifest has no `license` (reproduced with `cargo deny --all-features
+  check`). Fixed upstream on h5i branch `app/backend-nvvm-license`
+  (`0e99c5e`, from main `3ab10b3`, author Kiro), no PR yet; meanwhile
+  `deny.toml` clarifies exactly `h5i-app-gpu-backend-nvvm@0.5.3` as
+  Apache-2.0, to be removed when the pin moves. Dropped the allowances
+  deny reported as never encountered with all features (`BSD-2-Clause`,
+  `MPL-2.0`, `OpenSSL`). `cargo deny check` and `cargo deny
+  --all-features check`: all ok.
+- device-ptx: reproduced in `nvidia/cuda:12.6.3-devel-ubuntu24.04` (the
+  image's layers unpacked on the scratch disk and the job's steps run in a
+  chroot): `cust_raw`'s bindgen stops at `Unable to find libclang`. With
+  `libclang-dev` (LLVM 18; no `LIBCLANG_PATH` needed) the backend builds
+  and `build-device.sh --check` reports the committed PTX up to date.
+- images / deploy-test need an AWS account; they now run only when the
+  repository variable `AWS_DEPLOY_ROLE_ARN` is set (it is not), the same
+  way `gpu-tests` waits for `GPU_RUNNER`. Not a check of this code, so
+  this disables nothing that could pass here.
+
 ### J1: the GPU batch path on binary input, end to end
 
 - Binary records file (`.h5ib`, `payment_batch::binfile`,
