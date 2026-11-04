@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Start (or reuse) a local PostgreSQL 17 for development and tests.
 # Exports nothing; prints the URL to use as H5I_APP_TEST_DATABASE_URL / DATABASE_URL.
+# The one place for the test server's settings: CI starts its PostgreSQL with
+# this script too. max_connections=200: SERIALIZABLE's conflict pool
+# (RWConflictPool) is sized from it, and the concurrency suite overflows the
+# default 100's (SQLSTATE 53200).
 set -euo pipefail
 NAME=${H5I_PAY_PG_NAME:-h5i-pay-pg}
 PORT=${H5I_PAY_PG_PORT:-55432}

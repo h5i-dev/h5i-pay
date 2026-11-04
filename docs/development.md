@@ -22,7 +22,8 @@ cargo build --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo clippy --workspace --all-targets --features payment-api/mock-psp -- -D warnings
 
-# PostgreSQL-backed tests (skipped when the variable is unset)
+# PostgreSQL-backed tests (skipped when the variable is unset). CI starts its
+# server with the same script; its settings (max_connections=200) live there.
 export H5I_APP_TEST_DATABASE_URL=$(scripts/dev-db.sh)
 cargo test --workspace
 

@@ -84,16 +84,6 @@ jobs:
 
   rust:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: h5i
-          POSTGRES_PASSWORD: h5i
-          POSTGRES_DB: h5i
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U h5i" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       H5I_APP_TEST_DATABASE_URL: postgres://h5i:h5i@127.0.0.1:5432/h5i
       # `secrets` is not available in `if:`; expose whether the key exists.
@@ -105,6 +95,12 @@ jobs:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+      # PostgreSQL 17 exactly as locally: scripts/dev-db.sh holds the server
+      # settings (max_connections=200: the SSI conflict pool is sized from
+      # it, and the parallel concurrency tests overflow the default 100's,
+      # SQLSTATE 53200). A service container cannot take server arguments.
+      - name: PostgreSQL (scripts/dev-db.sh)
+        run: H5I_PAY_PG_PORT=5432 scripts/dev-db.sh
       - run: cargo build --workspace --all-targets --locked
       # SEC-09: advisories, licenses, banned and unknown sources (deny.toml).
       - uses: EmbarkStudios/cargo-deny-action@v2
