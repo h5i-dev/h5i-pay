@@ -389,7 +389,10 @@ mod tests {
     }
 
     fn file(rows: &[Record]) -> Vec<u8> {
-        let dir = std::env::temp_dir().join(format!("h5ib-{}-{}", std::process::id(), rows.len()));
+        // Unique per call: the tests run in parallel and sizes repeat.
+        static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let k = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("h5ib-{}-{k}", std::process::id()));
         write(&dir, rows).unwrap();
         let b = std::fs::read(&dir).unwrap();
         std::fs::remove_file(&dir).unwrap();
