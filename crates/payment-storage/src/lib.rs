@@ -354,10 +354,119 @@ pub async fn engines_with(
 ) -> Result<(Arc<LedgerEngine>, Arc<PaymentsEngine>), DbError> {
     let config = EngineConfig { clock: Clock::Database, ..config };
     let ledger = Arc::new(LedgerEngine::new(schema_pool_with(url, LEDGER_SCHEMA, pool_size, tls)?, config.clone()));
-    ledger.install_schema().await?;
     let payments = Arc::new(PaymentsEngine::new(schema_pool_with(url, PAYMENTS_SCHEMA, pool_size, tls)?, config));
-    payments.install_schema().await?;
+    startup::once(url, tls, "engines", startup::engines_version(), || async {
+        ledger.install_schema().await?;
+        payments.install_schema().await
+    })
+    .await?;
     Ok((ledger, payments))
+}
+
+/// Startup schema installs and migrations, serialized database-wide.
+///
+/// Every process that opens the engines (API tasks, the scheduled jobs)
+/// installs the schemas and runs the startup migrations (`Store::ddl`:
+/// `CREATE INDEX`, triggers, backfills, the G2 key move). Run while another
+/// process serves requests, that DDL takes table locks in a different order
+/// than the requests' row writes and can deadlock with them (40P01), and two
+/// startups at once interleave their two schema installs. So the installs
+/// run under one session advisory lock ([`LOCK`]), and each records the
+/// version of what it installed in `h5i_pay_meta.installed`: a process that
+/// finds the current version does no DDL at all, and only a new version (a
+/// deploy that changes the DDL or the h5i pin) runs it, once, while the
+/// others wait. A deadlock with live traffic during that one run is retried.
+pub mod startup {
+    use super::{connect_direct, DbError, DbTls};
+    use std::future::Future;
+
+    /// The database-wide lock key (one-int form, distinct from h5i-app-pg's
+    /// two-int schema lock and its per-tenant locks): "h5ipay" + 1.
+    pub const LOCK: i64 = 0x6835_6970_6179_0001;
+
+    /// The h5i commit every h5i-app crate comes from (Cargo.toml). Its
+    /// framework tables are part of what `install_schema` installs, so a pin
+    /// change is a new version (`tests::h5i_rev_matches_cargo_toml`).
+    pub const H5I_REV: &str = "9ec26b510cbcbbe0bea703e63239b0e6a515e33d";
+
+    /// FNV-1a: stable across Rust versions (unlike `DefaultHasher`).
+    pub fn fnv(parts: &[&str]) -> String {
+        let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+        for p in parts {
+            for b in p.bytes().chain([0u8]) {
+                h ^= b as u64;
+                h = h.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        }
+        format!("{h:016x}")
+    }
+
+    /// The version of the two engines' schemas: the pin and every statement.
+    pub fn engines_version() -> String {
+        use h5i_app_pg::Store;
+        let ledger = super::ledger::LedgerStore::ddl();
+        let payments = super::payments::PaymentsStore::ddl();
+        let mut parts = vec![H5I_REV, super::LEDGER_SCHEMA, super::PAYMENTS_SCHEMA];
+        parts.extend(ledger.iter().map(String::as_str));
+        parts.push("--");
+        parts.extend(payments.iter().map(String::as_str));
+        fnv(&parts)
+    }
+
+    fn transient(e: &DbError) -> bool {
+        use tokio_postgres::error::SqlState;
+        let code = match e {
+            DbError::Postgres(e) => e.code(),
+            _ => None,
+        };
+        matches!(code, Some(c) if *c == SqlState::T_R_DEADLOCK_DETECTED || *c == SqlState::T_R_SERIALIZATION_FAILURE)
+    }
+
+    /// Run `install` unless `name` is already at `version`; true if it ran.
+    pub async fn once<F, Fut>(url: &str, tls: &DbTls, name: &str, version: String, mut install: F) -> Result<bool, DbError>
+    where
+        F: FnMut() -> Fut,
+        Fut: Future<Output = Result<(), DbError>>,
+    {
+        let (c, conn) = connect_direct(url, tls).await?;
+        // Released by pg_advisory_unlock below, or when this session ends.
+        c.execute("SELECT pg_advisory_lock($1)", &[&LOCK]).await?;
+        let r = async {
+            c.batch_execute(
+                "CREATE SCHEMA IF NOT EXISTS h5i_pay_meta; \
+                 CREATE TABLE IF NOT EXISTS h5i_pay_meta.installed (name TEXT PRIMARY KEY, version TEXT NOT NULL, at TIMESTAMPTZ NOT NULL DEFAULT now())",
+            )
+            .await?;
+            let have: Option<String> = c.query_opt("SELECT version FROM h5i_pay_meta.installed WHERE name = $1", &[&name]).await?.map(|r| r.get(0));
+            if have.as_deref() == Some(version.as_str()) {
+                return Ok(false);
+            }
+            let mut attempt = 0u32;
+            loop {
+                match install().await {
+                    Ok(()) => break,
+                    Err(e) if transient(&e) && attempt < 8 => {
+                        attempt += 1;
+                        tokio::time::sleep(std::time::Duration::from_millis(50 << attempt.min(5))).await;
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            c.execute(
+                "INSERT INTO h5i_pay_meta.installed (name, version) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET version = EXCLUDED.version, at = now()",
+                &[&name, &version],
+            )
+            .await?;
+            Ok(true)
+        }
+        .await;
+        let unlocked = c.execute("SELECT pg_advisory_unlock($1)", &[&LOCK]).await;
+        drop(c);
+        let _ = conn.await;
+        let ran = r?;
+        unlocked?;
+        Ok(ran)
+    }
 }
 
 /// One tenant's unfinished work, by payment id (`recovery_work`).
@@ -696,11 +805,17 @@ CREATE TABLE IF NOT EXISTS ops.reconciliation_exceptions (
         connect_direct(url, tls).await
     }
 
+    /// Install the `ops` schema (once per version, under the startup lock:
+    /// [`crate::startup`]).
     pub async fn install(url: &str, tls: &DbTls) -> Result<(), DbError> {
-        let (c, conn) = connect(url, tls).await?;
-        c.batch_execute(DDL).await?;
-        drop(c);
-        let _ = conn.await;
+        crate::startup::once(url, tls, "ops", crate::startup::fnv(&[DDL]), || async {
+            let (c, conn) = connect(url, tls).await?;
+            c.batch_execute(DDL).await?;
+            drop(c);
+            let _ = conn.await;
+            Ok(())
+        })
+        .await?;
         Ok(())
     }
 
@@ -787,5 +902,24 @@ CREATE TABLE IF NOT EXISTS ops.reconciliation_exceptions (
         drop(c);
         let _ = conn.await;
         Ok(Some(out))
+    }
+}
+
+#[cfg(test)]
+mod startup_tests {
+    /// `startup::H5I_REV` is part of the schema version; it must move with
+    /// the pin.
+    #[test]
+    fn h5i_rev_matches_cargo_toml() {
+        let toml = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.toml")).unwrap();
+        let line = toml.lines().find(|l| l.starts_with("h5i-app-pg =")).unwrap();
+        assert!(line.contains(super::startup::H5I_REV), "{line}");
+    }
+
+    #[test]
+    fn versions_are_stable() {
+        assert_eq!(super::startup::fnv(&["a", "b"]), super::startup::fnv(&["a", "b"]));
+        assert_ne!(super::startup::fnv(&["ab"]), super::startup::fnv(&["a", "b"]));
+        assert_eq!(super::startup::engines_version().len(), 16);
     }
 }

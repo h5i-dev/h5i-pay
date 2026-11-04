@@ -2,7 +2,7 @@
 //! every operator shared before (`u0/…`) are migrated or still replay.
 
 use h5i_app_pg::{EngineConfig, ReplyCodec};
-use h5i_pay_tests::{database_url, fresh_tenant, keys, operator_token_for, user_token};
+use h5i_pay_tests::{database_url, fresh_tenant, keys, operator_token_for, user_token, ScratchDb};
 use payment_ledger as k;
 use payment_storage::ledger::{LedgerApp, LedgerStore};
 use serde_json::{json, Value};
@@ -72,7 +72,10 @@ async fn keys_are_per_principal() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn keys_from_before_are_migrated_or_still_replay() {
-    let Some(url) = database_url() else { return };
+    let Some(base) = database_url() else { return };
+    // Its own database: the test re-runs the startup migrations.
+    let db = ScratchDb::create(&base).await;
+    let url = db.url.clone();
     // The schema exists (an engine installed it); write rows as before G2.
     let _ = payment_storage::engines(&url, 1, EngineConfig::default()).await.unwrap();
     let org = fresh_tenant();
@@ -86,6 +89,8 @@ async fn keys_from_before_are_migrated_or_still_replay() {
         let ins = "INSERT INTO ledger.h5i_idempotency (tenant_id, key, fingerprint, reply) VALUES ($1, $2, $3, $4)";
         c.execute(ins, &[&(org as i64), &"u0/system-account-7-392-1001", &fp(&system), &enc(&k::Reply::Created(42))]).await.unwrap();
         c.execute(ins, &[&(org as i64), &"u0/manual-1", &fp(&manual), &enc(&k::Reply::Created(43))]).await.unwrap();
+        // A database from before G2 has not recorded this schema version.
+        c.execute("DELETE FROM h5i_pay_meta.installed", &[]).await.unwrap();
     }
     // Startup migrates: the system's key moves to the orchestrator's scope.
     let (s, ledger) = start(&url).await;

@@ -9,3 +9,4 @@ mod reconcile_periods;
 mod sign_ranges;
 mod find_work;
 mod recovery_job;
+mod startup;

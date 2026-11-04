@@ -254,7 +254,8 @@ async fn transfers_from_before_the_history_are_backfilled() {
              UPDATE ledger.accounts SET debits = debits + 7, credits = credits + 5 WHERE tenant_id = {t} AND id = 0;
              UPDATE ledger.accounts SET debits = debits + 5 WHERE tenant_id = {t} AND id = 1;
              UPDATE ledger.accounts SET credits = credits + 7 WHERE tenant_id = {t} AND id = 2;
-             DELETE FROM ledger.h5i_pay_migrations WHERE name = 'g4-journal-history';"
+             DELETE FROM ledger.h5i_pay_migrations WHERE name = 'g4-journal-history';
+             DELETE FROM h5i_pay_meta.installed;"
         ))
         .await
         .unwrap();
