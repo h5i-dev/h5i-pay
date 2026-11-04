@@ -178,6 +178,56 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### K1 (continued): the rust job's tests on GitHub
+
+Once cargo-deny passed, `cargo test` failed on GitHub in two ways that the
+local runs did not show.
+
+- **53200 in the concurrency suite** (`paged_audit_across_account_pages`
+  at setup: "not enough elements in RWConflictPool"). SERIALIZABLE keeps
+  read/write conflicts in a pool of about 5 × max_connections entries; CI's
+  `postgres:17` service ran with the default 100, the local server with
+  200 (`scripts/dev-db.sh`). CI now starts its server with that script
+  (`ab907fe`), so the settings live in one place. Connections: the nine
+  concurrency tests' pools add up to 16 × 5 + 4 × 2 + 2 × 4 + 2 × 16 = 128,
+  plus a few direct connections, if all ran at once; `cargo test` runs as
+  many tests at once as there are CPUs (4 on GitHub's runners and here), so
+  at most about 85 are open, under 200 either way; the suite is not
+  throttled. The pool, not the connection count, was the limit.
+  Production: the RDS parameter group now sets `max_connections = 400` and
+  `max_pred_locks_per_transaction = 128` (`f321683`, reasoning in
+  `infra/terraform/data.tf`: ~34 per API task × 6, ~34 per job × 3,
+  headroom for a rolling deploy). Upstream, h5i-app-pg now retries these
+  53200 errors (conflict pool or predicate lock table full; they free as
+  transactions end) with its usual backoff, and only those: h5i branch
+  `app/ssi-pool-retry` (`c3c5f30`, from main `3ab10b3`), with a test that
+  overflows the pool with open serializable transactions and fails
+  without the change. No PR yet; the pin stays on `9ec26b5`.
+- **40P01 at startup** (`keys_from_before_are_migrated_or_still_replay`
+  in `engines()`): a startup's DDL (`ALTER TABLE … IF NOT EXISTS`,
+  `CREATE INDEX IF NOT EXISTS`, which lock the table even when nothing
+  changes) ran next to other tests' requests and deadlocked with them.
+  h5i-app-pg already serializes `install_schema` calls (a transaction
+  advisory lock), so this was startup against live traffic, which a
+  rolling deploy or a job starting next to the API would hit too.
+  `payment_storage::startup::once` (`18af22b`) runs both engines'
+  installs, and the `ops` schema's, under one session advisory lock and
+  records the installed version (a hash of the h5i pin and every DDL
+  statement) in `h5i_pay_meta.installed`; a process that finds the
+  current version runs no DDL, and a real migration that deadlocks is
+  retried. The two migration tests now simulate a pre-upgrade database by
+  clearing that record (the idempotency one on its own database). Tests:
+  `a_second_startup_takes_no_table_locks` (a startup must finish while
+  another session holds every engine table exclusively; fails without the
+  change, it waited for the lock), and
+  `startups_next_to_live_traffic_do_not_deadlock` (24 startups next to
+  ledger transfers and payments, three fresh databases; it passed without
+  the change too in four local runs, because which side PostgreSQL aborts
+  depends on who waited first, so it is not a reliable negative check).
+- Local runs against a server started exactly like CI's (`scripts/dev-db.sh`
+  on another port): `cargo test --workspace --locked` passes. GitHub:
+  `ab907fe`'s `rust` job passed.
+
 ### J2: a short README (with the amendment)
 
 - `README.md` 144 lines / 863 words → 78 lines / about 330 words: a

@@ -106,3 +106,37 @@ async fn ledger_traffic_setup(e: &payment_storage::LedgerEngine, org: u64) {
         e.execute(&op(org), &open(a, 392, false)).await.unwrap().unwrap();
     }
 }
+
+/// Deterministic form of the above: once the schema is installed, a startup
+/// takes no table lock at all, so it finishes even while another session
+/// holds every engine table exclusively (before the fix it waited on the
+/// first `ALTER TABLE … IF NOT EXISTS`; with requests in flight, that wait
+/// is what could deadlock).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_second_startup_takes_no_table_locks() {
+    let Some(base) = database_url() else { return };
+    let db = ScratchDb::create(&base).await;
+    payment_storage::engines(&db.url, 2, EngineConfig::default()).await.unwrap();
+    payment_storage::ops::install(&db.url, &DbTls::Off).await.unwrap();
+    let (mut c, conn) = tokio_postgres::connect(&db.url, tokio_postgres::NoTls).await.unwrap();
+    tokio::spawn(conn);
+    let tables: Vec<String> = c
+        .query("SELECT schemaname || '.' || tablename FROM pg_tables WHERE schemaname IN ('ledger', 'payments', 'ops') ORDER BY 1", &[])
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| r.get(0))
+        .collect();
+    assert!(tables.len() > 10, "{tables:?}");
+    let tx = c.transaction().await.unwrap();
+    tx.batch_execute(&format!("LOCK TABLE {} IN ACCESS EXCLUSIVE MODE", tables.join(", "))).await.unwrap();
+    let second = async {
+        payment_storage::engines(&db.url, 2, EngineConfig::default()).await?;
+        payment_storage::ops::install(&db.url, &DbTls::Off).await
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(20), second)
+        .await
+        .expect("a startup with the current schema version waited for a table lock")
+        .unwrap();
+    tx.rollback().await.unwrap();
+}
