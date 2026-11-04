@@ -426,3 +426,52 @@ After J: re-run all checks, update PROGRESS.md and report. Disk is tight
 (about 3 GB free): delete stale build output and large test files you no
 longer need before generating 100M-row inputs, and remove those inputs
 after measuring.
+
+## K. CI that passes, and runs only what is worth running
+
+Same ground rules. Do K right after J1 is committed, before J2.
+
+1. [ ] **Make every CI job green.** Look at every failing job of the latest
+   runs on GitHub (the API works without `gh`:
+   `https://api.github.com/repos/h5i-dev/h5i-pay/actions/runs?per_page=10`,
+   then each run's `jobs`; logs need auth, so reproduce failures locally in
+   the same container image where you cannot read them). Known failures:
+   - `device-ptx`: `cust_raw`'s bindgen cannot find libclang
+     (`Unable to find libclang`). The `nvidia/cuda:12.6.3-devel-ubuntu24.04`
+     step installs no clang; add `libclang-dev` (and `clang` if bindgen
+     needs the headers), and set `LIBCLANG_PATH` if needed. Verify by
+     running the job's steps in that image locally (docker).
+   - `cargo deny` (licenses FAILED): `h5i-app-gpu-backend-nvvm` 0.5.3 has
+     no `license` field in its `Cargo.toml` (upstream
+     `crates/h5i-app-gpu/backend-nvvm/Cargo.toml`; the other h5i crates say
+     `Apache-2.0`). Fix it upstream on a new branch from h5i main (add
+     `license = "Apache-2.0"`, same as the rest of the repo), push it, and
+     tell me the branch for a PR. Until it is merged, add a narrow
+     `[[licenses.clarify]]` (or exception) for exactly that crate in
+     `deny.toml` with a comment pointing at the upstream fix; remove it
+     when the pin moves. Also drop the unused allowances deny warns about
+     only if that does not hide anything.
+   - Fix every other failing job the same way; do not disable a check to
+     make it green unless it cannot run on GitHub's runners (then say so in
+     the workflow and in PROGRESS.md).
+2. [ ] **Run expensive checks only when they can change.** `h5i app
+   mutate` is not a fuzzer: it plants each listed bug in a kernel and
+   requires a proof to break, which checks that the proofs still
+   constrain the code. Its result can only change when a kernel, its
+   `h5i-app.toml` mutant list, or its proofs change, and it costs about a
+   dozen full Lean builds. Run `mutate` (and the other long proof steps if
+   the same holds) only when `crates/payment-{ledger,domain,reconcile}/**`,
+   `proofs/**` or the h5i pin change (path filters), plus a weekly
+   schedule and `workflow_dispatch`, not on every push to main. Keep
+   `extract --check` and `check` on every PR that touches those paths.
+   Same for the GPU device PTX job (only when `crates/payment-gpu/**`,
+   `crates/payment-domain/src/policy.rs`, `crates/payment-reconcile/**`
+   change) and Terraform (only `infra/**`). Document the policy in a
+   comment at the top of `ci.yml`.
+
+## J2 amendment (README)
+
+The README must be much shorter than J2 first said: drop the `## Code`
+section entirely, and cut every remaining section by about 40–50% compared
+with the current README. Keep the mermaid diagram(s) only if they replace
+text.
