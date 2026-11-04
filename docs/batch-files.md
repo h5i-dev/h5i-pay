@@ -1,7 +1,11 @@
 # Batch worker files
 
 The files `h5i-pay export` writes, `h5i-pay-batch` reads and writes, and
-`h5i-pay ingest` reads. Code: `crates/payment-batch/src/files.rs` (CSV,
+`h5i-pay ingest` reads. The worker reconciles settlement files and screens
+payout batches on the CPU or, built with the `cuda` feature, on an NVIDIA
+GPU ([gpu-toolchain.md](gpu-toolchain.md)); the GPU code is the same Rust
+rules compiled to PTX, and it only computes reports, never financial
+state. Code: `crates/payment-batch/src/files.rs` (CSV,
 report) and `crates/payment-batch/src/binfile.rs` (binary records file).
 
 ## Records

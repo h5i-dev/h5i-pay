@@ -2,7 +2,24 @@
 
 A local walk-through of the API: the ledger, payments, reconciliation,
 history and scoped tokens. Every command below runs against a local server
-with the Mock PSP (see the README's "Run").
+with the Mock PSP (see the README's "Quick start").
+
+## How a payment is decided
+
+A payment is a sequence of kernel commands: `Create`, `BeginAuthorize`
+before the PSP is asked, `Record` with the PSP's answer (authorized,
+captured, declined, canceled), `AttachRef` for the PSP's reference,
+`RequestRefund` and the refund's result, `Event` for webhooks (deduplicated
+by event id), and `MarkPosted` once the ledger has the payment's postings.
+The ledger posts a capture from the PSP clearing account to the merchant's
+payable account, and a refund as a reservation into a holding account that
+is then settled or released. Each command runs in its own SERIALIZABLE
+PostgreSQL transaction and reads only the rows its read plan names, so
+concurrent requests cannot spend the same money twice. A write sent with
+an `Idempotency-Key` header acts once; a retry gets the first reply. A
+crash between steps leaves work that recovery finds and finishes
+([failure-recovery.md](failure-recovery.md); the design, in Japanese:
+[design-v0.1.md](design-v0.1.md)).
 
 ## The server and its database
 

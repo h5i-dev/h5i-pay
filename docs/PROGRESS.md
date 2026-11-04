@@ -178,6 +178,38 @@ PATH for proofs: `export PATH=/opt/aeneas/aeneas/bin:/opt/aeneas/charon/bin:$HOM
 
 ## After M5 (newest first)
 
+### J2: a short README (with the amendment)
+
+- `README.md` 144 lines / 863 words → 78 lines / about 330 words: a
+  one-sentence opening; What it is (two sentences, a mermaid architecture
+  diagram, and the payment state machine as a second diagram that
+  replaces the "How it decides" prose); Quick start and Use (one block
+  each); Verified (three lines and a link); Performance (four rows from
+  `docs/benchmarks.md`, two of them J1's GPU end-to-end result); one Docs
+  line; License. No Code, Deploy or GPU section.
+- Moved out: "How it decides" to `docs/api.md` ("How a payment is
+  decided"); the three-kernel `h5i app check/mutate/lint` commands to
+  `docs/development.md`; the GPU paragraph to `docs/batch-files.md` and
+  `docs/benchmarks.md`; Deploy is `infra/README.md`'s first paragraph
+  (linked); the build/token/TLS notes and the layout were already in
+  `docs/api.md` and `docs/development.md`.
+- Checked: both diagrams render with mermaid (mermaid.ink returns SVGs; a
+  broken diagram returns a parse error there); every README link
+  resolves; the Quick start and Use blocks run as written in `env -i`
+  against a fresh `scripts/dev-db.sh` container (payment authorized,
+  captured 1000, refund 300 succeeded); the J1 commands in
+  `docs/development.md` run as written.
+
+### After J and K: checks
+
+- On the J1 code (K changed only CI files and `deny.toml`, J2 only
+  documents): `cargo test --workspace` (116 pass), clippy plain, `mock-psp`
+  and CUDA, the GPU differential (8) and worker (2) tests,
+  `build-device.sh --check` (here and in the CI image), `cargo deny check`
+  with and without `--all-features`; `h5i app extract --check`, `lint` and
+  `check` on the three kernels (375 / 450 / 69 theorems, standard axioms
+  only) and `mutate` (22/22, 23/23, 6/6 caught).
+
 ### K2: expensive CI jobs only when they can change
 
 - `ci.yml` starts with the policy. A `changes` job (dorny/paths-filter)

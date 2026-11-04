@@ -402,7 +402,7 @@ Same ground rules. Tick each off here and in PROGRESS.md as it lands.
    - Update the nightly Step Functions run (`infra/terraform/reconcile.tf`,
      `batch-entrypoint.sh`) to use the binary format, and
      `docs/benchmarks.md` with the new section and conclusions.
-2. [ ] **A short README.** The current README (144 lines, 863 words) is
+2. [x] **A short README.** The current README (144 lines, 863 words) is
    still hard to read. Rewrite it to be short and scannable:
    - target roughly 60–80 lines; one-sentence opening; then at most these
      sections: what it is (with one mermaid diagram of the architecture:

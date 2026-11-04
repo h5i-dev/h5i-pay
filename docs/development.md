@@ -61,6 +61,16 @@ copy of Mathlib for all of them. On a small disk, set
 `../../ledger/.lake/packages` instead. What the theorems say and assume:
 [proof-assumptions.md](proof-assumptions.md).
 
+All three kernels at once (what the README's "Verified" summarizes):
+
+```sh
+h5i app check crates/payment-ledger crates/payment-domain crates/payment-reconcile
+h5i app mutate crates/payment-ledger crates/payment-domain crates/payment-reconcile
+h5i app lint crates/payment-ledger crates/payment-domain crates/payment-reconcile
+```
+
+The mutants are bugs each of which must break a proof.
+
 ## GPU code and benchmarks
 
 The GPU engines need the CUDA toolkit headers and libraries for `cust`,
