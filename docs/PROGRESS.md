@@ -226,7 +226,9 @@ local runs did not show.
   depends on who waited first, so it is not a reliable negative check).
 - Local runs against a server started exactly like CI's (`scripts/dev-db.sh`
   on another port): `cargo test --workspace --locked` passes. GitHub:
-  `ab907fe`'s `rust` job passed.
+  `ab907fe`'s full run passed (every job: rust, cuda-build, device-ptx,
+  proofs with `mutate`, terraform; images/deploy skipped without an AWS
+  role), and so did `f321683` and `3d28fe4` (path-filtered runs).
 
 ### J2: a short README (with the amendment)
 
